@@ -4,7 +4,7 @@ import numpy as np, pandas as pd
 WINDOWS = {"train": ("2010-01-01", "2018-12-31"), "val": ("2019-01-01", "2022-12-31")}
 MAJOR, MINOR = ["SPY", "QQQ"], ["XLE", "XLF"]
 BASE = dict(budget=1000.0, thr={"SPY": .05, "QQQ": .05, "XLE": .15, "XLF": .15},
-            amount=1000.0, fee=0.00075, xlf_rate_filter=True)
+            amount=1000.0, fee=0.00075, xlf_rate_filter=True, cash_yield=True, scale=False)
 
 def load(t):
     d = pd.concat([pd.read_csv(f"data/{k}/{t}.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
@@ -15,9 +15,13 @@ def load_spread():
     r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
     return r["spread_10y2y"]
 
+def load_cash_rate():
+    r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
+    return r["DGS2"].ffill() / 100.0   # 연율, 단기 국채 금리를 현금 수익률 대용으로 사용
+
 def signals(px, thr, spread=None):
     """일자별 매수 신호(bool). 신호는 종가 기준, 체결은 다음날 시가."""
-    c = px.close.values; n = len(c); sig = np.zeros(n, bool)
+    c = px.close.values; n = len(c); sig = np.zeros(n, int)
     peak = -np.inf; used = 0
     if spread is not None:  # 신호일 t에는 t-1까지의 금리만 사용
         sp = spread.ffill().reindex(px.index, method="ffill").shift(1).values
@@ -27,10 +31,10 @@ def signals(px, thr, spread=None):
         if lvl > used:
             if spread is not None and not (sp[i] >= 0):  # 역전 또는 미확인 -> 보류
                 continue
-            sig[i] = True; used = lvl
+            sig[i] = lvl; used = lvl
     return sig
 
-def run(px, sig, win, p, mode):
+def run(px, sig, win, p, mode, rate=None):
     """mode: 'dip' | 'dca'. 일별 시리즈(입금 D, 평가액 V, 현금, 주식수) 반환."""
     a, b = win; idx = px.index[(px.index >= a) & (px.index <= b)]
     pos0 = px.index.get_loc(idx[0])
@@ -39,12 +43,14 @@ def run(px, sig, win, p, mode):
     rows = []; prev_month = None
     for i in range(pos0, pos0 + len(idx)):
         dt = px.index[i]; D = 0.0
+        if rate is not None and i > 0:   # 전일까지 알려진 금리로 보유 현금에 일할 이자
+            cash *= 1 + rate[i] * (dt - px.index[i - 1]).days / 365
         if (dt.year, dt.month) != prev_month:
             prev_month = (dt.year, dt.month); D = p["budget"]; cash += D
             if mode == "dca":
                 sh += cash * (1 - p["fee"]) / o[i]; spent += cash; cash = 0.0; nbuy += 1
         if mode == "dip" and i > 0 and sig[i - 1] and cash > 1.0:   # 어제 종가 신호 -> 오늘 시가 체결
-            x = min(p["amount"], cash)   # 계획: 회당 고정 금액 (잔고 부족 시 잔고만큼)
+            x = min(p["amount"] * (sig[i - 1] if p["scale"] else 1), cash)   # 계획: 회당 고정 금액 (잔고 부족 시 잔고만큼)
             sh += x * (1 - p["fee"]) / o[i]; spent += x; cash -= x; nbuy += 1
         rows.append((dt, D, sh * c[i] + cash, cash, sh))
     df = pd.DataFrame(rows, columns=["date", "D", "V", "cash", "sh"]).set_index("date")
@@ -71,12 +77,13 @@ def metrics(df, spent, shares_total, nbuy):
                 cash_ratio=(df.cash / V).mean(), buys=nbuy, deposits=dep, final=V.iloc[-1])
 
 def backtest(window, p=None):
-    p = {**BASE, **(p or {})}; sp = load_spread(); out = {}; series = {}
+    p = {**BASE, **(p or {})}; sp = load_spread(); cr = load_cash_rate(); out = {}; series = {}
     for t in MAJOR + MINOR:
         px = load(t)
         s = signals(px, p["thr"][t], sp if (t == "XLF" and p["xlf_rate_filter"]) else None)
+        rate = cr.reindex(px.index, method="ffill").shift(1).fillna(0).values if p["cash_yield"] else None
         for mode in ("dip", "dca"):
-            df, spent, nb = run(px, s, WINDOWS[window], p, mode)
+            df, spent, nb = run(px, s, WINDOWS[window], p, mode, rate)
             series[(t, mode)] = (df, spent, nb)
             out[(t, mode)] = metrics(df, spent, df.sh.iloc[-1], nb)
     for name, group in (("주요", MAJOR), ("비주요", MINOR), ("합산", MAJOR + MINOR)):
