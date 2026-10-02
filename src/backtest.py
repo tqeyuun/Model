@@ -43,7 +43,7 @@ def run(px, sig, win, p, mode, rate=None):
     cash = sh = spent = 0.0; nbuy = 0
     rows = []; prev_month = None
     for i in range(pos0, pos0 + len(idx)):
-        dt = px.index[i]; D = 0.0
+        dt = px.index[i]; D = 0.0; x = 0.0
         if rate is not None and i > 0:   # 전일까지 알려진 금리로 보유 현금에 일할 이자
             cash *= 1 + rate[i] * (dt - px.index[i - 1]).days / 365
         if (dt.year, dt.month) != prev_month:
@@ -53,8 +53,8 @@ def run(px, sig, win, p, mode, rate=None):
         if mode == "dip" and i > 0 and sig[i - 1] and cash > 1.0:   # 어제 종가 신호 -> 오늘 시가 체결
             x = min(p["amount"] * (sig[i - 1] if p["scale"] else 1), cash)   # 계획: 회당 고정 금액 (잔고 부족 시 잔고만큼)
             sh += x * (1 - p["fee"]) / o[i]; spent += x; cash -= x; nbuy += 1
-        rows.append((dt, D, sh * c[i] + cash, cash, sh))
-    df = pd.DataFrame(rows, columns=["date", "D", "V", "cash", "sh"]).set_index("date")
+        rows.append((dt, D, sh * c[i] + cash, cash, sh, x if mode == "dip" else D))
+    df = pd.DataFrame(rows, columns=["date", "D", "V", "cash", "sh", "buy"]).set_index("date")
     df["spent"] = np.nan
     return df, spent, nbuy
 
@@ -70,7 +70,8 @@ def irr(D, V_end):
 
 def metrics(df, spent, shares_total, nbuy):
     D, V = df.D, df.V
-    ret = V / (V.shift(1, fill_value=0) + D) - 1
+    den = V.shift(1, fill_value=0) + D
+    ret = (V / den.where(den > 0) - 1).fillna(0.0)
     nav = (1 + ret).cumprod(); mdd = (nav / nav.cummax() - 1).min()
     dep = D.sum()
     return dict(avg_price=spent / shares_total if shares_total else np.nan,
@@ -111,3 +112,38 @@ if __name__ == "__main__":
     for w in sys.argv[1:] or ["train"]:
         o = backtest(w); print(f"\n===== {w} =====")
         print(table(o, ["SPY", "QQQ", "XLE", "XLF", "주요", "비주요", "합산"]))
+
+
+def backtest_matched(window, p=None):
+    """A 방식: 하락매수가 실제 투입한 금액 S를, 정액적립이 같은 기간에 매달 균등하게(S/개월수) 투입. 투입 자본 기준 비교."""
+    p = {**BASE, **(p or {})}; sp = load_spread(); cr = load_cash_rate(); out = {}; ser = {}
+    for t in MAJOR + MINOR:
+        px = load(t)
+        sg = signals(px, p["thr"][t], sp if (t == "XLF" and p["xlf_rate_filter"]) else None)
+        rate = cr.reindex(px.index, method="ffill").shift(1).fillna(0).values if p["cash_yield"] else None
+        dip, S, nb = run(px, sg, WINDOWS[window], p, "dip", rate)
+        nm = int((dip.D > 0).sum())
+        dca, S2, nb2 = run(px, sg, WINDOWS[window], {**p, "budget": S / nm}, "dca", None)
+        A = pd.DataFrame({"D": dip.buy, "V": dip.V - dip.cash, "cash": 0.0})
+        B = dca[["D", "V", "cash"]]
+        ser[t] = (A, B, S, S2, nb, nb2, dip, dca)
+        out[(t, "dip")] = {**metrics(A, S, dip.sh.iloc[-1], nb), "invested": S, "cash_ratio_full": (dip.cash / dip.V).mean()}
+        out[(t, "dca")] = {**metrics(B, S2, dca.sh.iloc[-1], nb2), "invested": S2, "cash_ratio_full": 0.0}
+    for name, group in (("주요", MAJOR), ("비주요", MINOR), ("합산", MAJOR + MINOR)):
+        for k, idx in (("dip", 0), ("dca", 1)):
+            df = ser[group[0]][idx].copy()
+            for g in group[1:]: df = df + ser[g][idx]
+            S = sum(ser[g][2 + idx] for g in group); nb = sum(ser[g][4 + idx] for g in group)
+            m = metrics(df, S, 1, nb); m["avg_price"] = np.nan; m["invested"] = S
+            full = sum(ser[g][6][c] for g in group for c in ["cash"]); tot = sum(ser[g][6]["V"] for g in group)
+            m["cash_ratio_full"] = (full / tot).mean() if k == "dip" else 0.0
+            out[(name, k)] = m
+    return out
+
+def table_matched(o, keys):
+    rows = []
+    for k in keys:
+        for mode, lab in (("dip", "하락매수"), ("dca", "동일자본 정액")):
+            m = o[(k, mode)]
+            rows.append([k, lab, m["avg_price"], m["invested"], m["total_return"], m["irr"], m["mdd"], m["buys"]])
+    return pd.DataFrame(rows, columns=["자산", "전략", "평균단가", "투입금", "투입자본수익률", "IRR", "최대낙폭", "매수횟수"]).to_string(index=False, float_format=lambda x: f"{x:,.3f}")
