@@ -26,13 +26,13 @@ def simulate(px, window, stock_w, boost=False, bond=True, rebalance=True):
     dd = stock_drawdown(px); sh = {t: 0.0 for t in ASSETS}
     rows = []; prev_m = None; boosted = False; sells = 0.0; nsell = 0
     for dt in days:
-        i = px["SPY"].index.get_loc(dt); pd_ = px["SPY"].index[i - 1]
-        o = {t: px[t].open.loc[dt] for t in ASSETS}; pc = {t: px[t].close.loc[pd_] for t in ASSETS}
+        i = px["SPY"].index.get_loc(dt); pd_ = px["SPY"].index[i - 1] if i > 0 else None   # 첫날: 전일 정보 없음
+        o = {t: px[t].open.loc[dt] for t in ASSETS}; pc = {t: px[t].close.loc[pd_] for t in ASSETS} if pd_ is not None else o
         # 목표 비중 (전일 종가 기준 상태)
         sw = stock_w; switched = False
         if boost:
-            if not boosted and dd.loc[pd_] > DIP_TRIGGER: boosted = True; switched = True
-            elif boosted and dd.loc[pd_] <= 1e-9: boosted = False; switched = True
+            if not boosted and dd.get(pd_, 0.0) > DIP_TRIGGER: boosted = True; switched = True
+            elif boosted and dd.get(pd_, 0.0) <= 1e-9: boosted = False; switched = True
             if boosted: sw = min(1.0, stock_w + DIP_BOOST)
         tgt = {"SPY": sw / 2, "QQQ": sw / 2, "IEF": 1 - sw} if bond else {"SPY": .5, "QQQ": .5, "IEF": 0.0}
         hold = {t: sh[t] * pc[t] for t in ASSETS}; V = sum(hold.values())

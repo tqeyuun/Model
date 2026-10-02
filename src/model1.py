@@ -64,7 +64,8 @@ def simulate(px, assets, window, weight_fn):
         D = 0.0
         if (dt.year, dt.month) != prev:
             prev = (dt.year, dt.month); D = DEPOSIT
-            pdt = px[assets[0]].index[px[assets[0]].index.get_loc(dt) - 1]
+            i = px[assets[0]].index.get_loc(dt)
+            pdt = px[assets[0]].index[i - 1] if i > 0 else None   # 데이터 첫날은 전일 정보 없음 (index[-1] 순환 방지)
             w = weight_fn(pdt); used.append(w)
             for t in assets: sh[t] += D * w[t] * (1 - FEE) / px[t].open.loc[dt]
         rows.append((dt, D, sum(sh[t] * px[t].close.loc[dt] for t in assets)))
@@ -74,9 +75,8 @@ def stats(df):
     den = df.V.shift(1, fill_value=0) + df.D
     ret = (df.V / den.where(den > 0) - 1).fillna(0.0)
     nav = (1 + ret).cumprod()
-    yearly = nav.groupby(nav.index.year).last(); first = nav.groupby(nav.index.year).first() / (1 + ret.groupby(ret.index.year).first())
-    yr = yearly / first.shift(-0) - 1   # 연도별 시간가중 수익률(연초 직전 nav 기준)
-    prev_end = yearly.shift(1).fillna(1.0); yr = yearly / prev_end - 1
+    yearly = nav.groupby(nav.index.year).last()
+    yr = yearly / yearly.shift(1).fillna(1.0) - 1   # 연도별 시간가중 수익률
     return dict(final=df.V.iloc[-1], total_return=df.V.iloc[-1] / df.D.sum() - 1,
                 mdd=(nav / nav.cummax() - 1).min(), sharpe=ret.mean() / ret.std() * np.sqrt(252), yearly=yr)
 
@@ -86,7 +86,7 @@ def run_window(window):
         assets, k = cfg["assets"], cfg["k"]
         px = {t: load(t) for t in assets}; sc = {t: drop_scores(px[t]) for t in assets}
         base = base_weights(assets)
-        m1, used = simulate(px, assets, window, lambda d: allocate({t: sc[t].loc[d] for t in assets}, base, k))
+        m1, used = simulate(px, assets, window, lambda d: allocate({t: sc[t].get(d, 0.0) for t in assets}, base, k))
         avg = {t: float(np.mean([u[t] for u in used])) for t in assets}
         eq, _ = simulate(px, assets, window, lambda d: base)
         fx, _ = simulate(px, assets, window, lambda d: avg)
