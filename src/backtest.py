@@ -1,22 +1,23 @@
 """분할매수(하락 매수) 백테스트. train/val 폴더만 읽는다 (_sealed_test 접근 금지)."""
 import numpy as np, pandas as pd
 
+FOLDERS = ("train", "val")   # 최종 테스트 스크립트만 _sealed_test를 추가한다
 WINDOWS = {"train": ("2010-01-01", "2018-12-31"), "val": ("2019-01-01", "2022-12-31")}
 MAJOR, MINOR = ["SPY", "QQQ"], ["XLE", "XLF"]
 BASE = dict(budget=1000.0, thr={"SPY": .05, "QQQ": .05, "XLE": .15, "XLF": .15},
             amount=1000.0, fee=0.00075, xlf_rate_filter=True, cash_yield=True, scale=False)
 
 def load(t):
-    d = pd.concat([pd.read_csv(f"data/{k}/{t}.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
+    d = pd.concat([pd.read_csv(f"data/{k}/{t}.csv", index_col=0, parse_dates=True) for k in FOLDERS])
     f = d.adjclose / d.close
     return pd.DataFrame({"open": d.open * f, "close": d.adjclose})
 
 def load_spread():
-    r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
+    r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in FOLDERS])
     return r["spread_10y2y"]
 
 def load_cash_rate():
-    r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
+    r = pd.concat([pd.read_csv(f"data/{k}/rates.csv", index_col=0, parse_dates=True) for k in FOLDERS])
     return r["DGS2"].ffill() / 100.0   # 연율, 단기 국채 금리를 현금 수익률 대용으로 사용
 
 def signals(px, thr, spread=None):
