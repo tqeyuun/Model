@@ -4,7 +4,7 @@ import numpy as np, pandas as pd
 WINDOWS = {"train": ("2010-01-01", "2018-12-31"), "val": ("2019-01-01", "2022-12-31")}
 MAJOR, MINOR = ["SPY", "QQQ"], ["XLE", "XLF"]
 BASE = dict(budget=1000.0, thr={"SPY": .05, "QQQ": .05, "XLE": .15, "XLF": .15},
-            frac=1.0, fee=0.00075, xlf_rate_filter=True)
+            amount=1000.0, fee=0.00075, xlf_rate_filter=True)
 
 def load(t):
     d = pd.concat([pd.read_csv(f"data/{k}/{t}.csv", index_col=0, parse_dates=True) for k in ("train", "val")])
@@ -44,7 +44,7 @@ def run(px, sig, win, p, mode):
             if mode == "dca":
                 sh += cash * (1 - p["fee"]) / o[i]; spent += cash; cash = 0.0; nbuy += 1
         if mode == "dip" and i > 0 and sig[i - 1] and cash > 1.0:   # 어제 종가 신호 -> 오늘 시가 체결
-            x = p["frac"] * cash
+            x = min(p["amount"], cash)   # 계획: 회당 고정 금액 (잔고 부족 시 잔고만큼)
             sh += x * (1 - p["fee"]) / o[i]; spent += x; cash -= x; nbuy += 1
         rows.append((dt, D, sh * c[i] + cash, cash, sh))
     df = pd.DataFrame(rows, columns=["date", "D", "V", "cash", "sh"]).set_index("date")
