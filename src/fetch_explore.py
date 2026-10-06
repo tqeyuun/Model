@@ -3,7 +3,7 @@
 import io, os, time, datetime as dt
 import requests, pandas as pd
 
-TICKERS = ["SPY", "QQQ", "IEF", "SHY", "GLD", "EFA"]
+TICKERS = ["SPY", "QQQ", "IEF", "SHY", "GLD", "EFA", "EEM", "TLT", "VNQ"]
 START, END = "2000-01-01", "2019-01-01"   # END 미포함
 OUT = "data/explore"
 
