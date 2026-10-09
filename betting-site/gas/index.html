@@ -126,11 +126,12 @@ button.seat.free{border-style:solid;border-color:var(--cyan);color:var(--cyan);c
 :root{--display:'Black Han Sans','Noto Sans KR',system-ui,sans-serif}
 header b,.card h2,.pts{font-family:var(--display);font-weight:400;letter-spacing:.3px}
 header b{font-size:24px}.card h2{font-size:20px}
+.lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살아요 */
 .card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
 </style>
 </head>
 <body>
-<header><b>🎲 도박장</b><span id="who"></span></header>
+<header><span class="lg"><span class="dice">🎲</span><b>도박장</b></span><span id="who"></span></header>
 <main id="app"></main>
 <script>
 const $ = (s) => document.querySelector(s);
