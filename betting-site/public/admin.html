@@ -51,12 +51,14 @@ const userAct = guard(async (user_id, action, value) => {
   await api('POST', '/api/admin/user', { user_id, action, value }); toast('완료'); await load();
 });
 const askPoints = (id, action) => { const v = prompt(action === 'set_points' ? '새 점수?' : '더할 점수? (빼려면 -100)'); if (v !== null && v !== '') userAct(id, action, Number(v)); };
+const askName = (id) => { const v = prompt('새 닉네임?'); if (v) userAct(id, 'rename', v); };
 const askPin = (id) => { const v = prompt('새 PIN 4자리?'); if (v) userAct(id, 'reset_pin', v); };
 const betAct = guard(async (bet_id, action, option_id) => {
   const msg = { delete: '내기를 삭제할까요? (진행 중이면 환불)', cancel: '취소하고 전액 환불할까요?', resolve: '이 선택지를 정답으로 확정할까요?' }[action];
   if (msg && !confirm(msg)) return;
   await api('POST', '/api/admin/bet', { bet_id, action, option_id }); toast('완료'); await load();
 });
+const delMsg = guard(async (id) => { await api('POST', '/api/admin/chat', { id }); await load(); });
 const gift = guard(async () => {
   const v = Number($('#gift').value);
   if (!confirm(`모든 유저에게 ${v}점을 줄까요?`)) return;
@@ -74,7 +76,8 @@ function render() {
   <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="점수"> <button class="pri" onclick="gift()">모두에게 주기</button></div>
   <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${u.points.toLocaleString()}점</td><td><div class="acts">
     <button onclick="askPoints(${u.id},'add_points')">± 더하기</button><button onclick="askPoints(${u.id},'set_points')">= 설정</button>
-    <button onclick="askPin(${u.id})">PIN 초기화</button><button class="danger" onclick="userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>
+    <button onclick="askName(${u.id})">닉네임</button><button onclick="askPin(${u.id})">PIN 초기화</button><button class="danger" onclick="userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>
+  <div class="card"><h2>💬 최근 채팅</h2>${data.messages.map((m) => `<div class="mute"><b style="color:var(--cyan)">${esc(m.name)}</b>: ${esc(m.text)} <button class="danger" style="padding:0 6px" onclick="delMsg(${m.id})">삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>
   <div class="card"><h2>내기</h2>${data.bets.map((b) => `<div style="border-bottom:1px solid var(--line);padding:8px 0">
     <b>${esc(b.title)}</b> <span class="tag">${S[b.status]}</span> <span class="mute">by ${esc(b.creator)} · 총 ${b.total}점</span>
     <div class="opts mute">${b.options.map((o) => `${b.winner === o.id ? '🏆' : ''}${esc(o.label)} (${o.pool}점/${o.bettors}명) ${b.status === 'open' || b.status === 'closed' ? `<button onclick="betAct(${b.id},'resolve',${o.id})">정답</button>` : ''}`).join(' · ')}</div>

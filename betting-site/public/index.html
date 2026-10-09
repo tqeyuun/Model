@@ -62,6 +62,15 @@ header b{background-size:300% 100%;animation:rb 5s linear infinite;font-size:22p
 .confetti{position:fixed;top:-20px;font-size:22px;pointer-events:none;z-index:20;animation:fall 1.8s ease-in forwards}
 @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
 .tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
+
+.tabs button{padding:10px 4px}.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#ffb800);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
+.tabs button:nth-child(3).on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5)}.tabs button:nth-child(3){border-color:#ff6b3d55}
+#chatbox{height:50vh;overflow-y:auto;padding:6px;margin:8px 0;background:#07070c;border:1px solid var(--line);border-radius:12px}
+.cm{margin:8px 0;max-width:85%}.cm.me{margin-left:auto;text-align:right}
+.cn{font-size:12px;font-weight:700}.cn span{color:var(--mute);font-weight:400;margin-left:4px}
+.cb{display:inline-block;padding:6px 12px;border-radius:14px;background:#1b1b2b;word-break:break-word;text-align:left}
+.cm.me .cb{background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff}
+button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 </style>
 </head>
 <body>
@@ -85,37 +94,101 @@ function confetti(n = 40) {
 }
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
-function logout() { token = null; user = null; localStorage.removeItem('token'); render(); }
+function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; localStorage.removeItem('token'); render(); }
 
+let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;
+
+function renderHeader() {
+  $('#who').innerHTML = user ? `${esc(user.name)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+}
 async function refresh() {
-  if (!token) return render();
-  if (document.activeElement && document.activeElement.tagName === 'INPUT' && tab === 'bets') return; // 입력 중엔 갱신 안 함
+  if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
   try {
     [user, bets, ranking] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking')]);
     const seen = JSON.parse(localStorage.getItem('luckySeen') || '[]');
     const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
     if (fresh.length) { localStorage.setItem('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); confetti(70); }
-    render();
+    if (!$('#app').innerHTML || (tab !== 'new' && tab !== 'chat' && !(document.activeElement && document.activeElement.tagName === 'INPUT'))) render();
+    else renderHeader();
   } catch (e) { /* 401 이면 logout 처리됨 */ }
 }
 
 function render() {
-  $('#who').innerHTML = user ? `${esc(user.name)} · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  renderHeader();
   $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','내기'],['new','내기 열기'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="tab='${k}';render()">${l}</button>`).join('')}</div>
+    <div class="tabs">${[['bets','내기'],['new','내기 열기'],['chat','💬 채팅'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : rankView()}`;
+    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : tab === 'chat' ? chatView() : rankView()}`;
+  if (!token) initGoogle();
+  if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
+const go = (k) => { tab = k; render(); };
 
 function authView() {
-  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN. 처음이면 가입하면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  if (pending) return `<div class="card"><h2>🎉 구글 인증 완료!</h2><p class="mute">친구들에게 보일 닉네임을 정해주세요. (12자 이내, 나중에 ✏️로 바꿀 수 있어요)</p>
+    <input id="gn" placeholder="닉네임" maxlength="12"><button class="pri" style="width:100%" onclick="googleSignup()">시작하기 (1000점 지급)</button></div>`;
+  return `<div class="card"><h2>들어가기</h2><p class="mute">구글 계정으로 로그인하면 계정이 저장돼요. 처음이면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  ${cfg.google_client_id ? '<div id="gbtn" style="min-height:44px"></div>' : '<p class="mute">⚠️ 구글 로그인이 아직 설정되지 않았어요. 아래 PIN으로 들어오세요.</p>'}
+  <details ${cfg.google_client_id ? '' : 'open'} style="margin-top:10px"><summary class="mute" style="cursor:pointer">닉네임 + PIN으로 들어가기</summary>
   <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password">
-  <div class="betrow"><button class="pri" style="flex:1" onclick="auth('login')">로그인</button><button style="flex:1" onclick="auth('signup')">가입</button></div></div>`;
+  <div class="betrow"><button class="pri" style="flex:1" onclick="auth('login')">로그인</button><button style="flex:1" onclick="auth('signup')">가입</button></div></details></div>`;
 }
 const auth = guard(async (kind) => {
   const r = await api('POST', '/api/' + kind, { name: $('#n').value, pin: $('#p').value });
-  token = r.token; localStorage.setItem('token', token); await refresh();
+  token = r.token; localStorage.setItem('token', token); render(); await refresh();
 });
+function initGoogle() {
+  if (!cfg.google_client_id || pending) return;
+  const draw = () => {
+    google.accounts.id.initialize({ client_id: cfg.google_client_id, callback: onGoogle });
+    google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_black', size: 'large', text: 'signin_with', locale: 'ko', shape: 'pill' });
+  };
+  if (window.google && google.accounts) return draw();
+  if (document.getElementById('gsi')) return setTimeout(initGoogle, 300);
+  const sc = document.createElement('script'); sc.id = 'gsi'; sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = draw; document.head.append(sc);
+}
+const onGoogle = guard(async (resp) => {
+  const r = await api('POST', '/api/google', { credential: resp.credential });
+  if (r.needs_nickname) { pending = r.pending; return render(); }
+  token = r.token; localStorage.setItem('token', token); render(); await refresh();
+});
+const googleSignup = guard(async () => {
+  const r = await api('POST', '/api/google/signup', { pending, name: $('#gn').value });
+  pending = null; token = r.token; localStorage.setItem('token', token); render(); await refresh();
+});
+const rename = guard(async () => {
+  const n = prompt('새 닉네임 (12자 이내)', user.name);
+  if (n === null || !n.trim() || n.trim() === user.name) return;
+  await api('POST', '/api/nickname', { name: n }); toast('닉네임이 바뀌었어요!'); await refresh();
+});
+
+/* ---------- 채팅 ---------- */
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+function chatView() {
+  return `<div class="card"><h2>💬 전체 채팅</h2><div id="chatbox"></div>
+  <div class="betrow"><input id="ci" maxlength="200" placeholder="메시지 입력…" autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()"><button class="pri" onclick="sendChat()">전송</button></div></div>`;
+}
+function renderChat() {
+  const box = $('#chatbox'); if (!box) return;
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:hsl(${hue(m.name)} 90% 70%)">${esc(m.name)} <span>${new Date(m.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span></div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보세요 👋</p>';
+  if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
+}
+async function pollChat() {
+  if (!token || tab !== 'chat') return;
+  try {
+    const rows = await api('GET', '/api/chat?after=' + lastChatId);
+    if (!lastChatId) chatMsgs = []; // 처음 불러올 때는 최근 기록으로 교체
+    if (rows.length) { chatMsgs = chatMsgs.concat(rows).slice(-150); lastChatId = rows[rows.length - 1].id; renderChat(); }
+    else if (!chatMsgs.length) renderChat();
+  } catch (e) { /* 무시 */ }
+}
+const sendChat = guard(async () => {
+  const i = $('#ci'); const text = i.value.trim(); if (!text) return;
+  i.value = '';
+  await api('POST', '/api/chat', { text }); await pollChat();
+});
+setInterval(pollChat, 2000);
 
 function statusText(b) {
   if (b.status === 'open') return b.closes_at ? '마감 ' + new Date(b.closes_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '진행 중';
@@ -171,7 +244,10 @@ function rankView() {
     `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
 }
 
-refresh(); setInterval(refresh, 5000);
+(async () => {
+  try { cfg = await (await fetch('/api/config')).json(); } catch {}
+  render(); refresh(); setInterval(refresh, 5000);
+})();
 </script>
 </body>
 </html>

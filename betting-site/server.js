@@ -8,6 +8,8 @@ const { DatabaseSync } = require('node:sqlite');
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.db');
 
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const TOKENINFO_URL = process.env.GOOGLE_TOKENINFO_URL || 'https://oauth2.googleapis.com/tokeninfo';
 const START_POINTS = 1000;
 const MIN_BET = 10;
 const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
@@ -28,12 +30,15 @@ CREATE TABLE IF NOT EXISTS bets (
   status TEXT NOT NULL DEFAULT 'open',  -- open | closed | resolved | cancelled
   winner INTEGER, closes_at INTEGER, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, label TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wagers (
   id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, option_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
   amount INTEGER NOT NULL, payout INTEGER, created_at INTEGER NOT NULL);
 `);
 
+try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub)');
 try { db.exec('ALTER TABLE wagers ADD COLUMN lucky INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 
 // 관리자 키: ADMIN_KEY 환경변수가 있으면 그것, 없으면 최초 실행 때 생성해 DB에 저장
@@ -156,6 +161,25 @@ function betAction(bet, body) {
   }
   fail(400, '알 수 없는 동작이에요.');
 }
+const NAME_RE = /^[\p{L}\p{N}_ ]{1,12}$/u;
+function checkName(raw) {
+  const name = String(raw || '').trim();
+  if (!NAME_RE.test(name)) fail(400, '닉네임은 12자 이내 글자/숫자만 가능해요.');
+  return name;
+}
+async function verifyGoogle(credential) {
+  if (!GOOGLE_CLIENT_ID) fail(400, '구글 로그인이 아직 설정되지 않았어요.');
+  let j;
+  try {
+    const r = await fetch(`${TOKENINFO_URL}?id_token=${encodeURIComponent(String(credential || ''))}`);
+    if (!r.ok) fail(401, '구글 인증에 실패했어요.');
+    j = await r.json();
+  } catch (e) { if (e instanceof HttpError) throw e; fail(502, '구글 서버에 연결하지 못했어요.'); }
+  const okIss = j.iss === 'accounts.google.com' || j.iss === 'https://accounts.google.com';
+  if (j.aud !== GOOGLE_CLIENT_ID || !okIss || !j.sub || Number(j.exp) * 1000 < now()) fail(401, '구글 인증에 실패했어요.');
+  return String(j.sub);
+}
+const pendingGoogle = new Map(); // 닉네임 정하기 전 임시 토큰 (10분)
 function adminOnly(req) {
   throttle('admin|' + req.socket.remoteAddress);
   const k = String(req.headers['x-admin-key'] || '');
@@ -167,8 +191,7 @@ function adminOnly(req) {
 // ---------- API ----------
 const routes = {
   'POST /api/signup': (req, body) => {
-    const name = String(body.name || '').trim(), pin = String(body.pin || '');
-    if (!/^[\p{L}\p{N}_ ]{1,12}$/u.test(name)) fail(400, '닉네임은 12자 이내 글자/숫자만 가능해요.');
+    const name = checkName(body.name), pin = String(body.pin || '');
     if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
     if (q1('SELECT 1 FROM users WHERE name=?', name)) fail(409, '이미 있는 닉네임이에요.');
     const salt = crypto.randomBytes(8).toString('hex');
@@ -179,8 +202,53 @@ const routes = {
     const name = String(body.name || '').trim(), pin = String(body.pin || '');
     throttle(name + '|' + req.socket.remoteAddress);
     const u = q1('SELECT * FROM users WHERE name=?', name);
-    if (!u || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
+    if (!u || !u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
     return { token: newSession(u.id) };
+  },
+  'GET /api/config': () => ({ google_client_id: GOOGLE_CLIENT_ID || null }),
+  'POST /api/google': async (req, body) => {
+    throttle('google|' + req.socket.remoteAddress);
+    const sub = await verifyGoogle(body.credential);
+    const u = q1('SELECT id FROM users WHERE google_sub=?', sub);
+    if (u) return { token: newSession(u.id) };
+    const pending = crypto.randomBytes(16).toString('hex');
+    pendingGoogle.set(pending, { sub, exp: now() + 6e5 });
+    return { needs_nickname: true, pending };
+  },
+  'POST /api/google/signup': (req, body) => {
+    const p = pendingGoogle.get(String(body.pending || ''));
+    if (!p || p.exp < now()) fail(400, '시간이 지났어요. 구글 로그인을 다시 해주세요.');
+    const name = checkName(body.name);
+    if (q1('SELECT 1 FROM users WHERE name=?', name)) fail(409, '이미 있는 닉네임이에요.');
+    const r = run('INSERT INTO users(name,salt,hash,points,created_at,google_sub) VALUES (?,?,?,?,?,?)', name, '', '', START_POINTS, now(), p.sub);
+    pendingGoogle.delete(String(body.pending));
+    return { token: newSession(Number(r.lastInsertRowid)) };
+  },
+  'POST /api/nickname': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const name = checkName(body.name);
+    const other = q1('SELECT id FROM users WHERE name=?', name);
+    if (other && other.id !== u.id) fail(409, '이미 있는 닉네임이에요.');
+    run('UPDATE users SET name=? WHERE id=?', name, u.id);
+    return { ok: true };
+  },
+  'GET /api/chat': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const after = Number(new URL(req.url, 'http://x').searchParams.get('after')) || 0;
+    const rows = after
+      ? q('SELECT m.id, m.text, m.created_at, m.user_id, u.name FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id>? ORDER BY m.id LIMIT 100', after)
+      : q('SELECT * FROM (SELECT m.id, m.text, m.created_at, m.user_id, u.name FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 60) ORDER BY id');
+    return rows.map((r) => ({ id: r.id, text: r.text, name: r.name, at: r.created_at, mine: r.user_id === u.id }));
+  },
+  'POST /api/chat': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const text = String(body.text || '').trim();
+    if (!text || text.length > 200) fail(400, '메시지는 1~200자예요.');
+    const last = q1('SELECT created_at FROM messages WHERE user_id=? ORDER BY id DESC LIMIT 1', u.id);
+    if (last && now() - last.created_at < 800) fail(429, '너무 빨라요! 잠깐만요.');
+    run('INSERT INTO messages(user_id,text,created_at) VALUES (?,?,?)', u.id, text, now());
+    run('DELETE FROM messages WHERE id < (SELECT MAX(id) FROM messages) - 1000');
+    return { ok: true };
   },
   'GET /api/me': (req, body, u) => me(u || fail(401, '로그인이 필요해요.')),
   'GET /api/bets': (req, body, u) => {
@@ -245,7 +313,8 @@ const routes = {
     const users = q('SELECT id,name,points,created_at FROM users ORDER BY points DESC');
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
-    return { users, bets, stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
+    const messages = q('SELECT m.id, m.text, m.created_at, u.name FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 40');
+    return { users, bets, messages, stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
   },
   'POST /api/admin/user': (req, body) => {
     adminOnly(req);
@@ -257,6 +326,10 @@ const routes = {
         const next = body.action === 'set_points' ? v : u.points + v;
         if (next < 0) fail(400, '0점 미만으로는 못 해요.');
         run('UPDATE users SET points=? WHERE id=?', next, u.id);
+      } else if (body.action === 'rename') {
+        const name = checkName(body.value);
+        if (q1('SELECT 1 FROM users WHERE name=? AND id<>?', name, u.id)) fail(409, '이미 있는 닉네임이에요.');
+        run('UPDATE users SET name=? WHERE id=?', name, u.id);
       } else if (body.action === 'reset_pin') {
         const pin = String(body.value || '');
         if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
@@ -266,6 +339,7 @@ const routes = {
       } else if (body.action === 'delete') {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
         run('DELETE FROM sessions WHERE user_id=?', u.id);
+        run('DELETE FROM messages WHERE user_id=?', u.id);
         run('DELETE FROM users WHERE id=?', u.id);
       } else fail(400, '알 수 없는 동작이에요.');
       return { ok: true };
@@ -282,6 +356,11 @@ const routes = {
       }
       return betAction(bet, body);
     });
+  },
+  'POST /api/admin/chat': (req, body) => {
+    adminOnly(req);
+    run('DELETE FROM messages WHERE id=?', Number(body.id));
+    return { ok: true };
   },
   'POST /api/admin/gift': (req, body) => {
     adminOnly(req);
@@ -306,10 +385,10 @@ const server = http.createServer((req, res) => {
     if (!handler) return send(404, { error: '없는 주소예요.' });
     let raw = '';
     req.on('data', (c) => { raw += c; if (raw.length > 1e5) req.destroy(); });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const body = raw ? JSON.parse(raw) : {};
-        send(200, handler(req, body, authUser(req)));
+        send(200, await handler(req, body, authUser(req)));
       } catch (e) {
         if (e instanceof HttpError) send(e.code, { error: e.message });
         else if (e instanceof SyntaxError) send(400, { error: '잘못된 요청이에요.' });
