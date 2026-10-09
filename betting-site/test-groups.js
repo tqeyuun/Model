@@ -41,28 +41,23 @@ server.listen(0, async () => {
     assert.equal((await call('GET', '/api/rps', null, b1)).j.recent.length, 0);
 
     // 로그인: 같은 닉네임+PIN이면 같은 방으로 다시 들어옴, 방은 PIN에서 결정
-    const re = (await call('POST', '/api/enter', { name: '에이원', pin: '1111' })).j.token;
+    const re = (await call('POST', '/api/enter', { room: '1111', name: '에이원', pin: '1111' })).j.token;
     assert.deepEqual(await ids(re), ['A방 도박']);
-    assert.equal((await call('POST', '/api/enter', { name: '에이원', pin: '2222' })).s, 401, 'PIN이 다르면 로그인 안 됨(방 침입 방지)');
-
-    // 예전 계정(방 없음)은 처음 로그인할 때 PIN으로 방이 정해짐
-    const legacy = await mk('옛날사람', '1111');
-    db.prepare("UPDATE users SET grp=NULL WHERE name='옛날사람'").run();
-    assert.deepEqual(await ids(legacy), [], '방이 없는 상태에선 어느 방도 안 보임');
-    const claimed = (await call('POST', '/api/login', { name: '옛날사람', pin: '1111' })).j.token;
-    assert.deepEqual(await ids(claimed), ['A방 도박'], '로그인하면 PIN 방으로 들어감');
-    assert.equal((await call('GET', '/api/me', null, claimed)).j.group_size, 3);
+    assert.equal((await call('POST', '/api/enter', { room: '1111', name: '에이원', pin: '2222' })).s, 401, 'PIN이 다르면 로그인 안 됨');
+    assert.equal((await call('POST', '/api/enter', { room: '2222', name: '에이원', pin: '1111' })).j.new_user, true, '다른 방에는 그 닉네임이 없으니 새 계정 (한 사람이 여러 계정을 써도 됨)');
 
     // 관리자: 모든 방을 보고, PIN을 바꿔주면 그 사람의 방이 바뀜
     const adm = (m, p, b) => call(m, p, b, null, { 'X-Admin-Key': ADMIN_KEY });
     const ov = (await adm('GET', '/api/admin/overview')).j;
-    assert.equal(ov.users.length, 5);
+    assert.equal(ov.users.length, 4);
     assert.equal(new Set(ov.users.map((u) => u.grp)).size, 2, '관리자 화면에서 방이 구분돼 보임');
     const a2id = ov.users.find((u) => u.name === '에이투').id;
     await adm('POST', '/api/admin/user', { user_id: a2id, action: 'reset_pin', value: '2222' });
-    const a2new = (await call('POST', '/api/login', { name: '에이투', pin: '2222' })).j.token;
-    assert.deepEqual(await ids(a2new), ['B방 도박'], 'PIN을 바꾸면 B방으로 이동');
-    console.log('PIN 방 분리 테스트 통과');
+    const a2new = (await call('POST', '/api/login', { room: '1111', name: '에이투', pin: '2222' })).j.token;
+    assert.deepEqual(await ids(a2new), ['A방 도박'], 'PIN만 바뀌고 방은 그대로(A방)');
+    await adm('POST', '/api/admin/user', { user_id: a2id, action: 'move_room', value: '2222' });
+    assert.deepEqual(await ids(a2new), ['B방 도박'], '방 변경 → B방으로 이동');
+    console.log('방 분리 테스트 통과');
   } catch (e) { console.error(e); process.exitCode = 1; }
   server.close();
 });

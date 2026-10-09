@@ -62,7 +62,7 @@ server.listen(0, async () => {
     assert.equal(await pts(b), bBefore + 100, '전체 지급');
     await adm('POST', '/api/admin/user', { user_id: ua.id, action: 'reset_pin', value: '9999' });
     assert.equal((await call('GET', '/api/me', null, a)).s, 401, 'PIN 초기화하면 기존 세션 종료');
-    assert.equal((await call('POST', '/api/login', { name: 'a', pin: '9999' })).s, 200);
+    assert.equal((await call('POST', '/api/login', { room: '1234', name: 'a', pin: '9999' })).s, 200);
     // 관리자 강제 정산(진행 중 내기 삭제 시 환불)
     const bet4 = (await call('POST', '/api/bets', { title: '4', options: ['U', 'V'] }, b)).j;
     const before4 = await pts(b);

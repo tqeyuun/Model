@@ -15,6 +15,7 @@ var SHEETS = {
   wagers: ['id', 'bet_id', 'option_id', 'user_id', 'amount', 'payout', 'lucky', 'created_at'],
   messages: ['id', 'user_id', 'text', 'created_at', 'bet_id'],
   items: ['user_id', 'item_id'],
+  rooms: ['id', 'grp', 'code', 'created_at'],
   rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at'],
   lun: ['id', 'host_id', 'stake', 'cap', 'status', 'winner_id', 'created_at', 'played_at'],
   lunp: ['id', 'room_id', 'user_id', 'num', 'joined_at'],
@@ -34,6 +35,18 @@ function doGet(e) {
 }
 
 /** 브라우저(google.script.run)가 부르는 단 하나의 함수. 결과는 JSON 문자열. */
+/** 방 코드 + 방별 닉네임 구조로 바뀐 첫 실행: 예전 계정·방·기록은 전부 비워요 (관리자 설정·관리자 비밀번호는 유지) */
+var SCHEMA_V = '2';
+function ensureSchema() {
+  if (props().getProperty('SCHEMA_V') === SCHEMA_V) return;
+  withLock(function () {
+    if (props().getProperty('SCHEMA_V') === SCHEMA_V) return;
+    var oldTokens = tbl('sessions').all().map(function (r) { return 's_' + r.token; });   // 캐시에 남은 예전 로그인도 지움 (새 계정과 번호가 겹쳐도 못 쓰게)
+    if (oldTokens.length) CacheService.getScriptCache().removeAll(oldTokens);
+    Object.keys(SHEETS).forEach(function (n) { var sh = tbl(n).sheet, last = sh.getLastRow(); if (last > 1) sh.deleteRows(2, last - 1); TBL[n] = null; });
+    props().setProperty('SCHEMA_V', SCHEMA_V);
+  });
+}
 var HOLDING = false; // 이 실행이 이미 스크립트 락을 잡고 있는지 (락은 재진입이 안 돼서 구분 필요)
 function handle(token, adminKey, method, url, body) {
   var write = method === 'POST', lock = null;
@@ -44,6 +57,7 @@ function handle(token, adminKey, method, url, body) {
     var fn = ROUTES[method + ' ' + path];
     if (!fn) fail(404, '없는 주소예요.');
     if (write) { lock = LockService.getScriptLock(); lock.waitLock(25000); HOLDING = true; }
+    ensureSchema();
     var ctx = { token: String(token || ''), adminKey: String(adminKey || ''), qs: qs };
     ctx.user = authUser(ctx.token);
     if (ctx.token && !ctx.user) fail(401, '다시 로그인해주세요.');
@@ -114,6 +128,24 @@ function groupKey(pin) {
   return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret('PEPPER') + 'grp:' + pin)).slice(0, 16);
 }
 function grpOf(u) { return u && u.grp ? String(u.grp) : ''; }
+/** 방 코드(친구들과 같은 값 → 같은 방)와 PIN(나만 아는 로그인 비밀번호)은 따로예요. 닉네임은 방 안에서만 겹치지 않으면 돼요. */
+var PIN_RE = /^\S{4,16}$/, ROOM_RE = /^[\p{L}\p{N}]{4,12}$/u;
+function roomRowOf(grp) { return tbl('rooms').find(function (r) { return String(r.grp) === grp; }); }
+function roomCodeOf(u) { var r = u && u.grp ? roomRowOf(grpOf(u)) : null; return r ? r.code : null; }
+/** 방이 없으면 만들고 방 번호(grp)를 돌려줌 */
+function ensureRoom(code) {
+  if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자예요.');
+  var g = groupKey(code);
+  if (!roomRowOf(g)) tbl('rooms').insert({ grp: g, code: code, created_at: now() });
+  return g;
+}
+function userInRoom(grp, name) { return tbl('users').find(function (x) { return grpOf(x) === grp && x.name === name; }); }
+function addAccount(grp, name, pin) {
+  if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
+  var salt = Utilities.getUuid().slice(0, 8);
+  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: grp });
+  return newSession(nu.id);
+}
 function sameRoom(userId, me) { var o = userById(userId); return !!o && grpOf(o) === grpOf(me); }
 function throttle(key, limit) {
   var c = CacheService.getScriptCache(), n = Number(c.get(key) || 0);
@@ -202,7 +234,7 @@ function deco(r) {
 }
 function meView(u) {
   var o = { id: u.id, name: u.name, points: u.points, can_aid: u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
-    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u); }).length };
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u); }).length, room: roomCodeOf(u) };
   var d = deco(u); for (var k in d) o[k] = d[k];
   return o;
 }
@@ -331,7 +363,7 @@ function settingsView() {
 /* ================= 관리자: 게임 방 / PIN 방 ================= */
 function adminRooms() {
   var nm = function (id) { var u = userById(id); return u ? u.name : '(탈퇴)'; };
-  var gp = function (id) { var u = userById(id); return u && u.grp ? String(u.grp).slice(0, 4) : null; };
+  var gp = function (id) { return roomCodeOf(userById(id)); };
   var out = [];
   tbl('rps').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'rps', id: r.id, host: nm(r.host_id), stake: r.stake, players: [nm(r.host_id)], cap: 2, created_at: r.created_at, grp: gp(r.host_id) }); });   // 손은 안 보임
   tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lun', id: r.id, host: nm(r.host_id), stake: r.stake, players: lunPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });   // 숫자는 안 보임
@@ -339,12 +371,13 @@ function adminRooms() {
   return out.sort(function (a, b) { return b.created_at - a.created_at; });
 }
 function adminGroups() {
-  var by = {};
+  var by = {}, codes = {};
+  tbl('rooms').all().forEach(function (r) { codes[String(r.grp)] = r.code; by[String(r.grp)] = by[String(r.grp)] || []; });
   tbl('users').all().forEach(function (u) { var g = grpOf(u); (by[g] = by[g] || []).push(u); });
   var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; });
   return Object.keys(by).map(function (g) {
     var ms = by[g], ids = {}; ms.forEach(function (m) { ids[m.id] = 1; });
-    return { id: g, label: g ? g.slice(0, 4) : '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
+    return { id: g, label: codes[g] || '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
       bets: bets.filter(function (b) { return ids[b.creator_id]; }).length, rooms: waiting.filter(function (r) { return ids[r.host_id]; }).length };
   }).sort(function (a, b) { return b.count - a.count; });
 }
@@ -360,7 +393,7 @@ function adminCloseRoom(kind, roomId) {
 function adminDeleteGroup(grp) {
   var g = grp ? String(grp) : '';
   var ms = tbl('users').where(function (u) { return grpOf(u) === g; });
-  if (!ms.length) fail(404, '그 방이 없어요.');
+  if (!ms.length && !roomRowOf(g)) fail(404, '그 방이 없어요.');
   var ids = {}, betIds = {};
   ms.forEach(function (m) { ids[m.id] = 1; });
   tbl('bets').where(function (b) { return ids[b.creator_id]; }).forEach(function (b) { betIds[b.id] = 1; });
@@ -377,6 +410,7 @@ function adminDeleteGroup(grp) {
   ['bj', 'slots', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
   tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
   tbl('users').removeWhere(function (u) { return ids[u.id]; });
+  tbl('rooms').removeWhere(function (r) { return String(r.grp) === g; });
   return ms.length;
 }
 
@@ -551,38 +585,51 @@ function slotView(u) {
 var ROUTES = {
   'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView(u) : [], rps: u ? rpsView(u) : null }; },
 
-  'POST /api/signup': function (body, u, ctx) {
-    var name = checkName(body.name), pin = String(body.pin || '');
-    if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
-    if (tbl('users').find(function (x) { return x.name === name; })) fail(409, '이미 있는 닉네임이에요.');
-    var salt = Utilities.getUuid().slice(0, 8);
-    var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: groupKey(pin) });
-    return { token: newSession(nu.id) };
+  // (테스트/내부용) 방 코드를 안 주면 PIN을 방 코드로 씀. 방이 없으면 만들고 계정을 만듦
+  'POST /api/signup': function (body) {
+    var name = checkName(body.name), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin);
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');   // 방을 만들기 전에 값부터 검사 (실패했는데 빈 방이 남지 않게)
+    var grp = ensureRoom(String(body.room === undefined ? pin : body.room).trim());
+    if (userInRoom(grp, name)) fail(409, '이 방에 이미 있는 닉네임이에요.');
+    return { token: addAccount(grp, name, pin) };
   },
   'POST /api/login': function (body) {
-    var name = String(body.name || '').trim(), pin = String(body.pin || '');
-    throttle('login|' + name, 10);
-    var u = tbl('users').find(function (x) { return x.name === name; });
-    if (!u) fail(401, '없는 닉네임이에요.');
-    if (hashPin(pin, u.salt) !== u.hash) fail(401, '이미 쓰고 있는 닉네임이에요. 내 계정이면 PIN이 달라요(PIN을 다시 확인해 주세요). 처음 만드는 거라면 다른 닉네임을 써주세요.');
-    if (!u.grp) { u.grp = groupKey(pin); tbl('users').save(u); }   // 예전 계정은 처음 로그인할 때 방이 정해짐
-    CacheService.getScriptCache().remove('login|' + name);
+    var name = String(body.name || '').trim(), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin);
+    var code = String(body.room === undefined ? pin : body.room).trim();
+    throttle('login|' + code + '|' + name, 10);
+    var u = userInRoom(groupKey(code), name);
+    if (!u || hashPin(pin, u.salt) !== u.hash) fail(401, '방 코드, 닉네임, PIN을 확인해 주세요.');
+    CacheService.getScriptCache().remove('login|' + code + '|' + name);
     return { token: newSession(u.id) };
   },
-  // 닉네임이 있으면 로그인, 없으면 (확인 후) 가입 — 버튼 하나로 처리
-  'POST /api/enter': function (body, u, ctx) {
-    var name = String(body.name || '').trim();
-    if (tbl('users').find(function (x) { return x.name === name; })) return ROUTES['POST /api/login'](body, u, ctx);
-    if (!body.create) {
+  // 방 들어가기(mode:'join') / 방 만들기(mode:'create'). 들어갈 땐: 이 방에 닉네임이 있으면 로그인(PIN 확인), 없으면 (확인 후) 새 계정.
+  'POST /api/enter': function (body) {
+    var name = String(body.name || '').trim(), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin), code = String(body.room === undefined ? '' : body.room).trim();
+    if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자예요.');
+    var grp = groupKey(code), room = roomRowOf(grp);
+    if (body.mode === 'create') {
+      if (room) fail(409, '이미 있는 방 코드예요. 그 방에 들어가려면 "방 들어가기"를 눌러주세요.');
       checkName(name);
-      if (!/^\d{4}$/.test(String(body.pin || ''))) fail(400, 'PIN은 숫자 4자리예요.');
-      return { new_user: true };
+      if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');   // 방을 만들기 전에 값부터 검사
+      ensureRoom(code);
+      return { token: addAccount(grp, name, pin), created_room: true };
     }
-    return ROUTES['POST /api/signup'](body, u, ctx);
+    if (!room) fail(404, '없는 방 코드예요. 방을 새로 만들려면 "방 만들기"를 눌러주세요.');
+    var u = userInRoom(grp, name);
+    if (u) {
+      throttle('login|' + code + '|' + name, 10);
+      if (hashPin(pin, u.salt) !== u.hash) fail(401, '이 방에 이미 있는 닉네임이에요. 내 계정이면 PIN이 달라요(다시 확인해 주세요). 처음이라면 다른 닉네임을 써주세요.');
+      CacheService.getScriptCache().remove('login|' + code + '|' + name);
+      return { token: newSession(u.id) };
+    }
+    checkName(name);
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
+    if (!body.create) return { new_user: true };
+    return { token: addAccount(grp, name, pin) };
   },
   'POST /api/nickname': function (body, u) {
     needLogin(u); var name = checkName(body.name);
-    var other = tbl('users').find(function (x) { return x.name === name; });
+    var other = tbl('users').find(function (x) { return x.name === name && grpOf(x) === grpOf(u); });
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임이에요.');
     u.name = name; tbl('users').save(u); return { ok: true };
   },
@@ -846,7 +893,7 @@ var ROUTES = {
   /* ---- 관리자 ---- */
   'GET /api/admin/overview': function (body, u, ctx) {
     adminOnly(ctx); sweep();
-    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, grp: x.grp ? String(x.grp).slice(0, 4) : null }; });
+    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, grp: roomCodeOf(x) }; });
     var wag = tbl('wagers').all(), names = {}; tbl('users').all().forEach(function (x) { names[x.id] = x.name; });
     var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
     var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
@@ -884,12 +931,16 @@ var ROUTES = {
       t.points = next; tbl('users').save(t);
     } else if (body.action === 'rename') {
       var name = checkName(body.value);
-      if (tbl('users').find(function (x) { return x.name === name && x.id !== t.id; })) fail(409, '이미 있는 닉네임이에요.');
+      if (tbl('users').find(function (x) { return x.name === name && x.id !== t.id && grpOf(x) === grpOf(t); })) fail(409, '이미 있는 닉네임이에요.');
       t.name = name; tbl('users').save(t);
-    } else if (body.action === 'reset_pin') {
+    } else if (body.action === 'move_room') {      // 방 변경: 방 코드로 옮김 (없는 코드면 방을 새로 만듦). 같은 방에 같은 닉네임이 있으면 거부
+      var g2 = ensureRoom(String(body.value || '').trim());
+      if (tbl('users').find(function (x) { return grpOf(x) === g2 && x.name === t.name && x.id !== t.id; })) fail(409, '그 방에 같은 닉네임이 이미 있어요.');
+      t.grp = g2; tbl('users').save(t);
+    } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
       var pin = String(body.value || '');
-      if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
-      var salt = Utilities.getUuid().slice(0, 8); t.salt = salt; t.hash = hashPin(pin, salt); t.grp = groupKey(pin); tbl('users').save(t);   // PIN이 바뀌면 방도 바뀜
+      if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
+      var salt = Utilities.getUuid().slice(0, 8); t.salt = salt; t.hash = hashPin(pin, salt); tbl('users').save(t);
       var keys = tbl('sessions').where(function (s) { return s.user_id === t.id; }).map(function (s) { return 's_' + s.token; });
       if (keys.length) CacheService.getScriptCache().removeAll(keys);
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });

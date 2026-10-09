@@ -25,11 +25,19 @@ let LUCKY_CHANCE = Number(process.env.LUCKY_CHANCE ?? 0.07); // 이긴 사람마
 const LUCKY_BONUS = 0.5;        // 럭키 당첨 시 받은 금액의 50%를 추가 지급
 
 const db = new DatabaseSync(DB_FILE);
+// 방 코드 + 방별 닉네임 구조로 바뀐 첫 실행: 예전 계정·방·기록은 전부 비워요 (관리자 설정은 유지)
+const SCHEMA_V = '2';
+db.exec('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
+if (db.prepare("SELECT v FROM settings WHERE k='schema_v'").get()?.v !== SCHEMA_V) {
+  for (const t of ['users', 'sessions', 'bets', 'options', 'wagers', 'messages', 'user_items', 'rps', 'lun', 'lun_p', 'lad', 'lad_p', 'bj', 'slots', 'rooms']) db.exec(`DROP TABLE IF EXISTS ${t}`);
+  db.prepare("INSERT OR REPLACE INTO settings(k,v) VALUES ('schema_v', ?)").run(SCHEMA_V);
+}
 db.exec(`
 PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL,
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL,
   points INTEGER NOT NULL, last_aid INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS rooms (id INTEGER PRIMARY KEY, grp TEXT UNIQUE NOT NULL, code TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS bets (
   id INTEGER PRIMARY KEY, title TEXT NOT NULL, creator_id INTEGER NOT NULL,
@@ -59,6 +67,7 @@ CREATE TABLE IF NOT EXISTS wagers (
 try { db.exec('ALTER TABLE messages ADD COLUMN bet_id INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN grp TEXT'); } catch { /* 이미 있음 */ }
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_room_name ON users(grp, name)');   // 닉네임은 방 안에서만 겹치지 않으면 됨
 for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
 db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub)');
@@ -300,7 +309,7 @@ const settingsView = () => SETTING_SPECS.map(({ key, label, hint, type, min, max
 // ---------- 관리자: 게임 방 / PIN 방 ----------
 function adminRooms() {
   const nameOf = (id) => q1('SELECT name FROM users WHERE id=?', id)?.name || '(탈퇴)';
-  const grpOfUser = (id) => (q1('SELECT substr(grp,1,4) g FROM users WHERE id=?', id)?.g) || null;
+  const grpOfUser = (id) => (q1('SELECT r.code g FROM users u LEFT JOIN rooms r ON r.grp=u.grp WHERE u.id=?', id)?.g) || null;
   const out = [];
   for (const r of q("SELECT * FROM rps WHERE status='waiting'")) out.push({ kind: 'rps', id: r.id, host: nameOf(r.host_id), stake: r.stake, players: [nameOf(r.host_id)], cap: 2, created_at: r.created_at, grp: grpOfUser(r.host_id) });   // 손은 안 보임
   for (const r of q("SELECT * FROM lun WHERE status='waiting'")) out.push({ kind: 'lun', id: r.id, host: nameOf(r.host_id), stake: r.stake, players: q('SELECT user_id FROM lun_p WHERE room_id=? ORDER BY id', r.id).map((p) => nameOf(p.user_id)), cap: r.cap, created_at: r.created_at, grp: grpOfUser(r.host_id) });   // 숫자는 안 보임
@@ -308,10 +317,12 @@ function adminRooms() {
   return out.sort((a, b) => b.created_at - a.created_at);
 }
 function adminGroups() {
-  return q('SELECT grp FROM users GROUP BY grp').map(({ grp }) => {
+  const codes = new Map(q('SELECT grp, code FROM rooms').map((r) => [r.grp, r.code]));
+  for (const r of q('SELECT DISTINCT grp FROM users')) if (!codes.has(r.grp)) codes.set(r.grp, null);
+  return [...codes.keys()].map((grp) => {
     const members = q('SELECT id, name, points FROM users WHERE grp IS ? ORDER BY points DESC', grp);
     const ids = members.map((m) => m.id).join(',') || '0';
-    return { id: grp || '', label: grp ? grp.slice(0, 4) : '방 없음', members: members.map((m) => m.name), count: members.length, points: members.reduce((a, m) => a + m.points, 0),
+    return { id: grp || '', label: codes.get(grp) || '방 없음', members: members.map((m) => m.name), count: members.length, points: members.reduce((a, m) => a + m.points, 0),
       bets: q1(`SELECT COUNT(*) n FROM bets WHERE creator_id IN (${ids})`).n,
       rooms: ['rps', 'lun', 'lad'].reduce((n, t) => n + q1(`SELECT COUNT(*) n FROM ${t} WHERE status='waiting' AND host_id IN (${ids})`).n, 0) };
   }).sort((a, b) => b.count - a.count);
@@ -327,7 +338,8 @@ function adminCloseRoom(kind, roomId) {
 // PIN 방 하나를 통째로 지움: 그 방 사람들과 그 사람들의 도박·채팅·게임 기록이 모두 사라져요
 function adminDeleteGroup(grp) {
   const ids = q('SELECT id FROM users WHERE grp IS ?', grp || null).map((r) => r.id);
-  if (!ids.length) fail(404, '그 방이 없어요.');
+  if (!ids.length && !q1('SELECT 1 FROM rooms WHERE grp=?', grp || '')) fail(404, '그 방이 없어요.');
+  if (!ids.length) { run('DELETE FROM rooms WHERE grp=?', grp); return 0; }
   const L = ids.join(',');
   const betIds = q(`SELECT id FROM bets WHERE creator_id IN (${L})`).map((r) => r.id);
   if (betIds.length) { const B = betIds.join(','); for (const t of ['messages', 'wagers', 'options']) run(`DELETE FROM ${t} WHERE bet_id IN (${B})`); run(`DELETE FROM bets WHERE id IN (${B})`); }
@@ -340,6 +352,7 @@ function adminDeleteGroup(grp) {
   run(`DELETE FROM rps WHERE host_id IN (${L}) OR guest_id IN (${L})`);
   for (const t of ['bj', 'slots', 'user_items', 'sessions']) run(`DELETE FROM ${t} WHERE user_id IN (${L})`);
   run(`DELETE FROM users WHERE id IN (${L})`);
+  run('DELETE FROM rooms WHERE grp=?', grp || '');
   return ids.length;
 }
 
@@ -370,7 +383,7 @@ function betView(b, me) {
     chat_count: q1('SELECT COUNT(*) n FROM messages WHERE bet_id=?', b.id).n,
   };
 }
-const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ?', grpOf(u)).n, ...deco(u) };
+const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ?', grpOf(u)).n, room: roomCodeOf(u), ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
@@ -382,6 +395,22 @@ function pepper() {
 }
 const groupKey = (pin) => crypto.createHash('sha256').update('grp:' + pepper() + pin).digest('hex').slice(0, 16);
 const grpOf = (u) => (u && u.grp) || null;
+// 방 코드(친구들과 같은 값 → 같은 방)와 PIN(나만 아는 로그인 비밀번호)은 따로예요. 닉네임은 방 안에서만 겹치지 않으면 돼요.
+const PIN_RE = /^\S{4,16}$/, ROOM_RE = /^[\p{L}\p{N}]{4,12}$/u;
+const roomCodeOf = (u) => (u && u.grp ? q1('SELECT code FROM rooms WHERE grp=?', u.grp)?.code : null) || null;
+function ensureRoom(code) {                       // 방이 없으면 만들고 방 번호(grp)를 돌려줌
+  if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자예요.');
+  const g = groupKey(code);
+  if (!q1('SELECT 1 FROM rooms WHERE grp=?', g)) run('INSERT INTO rooms(grp,code,created_at) VALUES (?,?,?)', g, code, now());
+  return g;
+}
+const userInRoom = (grp, name) => q1('SELECT * FROM users WHERE grp=? AND name=?', grp, name);
+function addAccount(grp, name, pin) {
+  if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
+  const salt = crypto.randomBytes(8).toString('hex');
+  const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp) VALUES (?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), grp);
+  return newSession(Number(r.lastInsertRowid));
+}
 // 같은 방의 도박만 볼 수 있음 (도박을 연 사람의 방 기준). 아니면 null.
 function visibleBet(betId, u) {
   return q1('SELECT b.* FROM bets b JOIN users c ON c.id=b.creator_id WHERE b.id=? AND c.grp IS ?', Number(betId), grpOf(u));
@@ -449,33 +478,46 @@ function adminOnly(req) {
 
 // ---------- API ----------
 const routes = {
+  // (테스트/내부용) 방 코드를 안 주면 PIN을 방 코드로 씀. 방이 없으면 만들고 계정을 만듦
   'POST /api/signup': (req, body) => {
-    const name = checkName(body.name), pin = String(body.pin || '');
-    if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
-    if (q1('SELECT 1 FROM users WHERE name=?', name)) fail(409, '이미 있는 닉네임이에요.');
-    const salt = crypto.randomBytes(8).toString('hex');
-    const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp) VALUES (?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), groupKey(pin));
-    return { token: newSession(Number(r.lastInsertRowid)) };
+    const name = checkName(body.name), pin = String(body.pin ?? '');
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');   // 방을 만들기 전에 값부터 검사 (실패했는데 빈 방이 남지 않게)
+    const grp = ensureRoom(String(body.room ?? pin).trim());
+    if (userInRoom(grp, name)) fail(409, '이 방에 이미 있는 닉네임이에요.');
+    return { token: addAccount(grp, name, pin) };
   },
   'POST /api/login': (req, body) => {
-    const name = String(body.name || '').trim(), pin = String(body.pin || '');
-    throttle(name + '|' + req.socket.remoteAddress);
-    const u = q1('SELECT * FROM users WHERE name=?', name);
-    if (!u) fail(401, '없는 닉네임이에요.');
-    if (!u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '이미 쓰고 있는 닉네임이에요. 내 계정이면 PIN이 달라요(PIN을 다시 확인해 주세요). 처음 만드는 거라면 다른 닉네임을 써주세요.');
-    if (!u.grp) run('UPDATE users SET grp=? WHERE id=?', groupKey(pin), u.id);   // 예전 계정은 처음 로그인할 때 방이 정해짐
+    const name = String(body.name || '').trim(), pin = String(body.pin ?? ''), code = String(body.room ?? pin).trim();
+    throttle(code + '|' + name + '|' + req.socket.remoteAddress);
+    const u = userInRoom(groupKey(code), name);
+    if (!u || !u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '방 코드, 닉네임, PIN을 확인해 주세요.');
+    attempts.delete(code + '|' + name + '|' + req.socket.remoteAddress);
     return { token: newSession(u.id) };
   },
-  // 닉네임이 있으면 로그인, 없으면 (확인 후) 가입 — 버튼 하나로 처리
+  // 방 들어가기(mode:'join') / 방 만들기(mode:'create'). 들어갈 땐: 이 방에 닉네임이 있으면 로그인(PIN 확인), 없으면 (확인 후) 새 계정.
   'POST /api/enter': (req, body) => {
-    const name = String(body.name || '').trim();
-    if (q1('SELECT 1 FROM users WHERE name=?', name)) return routes['POST /api/login'](req, body);
-    if (!body.create) {
+    const name = String(body.name || '').trim(), pin = String(body.pin ?? ''), code = String(body.room ?? '').trim();
+    if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자예요.');
+    const grp = groupKey(code), room = q1('SELECT 1 FROM rooms WHERE grp=?', grp);
+    if (body.mode === 'create') {
+      if (room) fail(409, '이미 있는 방 코드예요. 그 방에 들어가려면 "방 들어가기"를 눌러주세요.');
       checkName(name);
-      if (!/^\d{4}$/.test(String(body.pin || ''))) fail(400, 'PIN은 숫자 4자리예요.');
-      return { new_user: true };
+      if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');   // 방을 만들기 전에 값부터 검사
+      ensureRoom(code);
+      return { token: addAccount(grp, name, pin), created_room: true };
     }
-    return routes['POST /api/signup'](req, body);
+    if (!room) fail(404, '없는 방 코드예요. 방을 새로 만들려면 "방 만들기"를 눌러주세요.');
+    const u = userInRoom(grp, name);
+    if (u) {
+      throttle(code + '|' + name + '|' + req.socket.remoteAddress);
+      if (!u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '이 방에 이미 있는 닉네임이에요. 내 계정이면 PIN이 달라요(다시 확인해 주세요). 처음이라면 다른 닉네임을 써주세요.');
+      attempts.delete(code + '|' + name + '|' + req.socket.remoteAddress);
+      return { token: newSession(u.id) };
+    }
+    checkName(name);
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
+    if (!body.create) return { new_user: true };
+    return { token: addAccount(grp, name, pin) };
   },
   'GET /api/config': () => ({ google_client_id: GOOGLE_CLIENT_ID || null }),
   'POST /api/google': async (req, body) => {
@@ -491,7 +533,7 @@ const routes = {
     const p = pendingGoogle.get(String(body.pending || ''));
     if (!p || p.exp < now()) fail(400, '시간이 지났어요. 구글 로그인을 다시 해주세요.');
     const name = checkName(body.name);
-    if (q1('SELECT 1 FROM users WHERE name=?', name)) fail(409, '이미 있는 닉네임이에요.');
+    if (q1('SELECT 1 FROM users WHERE name=? AND grp IS NULL', name)) fail(409, '이미 있는 닉네임이에요.');
     const r = run('INSERT INTO users(name,salt,hash,points,created_at,google_sub) VALUES (?,?,?,?,?,?)', name, '', '', START_POINTS, now(), p.sub);
     pendingGoogle.delete(String(body.pending));
     return { token: newSession(Number(r.lastInsertRowid)) };
@@ -499,7 +541,7 @@ const routes = {
   'POST /api/nickname': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
     const name = checkName(body.name);
-    const other = q1('SELECT id FROM users WHERE name=?', name);
+    const other = q1('SELECT id FROM users WHERE name=? AND grp IS ?', name, grpOf(u));
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임이에요.');
     run('UPDATE users SET name=? WHERE id=?', name, u.id);
     return { ok: true };
@@ -822,7 +864,7 @@ const routes = {
   },
   'GET /api/admin/overview': (req) => {
     adminOnly(req); sweep();
-    const users = q('SELECT id,name,points,created_at,substr(grp,1,4) grp FROM users ORDER BY points DESC');
+    const users = q('SELECT u.id, u.name, u.points, u.created_at, r.code grp FROM users u LEFT JOIN rooms r ON r.grp=u.grp ORDER BY u.points DESC');
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
     const messages = q('SELECT m.id, m.text, m.created_at, u.name, b.title bet_title FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN bets b ON b.id=m.bet_id ORDER BY m.id DESC LIMIT 40');
@@ -858,14 +900,18 @@ const routes = {
         run('UPDATE users SET points=? WHERE id=?', next, u.id);
       } else if (body.action === 'rename') {
         const name = checkName(body.value);
-        if (q1('SELECT 1 FROM users WHERE name=? AND id<>?', name, u.id)) fail(409, '이미 있는 닉네임이에요.');
+        if (q1('SELECT 1 FROM users WHERE name=? AND id<>? AND grp IS ?', name, u.id, u.grp)) fail(409, '이미 있는 닉네임이에요.');
         run('UPDATE users SET name=? WHERE id=?', name, u.id);
-      } else if (body.action === 'reset_pin') {
+      } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
         const pin = String(body.value || '');
-        if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
+        if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자예요.');
         const salt = crypto.randomBytes(8).toString('hex');
-        run('UPDATE users SET salt=?, hash=?, grp=? WHERE id=?', salt, hashPin(pin, salt), groupKey(pin), u.id);   // PIN이 바뀌면 방도 바뀜
+        run('UPDATE users SET salt=?, hash=? WHERE id=?', salt, hashPin(pin, salt), u.id);
         run('DELETE FROM sessions WHERE user_id=?', u.id);
+      } else if (body.action === 'move_room') {      // 방 변경: 방 코드로 옮김 (없는 코드면 방을 새로 만듦). 같은 방에 같은 닉네임이 있으면 거부
+        const g = ensureRoom(String(body.value || '').trim());
+        if (q1('SELECT 1 FROM users WHERE grp=? AND name=? AND id<>?', g, u.name, u.id)) fail(409, '그 방에 같은 닉네임이 이미 있어요.');
+        run('UPDATE users SET grp=? WHERE id=?', g, u.id);
       } else if (body.action === 'delete') {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
         if (q1("SELECT 1 FROM lun_p p JOIN lun r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM lad_p p JOIN lad r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM bj WHERE user_id=? AND status='playing'", u.id)) fail(400, '진행 중인 게임이 있어서 못 지워요. 끝나거나 닫힌 뒤에 지워주세요.');

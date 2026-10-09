@@ -34,11 +34,11 @@ server.listen(0, async () => {
     assert.equal((await call('GET', '/api/me', null, t)).j.title, '도박꾼');
     assert.equal((await call('POST', '/api/shop/equip', { item_id: null, slot: 'zzz' }, t)).s, 400);
     // 시작하기(로그인/가입 통합)
-    assert.equal((await call('POST', '/api/enter', { name: '신입', pin: '4321' })).j.new_user, true);
-    assert.equal((await call('POST', '/api/enter', { name: '신입', pin: '4321', create: true })).s, 200);
-    assert.ok((await call('POST', '/api/enter', { name: '신입', pin: '4321' })).j.token);
-    assert.equal((await call('POST', '/api/enter', { name: '신입', pin: '0000' })).s, 401);
-    assert.equal((await call('POST', '/api/enter', { name: '새로', pin: '1' })).s, 400);
+    assert.equal((await call('POST', '/api/enter', { room: '1234', name: '신입', pin: '4321' })).j.new_user, true);
+    assert.equal((await call('POST', '/api/enter', { room: '1234', name: '신입', pin: '4321', create: true })).s, 200);
+    assert.ok((await call('POST', '/api/enter', { room: '1234', name: '신입', pin: '4321' })).j.token);
+    assert.equal((await call('POST', '/api/enter', { room: '1234', name: '신입', pin: '0000' })).s, 401);
+    assert.equal((await call('POST', '/api/enter', { room: '1234', name: '새로', pin: '1' })).s, 400);
     console.log('상점 테스트 통과');
   } catch (e) { console.error(e); process.exitCode = 1; }
   server.close();

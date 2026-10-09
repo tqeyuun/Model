@@ -160,7 +160,7 @@ function nm(o, force = {}) {
   return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
 }
 function renderHeader() {
-  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <span class="mute" title="같은 PIN으로 들어온 사람 수">👥${user.group_size || 1}</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <span class="mute" title="같은 방 사람 수">👥${user.group_size || 1}</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
 async function refresh() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
@@ -187,21 +187,27 @@ function render() {
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); loadGame(); };
 
+let authMode = 'join';
+const setAuthMode = (m) => { authMode = m; rerenderKeep(); };
+const loginForm = () => `
+  <div class="tabs mode"><button class="${authMode === 'join' ? 'on' : ''}" onclick="setAuthMode('join')">🚪 방 들어가기</button><button class="${authMode === 'create' ? 'on' : ''}" onclick="setAuthMode('create')">🏠 방 만들기</button></div>
+  <input id="r" placeholder="${authMode === 'create' ? '새 방 코드 정하기 (글자/숫자 4~12자)' : '방 코드 (친구가 알려준 코드)'}" maxlength="12" autocomplete="off">
+  <input id="n" placeholder="닉네임" maxlength="12" autocomplete="username">
+  <input id="p" placeholder="내 PIN (나만 아는 것, 4~16자)" type="password" maxlength="16" autocomplete="current-password" onkeydown="if(event.key==='Enter')auth()">
+  <button class="pri" style="width:100%;margin-top:6px" onclick="auth()">${authMode === 'create' ? '방 만들고 시작하기' : '시작하기'}</button>
+  <p class="mute"><b>방 코드</b>는 친구들과 같은 걸 써서 같은 방에 모여요. <b>PIN</b>은 나만 아는 로그인 비밀번호예요. 방마다 닉네임이 따로라서, 한 사람이 계정을 여러 개 만들어도 돼요.</p>`;
 function authView() {
   if (pending) return `<div class="card"><h2>🎉 구글 인증 완료!</h2><p class="mute">친구들에게 보일 닉네임을 정해주세요. (12자 이내, 나중에 ✏️로 바꿀 수 있어요)</p>
     <input id="gn" placeholder="닉네임" maxlength="12"><button class="pri" style="width:100%" onclick="googleSignup()">시작하기 (1000점 지급)</button></div>`;
   return `<div class="card"><h2>들어가기</h2><p class="mute">구글 계정으로 로그인하면 계정이 저장돼요. 처음이면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
-  ${cfg.google_client_id ? '<div id="gbtn" style="min-height:44px"></div>' : '<p class="mute">⚠️ 구글 로그인이 아직 설정되지 않았어요. 아래 PIN으로 들어오세요.</p>'}
-  <details ${cfg.google_client_id ? '' : 'open'} style="margin-top:10px"><summary class="mute" style="cursor:pointer">닉네임 + PIN으로 들어가기</summary>
-  <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password" onkeydown="if(event.key==='Enter')auth()">
-  <div class="betrow"><button class="pri" style="flex:1" onclick="auth()">시작하기</button></div>
-  <p class="mute">처음이면 새 계정이 만들어져요 (1000점 지급). <b>PIN이 같은 사람들끼리만</b> 같은 방에서 해요.</p></details></div>`;
+  ${cfg.google_client_id ? '<div id="gbtn" style="min-height:44px"></div>' : '<p class="mute">⚠️ 구글 로그인이 아직 설정되지 않았어요. 아래에서 방 코드로 들어오세요.</p>'}
+  <details ${cfg.google_client_id ? '' : 'open'} style="margin-top:10px"><summary class="mute" style="cursor:pointer">방 코드 + 닉네임 + PIN으로 들어가기</summary>${loginForm()}</details></div>`;
 }
 const auth = guard(async () => {
-  const body = { name: $('#n').value, pin: $('#p').value };
+  const body = { room: $('#r').value, name: $('#n').value, pin: $('#p').value, mode: authMode };
   let r = await api('POST', '/api/enter', body);
-  if (r.new_user) {   // 없는 닉네임이면 새 계정 — 오타일 수 있어서 한 번 확인
-    if (!confirm(`'${body.name.trim()}' 닉네임으로 새로 시작할까요? (1000점 지급)\n\nPIN이 같은 사람들끼리만 같은 방에서 해요. 이 PIN으로 처음 들어오는 게 맞나요?\n(이미 계정이 있다면 닉네임이나 PIN을 잘못 입력한 걸 수 있어요.)`)) return;
+  if (r.new_user) {   // 이 방에 없는 닉네임이면 새 계정 — 오타일 수 있어서 한 번 확인
+    if (!confirm(`방 "${body.room.trim()}"에 '${body.name.trim()}' 닉네임으로 새로 들어갈까요? (1000점 지급)\n\n(이미 계정이 있다면 닉네임이나 PIN을 잘못 입력한 걸 수 있어요.)`)) return;
     r = await api('POST', '/api/enter', { ...body, create: true });
   }
   token = r.token; localStorage.setItem('token', token); render(); await refresh();
@@ -653,7 +659,7 @@ const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_
 const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
 
 function rankView() {
-  return `<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
+  return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 내 방 코드 <b style="color:var(--cyan)">${esc(user.room)}</b></span><span class="mute">${user.group_size}명 · 친구에게 이 코드를 알려주세요</span></div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
     `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
 }
 
