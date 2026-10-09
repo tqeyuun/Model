@@ -128,6 +128,7 @@ header b,.card h2,.pts{font-family:var(--display);font-weight:400;letter-spacing
 header b{font-size:24px}.card h2{font-size:20px}
 .lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살아요 */
 .card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
+.members{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.member{padding:4px 10px;border-radius:99px;background:#1b1b2b;border:1px solid var(--line);font-size:14px}.member.me{border-color:var(--cyan)}
 </style>
 </head>
 <body>
@@ -161,7 +162,7 @@ function nm(o, force = {}) {
   return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
 }
 function renderHeader() {
-  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <span class="mute" title="같은 방 사람 수">👥${user.group_size || 1}</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
 async function refresh() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
@@ -660,7 +661,8 @@ const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_
 const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
 
 function rankView() {
-  return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 내 방 코드 <b style="color:var(--cyan)">${esc(user.room)}</b></span><span class="mute">${user.group_size}명 · 친구에게 이 코드를 알려주세요</span></div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
+  return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 내 방 코드 <b style="color:var(--cyan)">${esc(user.room)}</b></span><span class="mute">${user.group_size}명 · 친구에게 이 코드를 알려주세요</span></div>
+    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}</span>`).join('') || '<span class="mute">아직 나뿐이에요</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
     `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
 }
 
