@@ -71,6 +71,19 @@ header b{background-size:300% 100%;animation:rb 5s linear infinite;font-size:22p
 .cb{display:inline-block;padding:6px 12px;border-radius:14px;background:#1b1b2b;word-break:break-word;text-align:left}
 .cm.me .cb{background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff}
 button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
+
+.tabs button{font-size:13px;padding:10px 2px}
+.tabs button:nth-child(4).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(4){border-color:#ffb80055}
+.tabs button:nth-child(5).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(5){border-color:#34f5a055}
+.ttl{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;margin-right:5px;border-radius:99px;color:#000;background:linear-gradient(90deg,#ffb800,#ff2d95);vertical-align:middle}
+.nm{font-weight:700}
+.nm.fx-glow{color:#fff;text-shadow:0 0 6px #22d3ee,0 0 14px #a855f7,0 0 24px #ff2d95}
+.nm.fx-rainbow{background:linear-gradient(90deg,#ff2d95,#ffb800,#34f5a0,#22d3ee,#a855f7,#ff2d95);background-size:300% 100%;animation:rb 3s linear infinite;-webkit-background-clip:text;background-clip:text;color:transparent}
+.nm.fx-fire{background:linear-gradient(0deg,#ff2d00,#ffb800,#fff176);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 6px rgba(255,100,0,.8))}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px}
+.item{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
+.item.eq{border-color:var(--win);box-shadow:0 0 14px rgba(52,245,160,.35)}.item .pv{min-height:26px}
+.item button{width:100%}
 </style>
 </head>
 <body>
@@ -98,8 +111,15 @@ function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; lo
 
 let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;
 
+// 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
+function nm(o, force = {}) {
+  const d = { ...o, ...force };
+  const cls = d.fx ? ' fx-' + d.fx : '';
+  const style = d.color && !d.fx ? ` style="color:${d.color}"` : '';
+  return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
+}
 function renderHeader() {
-  $('#who').innerHTML = user ? `${esc(user.name)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
 async function refresh() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
@@ -116,13 +136,13 @@ async function refresh() {
 function render() {
   renderHeader();
   $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','내기'],['new','내기 열기'],['chat','💬 채팅'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    <div class="tabs">${[['bets','내기'],['new','새 내기'],['chat','💬 채팅'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : tab === 'chat' ? chatView() : rankView()}`;
+    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
   if (!token) initGoogle();
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
-const go = (k) => { tab = k; render(); };
+const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
 
 function authView() {
   if (pending) return `<div class="card"><h2>🎉 구글 인증 완료!</h2><p class="mute">친구들에게 보일 닉네임을 정해주세요. (12자 이내, 나중에 ✏️로 바꿀 수 있어요)</p>
@@ -171,7 +191,7 @@ function chatView() {
 function renderChat() {
   const box = $('#chatbox'); if (!box) return;
   const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-  box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:hsl(${hue(m.name)} 90% 70%)">${esc(m.name)} <span>${new Date(m.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span></div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보세요 👋</p>';
+  box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:${m.color || `hsl(${hue(m.name)} 90% 70%)`}">${nm(m)} <span>${new Date(m.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span></div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보세요 👋</p>';
   if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
 }
 async function pollChat() {
@@ -239,9 +259,29 @@ const create = guard(async () => {
   await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
   tab = 'bets'; toast('내기가 열렸어요!'); confetti(24); await refresh();
 });
+let shop = [];
+const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); if (tab === 'shop') render(); });
+const SLOTS = [['title', '호칭', '이름 앞에 붙는 칭호'], ['color', '닉네임 색', '글자 색'], ['fx', '닉네임 효과', '효과가 있으면 색보다 우선'], ['badge', '배지', '이름 앞 이모지']];
+function shopView() {
+  if (!shop.length) return '<p class="mute">불러오는 중…</p>';
+  const preview = (i) => nm(user, { [i.slot]: i.value });
+  return `<div class="card"><h2>🛍 상점</h2><div class="mute">내 모습: ${nm(user)} · 보유 <span class="pts">${user.points.toLocaleString()}점</span></div>
+  <p class="mute">사면 바로 장착돼요. 칸마다 하나씩 장착할 수 있고, 한 번 산 건 언제든 바꿔 낄 수 있어요.</p></div>` +
+  SLOTS.map(([slot, label, hint]) => `<div class="card"><h2>${label}</h2><div class="mute">${hint}</div>
+    <div class="items">${shop.filter((i) => i.slot === slot).map((i) => `<div class="item ${i.equipped ? 'eq' : ''}">
+      <div class="pv">${preview(i)}</div><div class="mute">${esc(i.name)}</div>
+      ${i.equipped ? `<button onclick="unequip('${slot}')">해제</button>`
+        : i.owned ? `<button class="pri" onclick="equip('${i.id}')">장착</button>`
+        : `<button class="pri" ${user.points < i.price ? 'disabled' : ''} onclick="buy('${i.id}')">${i.price.toLocaleString()}점</button>`}</div>`).join('')}</div></div>`).join('');
+}
+const afterShop = async () => { await loadShop(); await refresh(); };
+const buy = guard(async (id) => { await api('POST', '/api/shop/buy', { item_id: id }); toast('구매 완료! ✨'); confetti(30); await afterShop(); });
+const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_id: id }); await afterShop(); });
+const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
+
 function rankView() {
   return `<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
-    `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
+    `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
 }
 
 (async () => {

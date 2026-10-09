@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS wagers (
 `);
 
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
+for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
+db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub)');
 try { db.exec('ALTER TABLE wagers ADD COLUMN lucky INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 
@@ -50,6 +52,22 @@ if (!ADMIN_KEY) {
     db.prepare("INSERT INTO settings VALUES ('admin_key', ?)").run(ADMIN_KEY);
   }
 }
+// ---------- 상점 ----------
+// slot: title(호칭) | color(닉네임 색) | fx(닉네임 효과) | badge(이름 앞 이모지)
+const SHOP = [
+  ...[['t_gambler', '도박꾼', 300], ['t_dog', '역배 장인', 500], ['t_lucky', '행운아', 800], ['t_whale', '큰손', 1500], ['t_oracle', '예언가', 2500], ['t_legend', '전설', 5000]]
+    .map(([id, name, price]) => ({ id, slot: 'title', name, price, value: name })),
+  ...[['c_pink', '네온 핑크', 200, '#ff4fa3'], ['c_cyan', '네온 시안', 200, '#22d3ee'], ['c_mint', '민트', 200, '#34f5a0'], ['c_gold', '골드', 400, '#ffc83d'], ['c_violet', '바이올렛', 300, '#b57bff']]
+    .map(([id, name, price, value]) => ({ id, slot: 'color', name, price, value })),
+  { id: 'f_glow', slot: 'fx', name: '네온 글로우', price: 600, value: 'glow' },
+  { id: 'f_rainbow', slot: 'fx', name: '무지개 글자', price: 1200, value: 'rainbow' },
+  { id: 'f_fire', slot: 'fx', name: '불타는 글자', price: 1800, value: 'fire' },
+  ...[['b_dice', '주사위', 150, '🎲'], ['b_clover', '네잎클로버', 300, '🍀'], ['b_fire', '불꽃', 300, '🔥'], ['b_gem', '다이아', 1200, '💎'], ['b_crown', '왕관', 2000, '👑']]
+    .map(([id, name, price, value]) => ({ id, slot: 'badge', name, price, value })),
+];
+const SHOP_BY_ID = Object.fromEntries(SHOP.map((i) => [i.id, i]));
+const SLOT_COL = { title: 'eq_title', color: 'eq_color', fx: 'eq_fx', badge: 'eq_badge' };
+const deco = (r) => ({ title: SHOP_BY_ID[r.eq_title]?.value || null, color: SHOP_BY_ID[r.eq_color]?.value || null, fx: SHOP_BY_ID[r.eq_fx]?.value || null, badge: SHOP_BY_ID[r.eq_badge]?.value || null });
 const now = () => Date.now();
 const q = (sql, ...a) => db.prepare(sql).all(...a);
 const q1 = (sql, ...a) => db.prepare(sql).get(...a);
@@ -123,7 +141,7 @@ function betView(b, me) {
     my_lucky: mine.some((m) => m.lucky),
   };
 }
-const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5 };
+const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
@@ -236,9 +254,9 @@ const routes = {
     if (!u) fail(401, '로그인이 필요해요.');
     const after = Number(new URL(req.url, 'http://x').searchParams.get('after')) || 0;
     const rows = after
-      ? q('SELECT m.id, m.text, m.created_at, m.user_id, u.name FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id>? ORDER BY m.id LIMIT 100', after)
-      : q('SELECT * FROM (SELECT m.id, m.text, m.created_at, m.user_id, u.name FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 60) ORDER BY id');
-    return rows.map((r) => ({ id: r.id, text: r.text, name: r.name, at: r.created_at, mine: r.user_id === u.id }));
+      ? q('SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id>? ORDER BY m.id LIMIT 100', after)
+      : q('SELECT * FROM (SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 60) ORDER BY id');
+    return rows.map((r) => ({ id: r.id, text: r.text, name: r.name, at: r.created_at, mine: r.user_id === u.id, ...deco(r) }));
   },
   'POST /api/chat': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
@@ -248,6 +266,36 @@ const routes = {
     if (last && now() - last.created_at < 800) fail(429, '너무 빨라요! 잠깐만요.');
     run('INSERT INTO messages(user_id,text,created_at) VALUES (?,?,?)', u.id, text, now());
     run('DELETE FROM messages WHERE id < (SELECT MAX(id) FROM messages) - 1000');
+    return { ok: true };
+  },
+  'GET /api/shop': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const owned = new Set(q('SELECT item_id FROM user_items WHERE user_id=?', u.id).map((r) => r.item_id));
+    return SHOP.map((i) => ({ ...i, owned: owned.has(i.id), equipped: u[SLOT_COL[i.slot]] === i.id }));
+  },
+  'POST /api/shop/buy': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품이에요.');
+      if (q1('SELECT 1 FROM user_items WHERE user_id=? AND item_id=?', u.id, item.id)) fail(400, '이미 가지고 있어요.');
+      const f = q1('SELECT points FROM users WHERE id=?', u.id);
+      if (f.points < item.price) fail(400, '포인트가 부족해요.');
+      run('UPDATE users SET points=points-? WHERE id=?', item.price, u.id);
+      run('INSERT INTO user_items VALUES (?,?)', u.id, item.id);
+      run(`UPDATE users SET ${SLOT_COL[item.slot]}=? WHERE id=?`, item.id, u.id); // 사면 바로 장착
+      return { ok: true };
+    });
+  },
+  'POST /api/shop/equip': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    if (body.item_id === null) { // 해제: slot 지정
+      const col = SLOT_COL[String(body.slot)] || fail(400, '잘못된 칸이에요.');
+      run(`UPDATE users SET ${col}=NULL WHERE id=?`, u.id);
+      return { ok: true };
+    }
+    const item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품이에요.');
+    if (!q1('SELECT 1 FROM user_items WHERE user_id=? AND item_id=?', u.id, item.id)) fail(400, '먼저 구매해야 해요.');
+    run(`UPDATE users SET ${SLOT_COL[item.slot]}=? WHERE id=?`, item.id, u.id);
     return { ok: true };
   },
   'GET /api/me': (req, body, u) => me(u || fail(401, '로그인이 필요해요.')),
@@ -340,6 +388,7 @@ const routes = {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
         run('DELETE FROM sessions WHERE user_id=?', u.id);
         run('DELETE FROM messages WHERE user_id=?', u.id);
+        run('DELETE FROM user_items WHERE user_id=?', u.id);
         run('DELETE FROM users WHERE id=?', u.id);
       } else fail(400, '알 수 없는 동작이에요.');
       return { ok: true };
@@ -370,10 +419,10 @@ const routes = {
     return { ok: true };
   },
   'GET /api/ranking': () => q(`
-    SELECT u.name, u.points,
+    SELECT u.name, u.points, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout>0) wins,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout=0) losses
-    FROM users u ORDER BY u.points DESC LIMIT 50`),
+    FROM users u ORDER BY u.points DESC LIMIT 50`).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
