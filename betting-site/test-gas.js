@@ -215,7 +215,7 @@ assert.equal(pts(rc), rc0 + 100);
 
 // 관리자 링크 생성 + 페이지 서빙
 vm.runInContext('showAdminLink()', sb);
-assert.ok(sheets['관리자'].data[1][0].includes('?admin=' + K));
+assert.ok(String(sheets['관리자'].data[0][0]).includes('비밀번호'), "showAdminLink 는 '관리자' 탭과 안내를 만들어요 (비밀번호는 B1 칸에 직접 적음)");
 assert.equal(sb.doGet({ parameter: {} }).file, 'index');
 assert.equal(sb.doGet({ parameter: { admin: 'x' } }).file, 'admin');
 console.log('GAS 테스트 통과');

@@ -16,6 +16,7 @@ function makeSandbox() {
         const rng = {
           getValues: () => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => (data[r - 1 + i] || [])[c - 1 + j] ?? '')),
           setValues(v) { v.forEach((row, i) => { data[r - 1 + i] = data[r - 1 + i] || []; row.forEach((x, j) => { data[r - 1 + i][c - 1 + j] = x; }); }); return rng; },
+          getValue: () => data[r - 1]?.[c - 1] ?? '',
           setValue(v) { data[r - 1] = data[r - 1] || []; data[r - 1][c - 1] = v; return rng; },
           setFontWeight: () => rng,
         };
@@ -47,8 +48,9 @@ function makeSandbox() {
     Logger: { log() {} },
   };
   vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(__dirname + '/gas/Games.gs', 'utf8'), sb);   // 게임 규칙 (Node 서버와 같은 games-core.js)
+  // 실제 앱스 스크립트는 파일을 읽는 순서가 보장되지 않아서, 일부러 Code.gs 를 먼저 실행해 봄 (Games.gs 를 최상단에서 참조하면 여기서 터짐)
   vm.runInContext(fs.readFileSync(__dirname + '/gas/Code.gs', 'utf8'), sb);
+  vm.runInContext(fs.readFileSync(__dirname + '/gas/Games.gs', 'utf8'), sb);   // 게임 규칙 (Node 서버와 같은 games-core.js)
   return { sb, sheets, cache, props };
 }
 

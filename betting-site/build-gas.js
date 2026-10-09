@@ -60,6 +60,7 @@ fs.writeFileSync(path.join(__dirname, 'gas/index.html'), s);
 let a = fs.readFileSync(path.join(__dirname, 'public/admin.html'), 'utf8');
 a = cut(a, "// 키는 주소의 # 뒤에", "let data = null;", "// 관리자 키는 주소의 ?admin=... 로 들어오고, 서버가 페이지에 넣어줘요.\nconst key = <?!= adminKey ?>;\n");
 a = cut(a, "async function api(", "function toast(", runner("''", 'key', ''));
+a = rep(a, "서버를 켤 때 터미널에 나온 관리자 링크로 들어와 주세요.", "관리자 시트는 다른 사람에게 공유하지 마세요.");
 for (const bad of ['fetch(', 'location.hash', 'sessionStorage']) if (a.includes(bad)) throw new Error('남은 코드: ' + bad);
 fs.writeFileSync(path.join(__dirname, 'gas/admin.html'), a);
 

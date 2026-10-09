@@ -15,13 +15,13 @@ const RPS_HANDS = ['rock', 'paper', 'scissors'];           // 바위 보 가위
 const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
 const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
-const SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
+let SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
 const MIN_BET = 10;
 const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
 const UNDERDOG_SHARE = 0.30;    // 이긴 쪽 판돈 비중이 이 값 미만이면 역배
 const UNDERDOG_BONUS = 0.20;    // 역배 적중 시 총 판돈의 20%를 보너스로 추가 지급
-const LUCKY_CHANCE = Number(process.env.LUCKY_CHANCE ?? 0.07); // 이긴 사람마다 7% 확률로 럭키 보너스
+let LUCKY_CHANCE = Number(process.env.LUCKY_CHANCE ?? 0.07); // 이긴 사람마다 7% 확률로 럭키 보너스
 const LUCKY_BONUS = 0.5;        // 럭키 당첨 시 받은 금액의 50%를 추가 지급
 
 const db = new DatabaseSync(DB_FILE);
@@ -164,7 +164,7 @@ function rpsView(u) {
 }
 
 // ---------- 🤫 최저 유일 숫자 / 🪜 사다리타기 (여러 명이 방에 모여서 하는 게임) ----------
-const ROOM_STAKE_MAX = 1000;
+let ROOM_STAKE_MAX = 1000;
 const playerView = (id) => rpsPlayer(id);
 const pay = (userId, delta) => run('UPDATE users SET points=points+? WHERE id=?', delta, userId);
 function checkStake(raw) {
@@ -272,6 +272,75 @@ function checkBet(raw, min, max) {
   const bet = Number(raw);
   if (!Number.isInteger(bet) || bet < min || bet > max) fail(400, `건 돈은 ${min}~${max}점이에요.`);
   return bet;
+}
+
+// ---------- 관리자: 설정(화면에서 바로 조절) ----------
+// 저장된 값은 settings 표의 cfg_* 로 남고, 서버가 켜질 때/바꿀 때 아래 변수들에 반영돼요.
+const SETTING_SPECS = [
+  { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(점)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 점수 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: () => G.SOLO.DAILY_NET_CAP, set: (v) => { G.SOLO.DAILY_NET_CAP = v; } },
+  { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: () => G.SOLO.DAILY_PLAYS, set: (v) => { G.SOLO.DAILY_PLAYS = v; } },
+  { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(점)', hint: `최소 ${G.BJ.MIN_BET}점`, type: 'int', min: G.BJ.MIN_BET, max: 1000000, get: () => G.BJ.MAX_BET, set: (v) => { G.BJ.MAX_BET = v; } },
+  { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(점)', hint: `최소 ${G.SLOT.MIN_BET}점`, type: 'int', min: G.SLOT.MIN_BET, max: 1000000, get: () => G.SLOT.MAX_BET, set: (v) => { G.SLOT.MAX_BET = v; } },
+  { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(점)', hint: `최소 ${MIN_BET}점`, type: 'int', min: MIN_BET, max: 1000000, get: () => ROOM_STAKE_MAX, set: (v) => { ROOM_STAKE_MAX = v; } },
+  { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: () => Math.round(LUCKY_CHANCE * 100), set: (v) => { LUCKY_CHANCE = v / 100; } },
+  { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막혀요', type: 'bool', get: () => SHOP_OPEN, set: (v) => { SHOP_OPEN = v; } },
+];
+const SETTING_DEFAULTS = {};
+function applySettings() {
+  const saved = {};
+  for (const r of q("SELECT k, v FROM settings WHERE k LIKE 'cfg\\_%' ESCAPE '\\'")) saved[r.k.slice(4)] = r.v;
+  for (const sp of SETTING_SPECS) {
+    if (!(sp.key in SETTING_DEFAULTS)) SETTING_DEFAULTS[sp.key] = sp.get();   // 처음 한 번: 코드의 기본값 기억
+    if (sp.key in saved) sp.set(sp.type === 'bool' ? saved[sp.key] === '1' : Number(saved[sp.key]));
+    else sp.set(SETTING_DEFAULTS[sp.key]);
+  }
+}
+const settingsView = () => SETTING_SPECS.map(({ key, label, hint, type, min, max, get }) => ({ key, label, hint, type, min: min ?? null, max: max ?? null, value: get(), default: SETTING_DEFAULTS[key] }));
+
+// ---------- 관리자: 게임 방 / PIN 방 ----------
+function adminRooms() {
+  const nameOf = (id) => q1('SELECT name FROM users WHERE id=?', id)?.name || '(탈퇴)';
+  const grpOfUser = (id) => (q1('SELECT substr(grp,1,4) g FROM users WHERE id=?', id)?.g) || null;
+  const out = [];
+  for (const r of q("SELECT * FROM rps WHERE status='waiting'")) out.push({ kind: 'rps', id: r.id, host: nameOf(r.host_id), stake: r.stake, players: [nameOf(r.host_id)], cap: 2, created_at: r.created_at, grp: grpOfUser(r.host_id) });   // 손은 안 보임
+  for (const r of q("SELECT * FROM lun WHERE status='waiting'")) out.push({ kind: 'lun', id: r.id, host: nameOf(r.host_id), stake: r.stake, players: q('SELECT user_id FROM lun_p WHERE room_id=? ORDER BY id', r.id).map((p) => nameOf(p.user_id)), cap: r.cap, created_at: r.created_at, grp: grpOfUser(r.host_id) });   // 숫자는 안 보임
+  for (const r of q("SELECT * FROM lad WHERE status='waiting'")) out.push({ kind: 'lad', id: r.id, host: nameOf(r.host_id), stake: r.stake, players: q('SELECT user_id FROM lad_p WHERE room_id=? ORDER BY slot', r.id).map((p) => nameOf(p.user_id)), cap: r.slots, created_at: r.created_at, grp: grpOfUser(r.host_id) });
+  return out.sort((a, b) => b.created_at - a.created_at);
+}
+function adminGroups() {
+  return q('SELECT grp FROM users GROUP BY grp').map(({ grp }) => {
+    const members = q('SELECT id, name, points FROM users WHERE grp IS ? ORDER BY points DESC', grp);
+    const ids = members.map((m) => m.id).join(',') || '0';
+    return { id: grp || '', label: grp ? grp.slice(0, 4) : '방 없음', members: members.map((m) => m.name), count: members.length, points: members.reduce((a, m) => a + m.points, 0),
+      bets: q1(`SELECT COUNT(*) n FROM bets WHERE creator_id IN (${ids})`).n,
+      rooms: ['rps', 'lun', 'lad'].reduce((n, t) => n + q1(`SELECT COUNT(*) n FROM ${t} WHERE status='waiting' AND host_id IN (${ids})`).n, 0) };
+  }).sort((a, b) => b.count - a.count);
+}
+function adminCloseRoom(kind, roomId) {
+  const t = { rps: 'rps', lun: 'lun', lad: 'lad' }[kind] || fail(400, '알 수 없는 게임이에요.');
+  const r = q1(`SELECT * FROM ${t} WHERE id=?`, Number(roomId)) || fail(404, '방이 없어요.');
+  if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+  if (t === 'rps') pay(r.host_id, r.stake);
+  else for (const p of q(`SELECT user_id FROM ${t}_p WHERE room_id=?`, r.id)) pay(p.user_id, r.stake);
+  run(`UPDATE ${t} SET status='cancelled' WHERE id=?`, r.id);
+}
+// PIN 방 하나를 통째로 지움: 그 방 사람들과 그 사람들의 도박·채팅·게임 기록이 모두 사라져요
+function adminDeleteGroup(grp) {
+  const ids = q('SELECT id FROM users WHERE grp IS ?', grp || null).map((r) => r.id);
+  if (!ids.length) fail(404, '그 방이 없어요.');
+  const L = ids.join(',');
+  const betIds = q(`SELECT id FROM bets WHERE creator_id IN (${L})`).map((r) => r.id);
+  if (betIds.length) { const B = betIds.join(','); for (const t of ['messages', 'wagers', 'options']) run(`DELETE FROM ${t} WHERE bet_id IN (${B})`); run(`DELETE FROM bets WHERE id IN (${B})`); }
+  run(`DELETE FROM wagers WHERE user_id IN (${L})`); run(`DELETE FROM messages WHERE user_id IN (${L})`);
+  for (const t of ['lun', 'lad']) {
+    const rooms = q(`SELECT id FROM ${t} WHERE host_id IN (${L})`).map((r) => r.id);
+    if (rooms.length) run(`DELETE FROM ${t}_p WHERE room_id IN (${rooms.join(',')})`);
+    run(`DELETE FROM ${t}_p WHERE user_id IN (${L})`); run(`DELETE FROM ${t} WHERE host_id IN (${L})`);
+  }
+  run(`DELETE FROM rps WHERE host_id IN (${L}) OR guest_id IN (${L})`);
+  for (const t of ['bj', 'slots', 'user_items', 'sessions']) run(`DELETE FROM ${t} WHERE user_id IN (${L})`);
+  run(`DELETE FROM users WHERE id IN (${L})`);
+  return ids.length;
 }
 
 // ---------- 직렬화 ----------
@@ -756,8 +825,26 @@ const routes = {
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
     const messages = q('SELECT m.id, m.text, m.created_at, u.name, b.title bet_title FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN bets b ON b.id=m.bet_id ORDER BY m.id DESC LIMIT 40');
-    return { users, bets, messages, stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
+    return { users, bets, messages, settings: settingsView(), rooms: adminRooms(), groups: adminGroups(), stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
   },
+  'POST /api/admin/settings': (req, body) => {
+    adminOnly(req);
+    const values = body.values && typeof body.values === 'object' ? body.values : {}, reset = Array.isArray(body.reset) ? body.reset : [];
+    const byKey = Object.fromEntries(SETTING_SPECS.map((sp) => [sp.key, sp]));
+    for (const [k, v] of Object.entries(values)) {
+      const sp = byKey[k] || fail(400, '알 수 없는 설정이에요: ' + k);
+      if (sp.type === 'bool' ? typeof v !== 'boolean' : !Number.isInteger(v) || v < sp.min || v > sp.max) fail(400, `${sp.label}: ${sp.type === 'bool' ? '켜기/끄기만 가능해요' : `${sp.min}~${sp.max} 사이 정수를 넣어주세요`}.`);
+    }
+    for (const k of reset) if (!byKey[k]) fail(400, '알 수 없는 설정이에요: ' + k);
+    tx(() => {
+      for (const [k, v] of Object.entries(values)) run('INSERT OR REPLACE INTO settings(k,v) VALUES (?,?)', 'cfg_' + k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v));
+      for (const k of reset) run('DELETE FROM settings WHERE k=?', 'cfg_' + k);
+    });
+    applySettings();
+    return { ok: true, settings: settingsView() };
+  },
+  'POST /api/admin/room': (req, body) => { adminOnly(req); tx(() => adminCloseRoom(String(body.kind), body.room_id)); return { ok: true }; },
+  'POST /api/admin/group': (req, body) => { adminOnly(req); return { ok: true, deleted_users: tx(() => adminDeleteGroup(body.grp ? String(body.grp) : null)) }; },
   'POST /api/admin/user': (req, body) => {
     adminOnly(req);
     return tx(() => {
@@ -849,8 +936,9 @@ const server = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
+applySettings();   // 저장된 관리자 설정을 반영
 if (require.main === module) server.listen(PORT, () => {
   console.log(`사이트:  http://localhost:${PORT}`);
   console.log(`관리자:  http://localhost:${PORT}/admin#${ADMIN_KEY}   (이 링크는 나만 알고 있기!)`);
 });
-module.exports = { server, db, ADMIN_KEY, UNDERDOG_BONUS, UNDERDOG_SHARE };
+module.exports = { server, db, ADMIN_KEY, applySettings, UNDERDOG_BONUS, UNDERDOG_SHARE };

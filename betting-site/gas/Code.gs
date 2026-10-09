@@ -2,7 +2,7 @@
  * 도박장 (Google Apps Script 웹 앱 버전)
  * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·도박·채팅·상점)를 저장합니다.
  * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 포인트(실제 돈과 무관).
- * - 처음 한 번 showAdminLink()를 실행하면 시트의 '관리자' 탭에 관리자 링크가 생깁니다.
+ * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
 var CFG = { SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열려요 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
@@ -40,6 +40,7 @@ function handle(token, adminKey, method, url, body) {
   try {
     var parts = String(url).split('?'), path = parts[0], qs = {};
     (parts[1] || '').split('&').forEach(function (kv) { if (kv) { var p = kv.split('='); qs[p[0]] = decodeURIComponent(p[1] || ''); } });
+    applySettings();
     var fn = ROUTES[method + ' ' + path];
     if (!fn) fail(404, '없는 주소예요.');
     if (write) { lock = LockService.getScriptLock(); lock.waitLock(25000); HOLDING = true; }
@@ -145,9 +146,41 @@ function authUser(token) {
   }
   return userById(Number(id));
 }
+/** 같은 길이로 끝까지 비교(글자 하나 틀려도 같은 시간) */
+function safeEq(a, b) {
+  a = String(a); b = String(b);
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+/** 시트의 '관리자' 탭. 없으면 만들어요. B1 칸에 관리자 비밀번호를 적으면 돼요. */
+function ensureAdminSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName('관리자');
+  if (sh) return sh;
+  try {
+    sh = ss.insertSheet('관리자');
+    sh.getRange('A1').setValue('관리자 비밀번호 →').setFontWeight('bold');
+    sh.getRange('C1').setValue('← B1 칸에 8자 이상의 비밀번호를 적으세요. 나만 알아야 해요!');
+    sh.getRange('A3').setValue('관리자 링크 = 웹 앱 주소 뒤에  ?admin=비밀번호  를 붙인 것');
+    sh.getRange('A4').setValue('예)  https://script.google.com/macros/s/.../exec?admin=내비밀번호');
+    sh.getRange('A6').setValue('※ 이 시트를 다른 사람에게 공유하지 마세요. 비밀번호를 바꾸면 이전 링크는 바로 못 써요.');
+  } catch (e) { sh = ss.getSheetByName('관리자'); }
+  return sh;
+}
+function adminPassword() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('관리자');
+  if (!sh) return '';
+  var v = sh.getRange('B1').getValue();
+  return v === null || v === undefined ? '' : String(v).trim();
+}
 function adminOnly(ctx) {
   throttle('admin|x', 20);
-  if (!ctx.adminKey || ctx.adminKey !== secret('ADMIN_KEY')) fail(403, '관리자 키가 틀렸어요.');
+  var key = String(ctx.adminKey || ''), pw = adminPassword(), ok = false;
+  if (key) ok = (pw.length >= 8 && safeEq(key, pw)) || safeEq(key, secret('ADMIN_KEY'));   // 시트 비밀번호(8자 이상) 또는 예전 자동 키
+  if (!ok) {
+    ensureAdminSheet();
+    fail(403, "관리자 비밀번호가 맞지 않아요. 시트의 '관리자' 탭 B1 칸에 8자 이상의 비밀번호를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여서 들어오세요.");
+  }
   CacheService.getScriptCache().remove('admin|x');
 }
 
@@ -268,6 +301,83 @@ function betsList(u) {
     return bo - ao || b.id - a.id;
   }).slice(0, 100);
   return betViews(bets, u);
+}
+
+/* ================= 관리자 설정 (화면에서 바로 조절) ================= */
+// 저장된 값은 스크립트 속성 SETTINGS(JSON)에 남고, 요청마다 아래 변수들에 반영돼요. (Games.gs 보다 먼저 읽혀도 되게 함수 안에서 만들어요)
+function settingSpecs() {
+  return [
+    { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(점)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 점수 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.SOLO.DAILY_NET_CAP; }, set: function (v) { GAMES.SOLO.DAILY_NET_CAP = v; } },
+    { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: function () { return GAMES.SOLO.DAILY_PLAYS; }, set: function (v) { GAMES.SOLO.DAILY_PLAYS = v; } },
+    { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(점)', hint: '최소 ' + GAMES.BJ.MIN_BET + '점', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
+    { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(점)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '점', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
+    { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(점)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
+    { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
+    { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막혀요', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
+  ];
+}
+var SETTING_DEFAULTS = null;
+function loadSettings() { try { return JSON.parse(props().getProperty('SETTINGS') || '{}'); } catch (e) { return {}; } }
+/** 요청 시작할 때 호출: 저장된 값을 반영 (저장 안 된 항목은 코드 기본값 그대로) */
+function applySettings() {
+  var specs = settingSpecs(), saved = loadSettings();
+  if (!SETTING_DEFAULTS) { SETTING_DEFAULTS = {}; specs.forEach(function (sp) { SETTING_DEFAULTS[sp.key] = sp.get(); }); }
+  specs.forEach(function (sp) { if (saved.hasOwnProperty(sp.key)) sp.set(saved[sp.key]); });
+}
+function settingsView() {
+  return settingSpecs().map(function (sp) { return { key: sp.key, label: sp.label, hint: sp.hint, type: sp.type, min: sp.min === undefined ? null : sp.min, max: sp.max === undefined ? null : sp.max, value: sp.get(), 'default': SETTING_DEFAULTS[sp.key] }; });
+}
+
+/* ================= 관리자: 게임 방 / PIN 방 ================= */
+function adminRooms() {
+  var nm = function (id) { var u = userById(id); return u ? u.name : '(탈퇴)'; };
+  var gp = function (id) { var u = userById(id); return u && u.grp ? String(u.grp).slice(0, 4) : null; };
+  var out = [];
+  tbl('rps').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'rps', id: r.id, host: nm(r.host_id), stake: r.stake, players: [nm(r.host_id)], cap: 2, created_at: r.created_at, grp: gp(r.host_id) }); });   // 손은 안 보임
+  tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lun', id: r.id, host: nm(r.host_id), stake: r.stake, players: lunPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });   // 숫자는 안 보임
+  tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lad', id: r.id, host: nm(r.host_id), stake: r.stake, players: ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }).map(function (p) { return nm(p.user_id); }), cap: r.slots, created_at: r.created_at, grp: gp(r.host_id) }); });
+  return out.sort(function (a, b) { return b.created_at - a.created_at; });
+}
+function adminGroups() {
+  var by = {};
+  tbl('users').all().forEach(function (u) { var g = grpOf(u); (by[g] = by[g] || []).push(u); });
+  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; });
+  return Object.keys(by).map(function (g) {
+    var ms = by[g], ids = {}; ms.forEach(function (m) { ids[m.id] = 1; });
+    return { id: g, label: g ? g.slice(0, 4) : '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
+      bets: bets.filter(function (b) { return ids[b.creator_id]; }).length, rooms: waiting.filter(function (r) { return ids[r.host_id]; }).length };
+  }).sort(function (a, b) { return b.count - a.count; });
+}
+function adminCloseRoom(kind, roomId) {
+  if (['rps', 'lun', 'lad'].indexOf(kind) < 0) fail(400, '알 수 없는 게임이에요.');
+  var r = byId(kind, roomId);
+  if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+  if (kind === 'rps') addPoints(r.host_id, r.stake);
+  else (kind === 'lun' ? lunPlayers(r) : ladPlayers(r)).forEach(function (p) { addPoints(p.user_id, r.stake); });
+  r.status = 'cancelled'; tbl(kind).save(r);
+}
+/** PIN 방 하나를 통째로 지움: 그 방 사람들과 그 사람들의 도박·채팅·게임 기록이 모두 사라져요 */
+function adminDeleteGroup(grp) {
+  var g = grp ? String(grp) : '';
+  var ms = tbl('users').where(function (u) { return grpOf(u) === g; });
+  if (!ms.length) fail(404, '그 방이 없어요.');
+  var ids = {}, betIds = {};
+  ms.forEach(function (m) { ids[m.id] = 1; });
+  tbl('bets').where(function (b) { return ids[b.creator_id]; }).forEach(function (b) { betIds[b.id] = 1; });
+  tbl('messages').removeWhere(function (m) { return betIds[m.bet_id] || ids[m.user_id]; });
+  tbl('wagers').removeWhere(function (w) { return betIds[w.bet_id] || ids[w.user_id]; });
+  tbl('options').removeWhere(function (o) { return betIds[o.bet_id]; });
+  tbl('bets').removeWhere(function (b) { return betIds[b.id]; });
+  [['lun', 'lunp'], ['lad', 'ladp']].forEach(function (pair) {
+    var rooms = {}; tbl(pair[0]).where(function (r) { return ids[r.host_id]; }).forEach(function (r) { rooms[r.id] = 1; });
+    tbl(pair[1]).removeWhere(function (p) { return rooms[p.room_id] || ids[p.user_id]; });
+    tbl(pair[0]).removeWhere(function (r) { return rooms[r.id]; });
+  });
+  tbl('rps').removeWhere(function (r) { return ids[r.host_id] || ids[r.guest_id]; });
+  ['bj', 'slots', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
+  tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
+  tbl('users').removeWhere(function (u) { return ids[u.id]; });
+  return ms.length;
 }
 
 /* ================= 가위바위보 ================= */
@@ -740,10 +850,28 @@ var ROUTES = {
     var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
     var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
     var messages = tbl('messages').all().filter(function (m) { return names[m.user_id]; }).slice(-40).reverse().map(function (m) { return { id: m.id, text: m.text, created_at: m.created_at, name: names[m.user_id], bet_title: titles[m.bet_id] || null }; });
-    return { users: users, bets: bets, messages: messages, stats: {
+    return { users: users, bets: bets, messages: messages, settings: settingsView(), rooms: adminRooms(), groups: adminGroups(), stats: {
       users: users.length, points: users.reduce(function (s, x) { return s + x.points; }, 0), wagers: wag.length,
       wagered: wag.reduce(function (s, w) { return s + w.amount; }, 0), lucky: wag.filter(function (w) { return Number(w.lucky) === 1; }).length } };
   },
+  'POST /api/admin/settings': function (body, u, ctx) {
+    adminOnly(ctx);
+    var values = body.values && typeof body.values === 'object' ? body.values : {}, reset = Array.isArray(body.reset) ? body.reset : [];
+    var specs = settingSpecs(), byKey = {}; specs.forEach(function (sp) { byKey[sp.key] = sp; });
+    Object.keys(values).forEach(function (k) {
+      var sp = byKey[k] || fail(400, '알 수 없는 설정이에요: ' + k), v = values[k];
+      if (sp.type === 'bool' ? typeof v !== 'boolean' : (typeof v !== 'number' || v !== Math.floor(v) || v < sp.min || v > sp.max))
+        fail(400, sp.label + ': ' + (sp.type === 'bool' ? '켜기/끄기만 가능해요' : sp.min + '~' + sp.max + ' 사이 정수를 넣어주세요') + '.');
+    });
+    reset.forEach(function (k) { if (!byKey[k]) fail(400, '알 수 없는 설정이에요: ' + k); });
+    var saved = loadSettings();
+    Object.keys(values).forEach(function (k) { saved[k] = values[k]; byKey[k].set(values[k]); });
+    reset.forEach(function (k) { delete saved[k]; byKey[k].set(SETTING_DEFAULTS[k]); });
+    props().setProperty('SETTINGS', JSON.stringify(saved));
+    return { ok: true, settings: settingsView() };
+  },
+  'POST /api/admin/room': function (body, u, ctx) { adminOnly(ctx); adminCloseRoom(String(body.kind), body.room_id); return { ok: true }; },
+  'POST /api/admin/group': function (body, u, ctx) { adminOnly(ctx); return { ok: true, deleted_users: adminDeleteGroup(body.grp) }; },
   'POST /api/admin/user': function (body, u, ctx) {
     adminOnly(ctx);
     var t = tbl('users').find(function (x) { return x.id === Number(body.user_id); }) || fail(404, '유저가 없어요.');
@@ -824,10 +952,7 @@ var ROUTES = {
 /** 한 번 실행하세요: 시트 탭을 만들고, '관리자' 탭에 관리자 링크를 적어줍니다. */
 function showAdminLink() {
   Object.keys(SHEETS).forEach(function (n) { tbl(n); });
+  ensureAdminSheet();
   var url = ''; try { url = ScriptApp.getService().getUrl(); } catch (e) {}
-  var link = (url || '(웹 앱 주소)') + '?admin=' + secret('ADMIN_KEY');
-  var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName('관리자') || ss.insertSheet('관리자');
-  sh.clear(); sh.getRange('A1').setValue('관리자 링크 (나만 알고 있기!)'); sh.getRange('A2').setValue(link);
-  sh.getRange('A4').setValue('웹 앱 주소가 비어 있으면, 배포 후 나온 주소 뒤에 ?admin=' + secret('ADMIN_KEY') + ' 를 붙이세요.');
-  Logger.log(link);
+  Logger.log("'관리자' 탭 B1 칸에 8자 이상의 비밀번호를 적으세요. 관리자 링크: " + (url || '(웹 앱 주소)') + '?admin=비밀번호');
 }
