@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>친구 내기판</title>
+<style>
+:root{--bg:#000;--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:var(--ink);font:16px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif;min-height:100vh;
+ background-image:radial-gradient(600px 300px at 10% -5%,rgba(168,85,247,.28),transparent),radial-gradient(500px 300px at 95% 5%,rgba(255,45,149,.2),transparent),radial-gradient(500px 400px at 50% 110%,rgba(34,211,238,.14),transparent);background-attachment:fixed}
+main{max-width:640px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header b{font-size:20px;background:linear-gradient(90deg,var(--cyan),var(--pri),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 8px rgba(168,85,247,.6))}
+.pts{font-weight:800;color:var(--dog);text-shadow:0 0 10px rgba(255,184,0,.7)}
+.card{position:relative;background:linear-gradient(160deg,#14141f,var(--card));border:1px solid var(--line);border-radius:16px;padding:14px;margin:14px 0;box-shadow:0 0 0 1px rgba(168,85,247,.08),0 8px 30px rgba(168,85,247,.12);transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(168,85,247,.5),0 10px 36px rgba(255,45,149,.2)}
+h2{font-size:18px;margin:0 0 4px}.mute{color:var(--mute);font-size:13px}
+input,button{font:inherit;border-radius:12px;border:1px solid var(--line);padding:10px 12px;background:#07070c;color:var(--ink);outline:none}
+input{width:100%;margin:4px 0}input:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(168,85,247,.25)}
+button{cursor:pointer;transition:transform .1s,filter .15s}button:hover:not(:disabled){filter:brightness(1.25)}button:active:not(:disabled){transform:scale(.96)}
+button.pri{background:linear-gradient(90deg,var(--pri),var(--pink));border:0;color:#fff;font-weight:700;box-shadow:0 0 16px rgba(255,45,149,.45)}
+button:disabled{opacity:.4;cursor:default}
+.tabs{display:flex;gap:6px;margin:12px 0}.tabs button{flex:1;font-weight:600}
+.tabs .on{background:linear-gradient(90deg,var(--cyan),var(--pri));color:#000;border:0;box-shadow:0 0 16px rgba(34,211,238,.5)}
+.opt{margin:12px 0;padding:8px 10px;border-radius:12px;border:1px solid transparent}
+.bar{height:10px;background:#1a1a28;border-radius:8px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--pri));box-shadow:0 0 12px var(--pri);transition:width .5s}
+.opt.dog{border-color:rgba(255,184,0,.45);background:rgba(255,184,0,.06);animation:glow 2s infinite}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink));box-shadow:0 0 12px var(--dog)}
+.opt.won{border-color:var(--win);background:rgba(52,245,160,.07);box-shadow:0 0 18px rgba(52,245,160,.3)}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan));box-shadow:0 0 12px var(--win)}
+@keyframes glow{50%{box-shadow:0 0 16px rgba(255,184,0,.35)}}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:linear-gradient(90deg,var(--dog),var(--pink));color:#000;margin-left:6px;vertical-align:middle}
+.tag.s{background:#26243a;color:var(--cyan)}
+.win{color:var(--win);font-weight:800;text-shadow:0 0 10px rgba(52,245,160,.6)}.lose{color:var(--lose);font-weight:800}
+.lucky{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:99px;font-weight:800;color:#000;background:linear-gradient(90deg,#fff176,#ffb800,#ff2d95,#a855f7,#22d3ee);background-size:300%;animation:rb 2s linear infinite;box-shadow:0 0 14px rgba(255,184,0,.8)}
+@keyframes rb{to{background-position:300% 0}}
+.betrow{display:flex;gap:6px;margin-top:6px}.betrow input{margin:0}
+.msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff;font-weight:700;padding:10px 18px;border-radius:12px;z-index:9;max-width:90%;box-shadow:0 0 24px rgba(255,45,149,.6)}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}td:nth-child(n+3),th:nth-child(n+3){text-align:right}
+tr:nth-child(2) td:first-child{color:#ffd700}tr:nth-child(3) td:first-child{color:#c0c0c0}tr:nth-child(4) td:first-child{color:#cd7f32}
+tr:nth-child(2){background:rgba(255,215,0,.07)}
+
+/* ---- 더 화려하게 ---- */
+:root{--c0:#22d3ee;--c1:#ff2d95;--c2:#ffb800;--c3:#34f5a0;--c4:#a855f7;--c5:#ff6b3d}
+header b{background-size:300% 100%;animation:rb 5s linear infinite;font-size:22px;letter-spacing:.5px}
+.card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#22d3ee,#a855f7,#ff2d95,#ffb800,#34f5a0,#22d3ee);background-size:300% 100%;animation:rb 6s linear infinite}
+.card h2{background:linear-gradient(90deg,#fff,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.opt{--c:var(--c0);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 7%,transparent)}
+.opt .bar i{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 55%,#fff));box-shadow:0 0 14px var(--c)}
+.opt .lbl{color:var(--c);font-weight:700;text-shadow:0 0 10px color-mix(in srgb,var(--c) 60%,transparent)}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink))}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan))}
+.opt button.pri{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 50%,var(--pink)));box-shadow:0 0 16px color-mix(in srgb,var(--c) 60%,transparent);color:#000}
+.tabs button:nth-child(1).on{background:linear-gradient(90deg,#22d3ee,#34f5a0)}
+.tabs button:nth-child(2).on{background:linear-gradient(90deg,#ff2d95,#ffb800);box-shadow:0 0 16px rgba(255,45,149,.5)}
+.tabs button:nth-child(3).on{background:linear-gradient(90deg,#a855f7,#22d3ee);box-shadow:0 0 16px rgba(168,85,247,.5)}
+.tabs button{border-width:2px}
+.tabs button:nth-child(1){border-color:#22d3ee55}.tabs button:nth-child(2){border-color:#ff2d9555}.tabs button:nth-child(3){border-color:#a855f755}
+.confetti{position:fixed;top:-20px;font-size:22px;pointer-events:none;z-index:20;animation:fall 1.8s ease-in forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
+.tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
+
+.tabs button{padding:10px 4px}.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#ffb800);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
+.tabs button:nth-child(3).on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5)}.tabs button:nth-child(3){border-color:#ff6b3d55}
+#chatbox{height:50vh;overflow-y:auto;padding:6px;margin:8px 0;background:#07070c;border:1px solid var(--line);border-radius:12px}
+.cm{margin:8px 0;max-width:85%}.cm.me{margin-left:auto;text-align:right}
+.cn{font-size:12px;font-weight:700}.cn span{color:var(--mute);font-weight:400;margin-left:4px}
+.cb{display:inline-block;padding:6px 12px;border-radius:14px;background:#1b1b2b;word-break:break-word;text-align:left}
+.cm.me .cb{background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff}
+button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
+
+.tabs button{font-size:13px;padding:10px 2px}
+.tabs button:nth-child(4).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(4){border-color:#ffb80055}
+.tabs button:nth-child(5).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(5){border-color:#34f5a055}
+.ttl{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;margin-right:5px;border-radius:99px;color:#000;background:linear-gradient(90deg,#ffb800,#ff2d95);vertical-align:middle}
+.nm{font-weight:700}
+.nm.fx-glow{color:#fff;text-shadow:0 0 6px #22d3ee,0 0 14px #a855f7,0 0 24px #ff2d95}
+.nm.fx-rainbow{background:linear-gradient(90deg,#ff2d95,#ffb800,#34f5a0,#22d3ee,#a855f7,#ff2d95);background-size:300% 100%;animation:rb 3s linear infinite;-webkit-background-clip:text;background-clip:text;color:transparent}
+.nm.fx-fire{background:linear-gradient(0deg,#ff2d00,#ffb800,#fff176);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 6px rgba(255,100,0,.8))}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px}
+.item{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
+.item.eq{border-color:var(--win);box-shadow:0 0 14px rgba(52,245,160,.35)}.item .pv{min-height:26px}
+.item button{width:100%}
+</style>
+</head>
+<body>
+<header><b>🎲 친구 내기판</b><span id="who"></span></header>
+<main id="app"></main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS = { // 앱스 스크립트 화면에서는 저장소가 막힐 수 있어 안전하게 감쌈
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* 무시 */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* 무시 */ } },
+};
+let token = LS.get('token'), user = null, tab = 'bets', bets = [], ranking = [], busy = false;
+
+function api(method, url, body) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler((s) => {
+        const j = JSON.parse(s);
+        if (j.error) { if (j.code === 401 && token) logout(); const e = new Error(j.error); e.code = j.code; reject(e); } else resolve(j.data);
+      })
+      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있어요.')))
+      .handle(token || '', '', method, url, body || {});
+  });
+}
+function confetti(n = 40) {
+  const e = ['🎉', '✨', '💎', '🪙', '🍀', '⭐', '💖'];
+  for (let i = 0; i < n; i++) { const d = document.createElement('span'); d.className = 'confetti'; d.textContent = e[i % e.length];
+    d.style.left = Math.random() * 100 + 'vw'; d.style.animationDelay = Math.random() * .6 + 's'; document.body.append(d); setTimeout(() => d.remove(), 2800); }
+}
+function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; LS.del('token'); render(); }
+
+let chatMsgs = [], lastChatId = 0;
+
+// 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
+function nm(o, force = {}) {
+  const d = { ...o, ...force };
+  const cls = d.fx ? ' fx-' + d.fx : '';
+  const style = d.color && !d.fx ? ` style="color:${d.color}"` : '';
+  return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
+}
+function renderHeader() {
+  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+}
+async function refresh() {
+  if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
+  try {
+    ({ me: user, bets, ranking } = await api('GET', '/api/state'));
+    const seen = JSON.parse(LS.get('luckySeen') || '[]');
+    const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
+    if (fresh.length) { LS.set('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); confetti(70); }
+    if (!$('#app').innerHTML || (tab !== 'new' && tab !== 'chat' && !(document.activeElement && document.activeElement.tagName === 'INPUT'))) render();
+    else renderHeader();
+  } catch (e) { /* 401 이면 logout 처리됨 */ }
+}
+
+function render() {
+  renderHeader();
+  $('#app').innerHTML = !token ? authView() : `
+    <div class="tabs">${[['bets','내기'],['new','새 내기'],['chat','💬 채팅'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
+    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
+  if (token && tab === 'chat') { renderChat(); pollChat(); }
+}
+const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
+
+function authView() {
+  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음이면 닉네임과 PIN을 정하고 '가입'을 누르세요. 가입하면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password">
+  <div class="betrow"><button class="pri" style="flex:1" onclick="auth('login')">로그인</button><button style="flex:1" onclick="auth('signup')">가입</button></div></div>`;
+}
+const auth = guard(async (kind) => {
+  const r = await api('POST', '/api/' + kind, { name: $('#n').value, pin: $('#p').value });
+  token = r.token; LS.set('token', token); render(); await refresh();
+});
+const rename = guard(async () => {
+  const n = prompt('새 닉네임 (12자 이내)', user.name);
+  if (n === null || !n.trim() || n.trim() === user.name) return;
+  await api('POST', '/api/nickname', { name: n }); toast('닉네임이 바뀌었어요!'); await refresh();
+});
+
+/* ---------- 채팅 ---------- */
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+function chatView() {
+  return `<div class="card"><h2>💬 전체 채팅</h2><div id="chatbox"></div>
+  <div class="betrow"><input id="ci" maxlength="200" placeholder="메시지 입력…" autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()"><button class="pri" onclick="sendChat()">전송</button></div></div>`;
+}
+function renderChat() {
+  const box = $('#chatbox'); if (!box) return;
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:${m.color || `hsl(${hue(m.name)} 90% 70%)`}">${nm(m)} <span>${new Date(m.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span></div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보세요 👋</p>';
+  if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
+}
+async function pollChat() {
+  if (!token || tab !== 'chat') return;
+  try {
+    const rows = await api('GET', '/api/chat?after=' + lastChatId);
+    if (!lastChatId) chatMsgs = []; // 처음 불러올 때는 최근 기록으로 교체
+    if (rows.length) { chatMsgs = chatMsgs.concat(rows).slice(-150); lastChatId = rows[rows.length - 1].id; renderChat(); }
+    else if (!chatMsgs.length) renderChat();
+  } catch (e) { /* 무시 */ }
+}
+const sendChat = guard(async () => {
+  const i = $('#ci'); const text = i.value.trim(); if (!text) return;
+  i.value = '';
+  await api('POST', '/api/chat', { text }); await pollChat();
+});
+setInterval(() => { if (!document.hidden) pollChat(); }, 4000); // 앱스 스크립트는 호출이 느려서 간격을 넉넉히
+
+function statusText(b) {
+  if (b.status === 'open') return b.closes_at ? '마감 ' + new Date(b.closes_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '진행 중';
+  return { closed: '마감됨 (결과 대기)', resolved: '결과 확정', cancelled: '취소/환불' }[b.status];
+}
+function betView(b) {
+  const open = b.status === 'open';
+  const opts = b.options.map((o, oi) => `
+    <div style="--c:var(--c${oi % 6})" class="opt ${o.underdog && b.status !== 'resolved' ? 'dog' : ''} ${b.winner === o.id ? 'won' : ''}">
+      <div class="row"><span class="lbl">${b.winner === o.id ? '🏆 ' : ''}${esc(o.label)}${o.underdog && !b.winner ? '<span class="tag">역배</span>' : ''}${o.my_amount ? `<span class="tag s">내 ${o.my_amount}점</span>` : ''}</span>
+        <span class="mute">${o.pool}점 · ${o.bettors}명 · ${o.multiplier ? '×' + o.multiplier : '-'}</span></div>
+      <div class="bar"><i style="width:${Math.round(o.share * 100)}%"></i></div>
+      ${open ? `<div class="betrow"><input id="a${o.id}" type="number" min="10" step="10" placeholder="걸 점수" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}><button class="pri" onclick="wager(${o.id})" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}>걸기</button></div>` : ''}
+      ${b.status === 'closed' && b.mine_created ? `<button onclick="act(${b.id},'resolve',${o.id})">이게 정답!</button>` : ''}
+    </div>`).join('');
+  let result = '';
+  if (b.my_total && (b.status === 'resolved' || b.status === 'cancelled')) {
+    const net = b.my_payout - b.my_total;
+    result = b.status === 'cancelled' ? `<p class="mute">환불됨 (${b.my_total}점)</p>` : `<p class="${net >= 0 ? 'win' : 'lose'}">${net >= 0 ? '+' : ''}${net}점 (${b.my_total}점 걸고 ${b.my_payout}점 받음)${b.my_lucky ? '<span class="lucky">🍀 럭키 보너스!</span>' : ''}</p>`;
+  }
+  const mgr = b.mine_created && (b.status === 'open' || b.status === 'closed') ? `<div class="betrow">
+    ${open ? `<button onclick="act(${b.id},'close')">지금 마감</button>` : ''}<button onclick="if(confirm('취소하고 전부 환불할까요?'))act(${b.id},'cancel')">취소(환불)</button></div>` : '';
+  return `<div class="card"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}점</div>${opts}${result}${mgr}</div>`;
+}
+const wager = guard(async (optionId) => {
+  const amount = Number($('#a' + optionId).value);
+  await api('POST', '/api/wager', { option_id: optionId, amount });
+  toast('걸었어요! 🎲'); confetti(18); await refresh();
+});
+const act = guard(async (bet_id, action, option_id) => {
+  if (action === 'resolve' && !confirm('정답을 확정하면 되돌릴 수 없어요. 맞나요?')) return;
+  await api('POST', '/api/bets/action', { bet_id, action, option_id });
+  await refresh();
+});
+const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); confetti(); await refresh(); });
+
+function newView() {
+  return `<div class="card"><h2>내기 열기</h2>
+  <input id="t" placeholder="예) 오늘 점심 메뉴는?" maxlength="80">
+  <div id="os"><input class="o" placeholder="선택지 1"><input class="o" placeholder="선택지 2"></div>
+  <button onclick="addOpt()">+ 선택지 추가</button>
+  <input id="m" type="number" min="0" placeholder="몇 분 뒤 마감? (비우면 직접 마감)">
+  <p class="mute">내기를 연 사람이 마감 후 정답을 확정해요. 공정하게 부탁해요 🤝</p>
+  <button class="pri" onclick="create()">열기</button></div>`;
+}
+function addOpt() { if (document.querySelectorAll('.o').length < 6) $('#os').insertAdjacentHTML('beforeend', `<input class="o" placeholder="선택지 ${document.querySelectorAll('.o').length + 1}">`); }
+const create = guard(async () => {
+  await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
+  tab = 'bets'; toast('내기가 열렸어요!'); confetti(24); await refresh();
+});
+let shop = [];
+const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); if (tab === 'shop') render(); });
+const SLOTS = [['title', '호칭', '이름 앞에 붙는 칭호'], ['color', '닉네임 색', '글자 색'], ['fx', '닉네임 효과', '효과가 있으면 색보다 우선'], ['badge', '배지', '이름 앞 이모지']];
+function shopView() {
+  if (!shop.length) return '<p class="mute">불러오는 중…</p>';
+  const preview = (i) => nm(user, { [i.slot]: i.value });
+  return `<div class="card"><h2>🛍 상점</h2><div class="mute">내 모습: ${nm(user)} · 보유 <span class="pts">${user.points.toLocaleString()}점</span></div>
+  <p class="mute">사면 바로 장착돼요. 칸마다 하나씩 장착할 수 있고, 한 번 산 건 언제든 바꿔 낄 수 있어요.</p></div>` +
+  SLOTS.map(([slot, label, hint]) => `<div class="card"><h2>${label}</h2><div class="mute">${hint}</div>
+    <div class="items">${shop.filter((i) => i.slot === slot).map((i) => `<div class="item ${i.equipped ? 'eq' : ''}">
+      <div class="pv">${preview(i)}</div><div class="mute">${esc(i.name)}</div>
+      ${i.equipped ? `<button onclick="unequip('${slot}')">해제</button>`
+        : i.owned ? `<button class="pri" onclick="equip('${i.id}')">장착</button>`
+        : `<button class="pri" ${user.points < i.price ? 'disabled' : ''} onclick="buy('${i.id}')">${i.price.toLocaleString()}점</button>`}</div>`).join('')}</div></div>`).join('');
+}
+const afterShop = async () => { await loadShop(); await refresh(); };
+const buy = guard(async (id) => { await api('POST', '/api/shop/buy', { item_id: id }); toast('구매 완료! ✨'); confetti(30); await afterShop(); });
+const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_id: id }); await afterShop(); });
+const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
+
+function rankView() {
+  return `<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
+    `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
+}
+
+(async () => {
+  render(); refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 8000);
+})();
+</script>
+</body>
+</html>
