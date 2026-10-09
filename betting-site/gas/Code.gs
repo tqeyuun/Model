@@ -563,7 +563,8 @@ var ROUTES = {
     var name = String(body.name || '').trim(), pin = String(body.pin || '');
     throttle('login|' + name, 10);
     var u = tbl('users').find(function (x) { return x.name === name; });
-    if (!u || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
+    if (!u) fail(401, '없는 닉네임이에요.');
+    if (hashPin(pin, u.salt) !== u.hash) fail(401, '이미 쓰고 있는 닉네임이에요. 내 계정이면 PIN이 달라요(PIN을 다시 확인해 주세요). 처음 만드는 거라면 다른 닉네임을 써주세요.');
     if (!u.grp) { u.grp = groupKey(pin); tbl('users').save(u); }   // 예전 계정은 처음 로그인할 때 방이 정해짐
     CacheService.getScriptCache().remove('login|' + name);
     return { token: newSession(u.id) };

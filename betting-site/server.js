@@ -461,7 +461,8 @@ const routes = {
     const name = String(body.name || '').trim(), pin = String(body.pin || '');
     throttle(name + '|' + req.socket.remoteAddress);
     const u = q1('SELECT * FROM users WHERE name=?', name);
-    if (!u || !u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
+    if (!u) fail(401, '없는 닉네임이에요.');
+    if (!u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '이미 쓰고 있는 닉네임이에요. 내 계정이면 PIN이 달라요(PIN을 다시 확인해 주세요). 처음 만드는 거라면 다른 닉네임을 써주세요.');
     if (!u.grp) run('UPDATE users SET grp=? WHERE id=?', groupKey(pin), u.id);   // 예전 계정은 처음 로그인할 때 방이 정해짐
     return { token: newSession(u.id) };
   },
