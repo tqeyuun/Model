@@ -3,7 +3,7 @@ process.env.DB_FILE = ':memory:';
 const assert = require('node:assert');
 const G = require('./games-core');           // 서버와 같은 모듈 → 카드/난수를 고정해서 정산을 정확히 검증
 const { server, db } = require('./server');
-G.SOLO.DAILY_NET_CAP = 0;   // 기존 게임 검증은 하루 한도 없이 (한도는 맨 아래에서 따로 검증)
+G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0;   // 기존 게임 검증은 하루 제한 없이 (제한은 맨 아래에서 따로 검증)
 const rankIdx = { A: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, J: 10, Q: 11, K: 12 };
 const rig = (order) => { const first = order.map((r) => rankIdx[r]); const used = {}; first.forEach((c) => { used[c] = (used[c] || 0) + 1; });
   // 같은 숫자 카드를 여러 장 쓰려면 다른 무늬 코드로 대체

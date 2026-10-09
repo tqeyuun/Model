@@ -13,7 +13,7 @@ const rankIdx = { A: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, J
 const rig = (order) => { const seen = {}; const codes = order.map((r) => { const k = (seen[r] = seen[r] || 0); seen[r]++; return rankIdx[r] + 13 * k; });
   return [...codes, ...Array.from({ length: 52 }, (_, i) => i).filter((c) => !codes.includes(c))]; };
 sb.CFG.LUCKY_CHANCE = 0;
-G.SOLO.DAILY_NET_CAP = 0;   // 기존 게임 검증은 하루 한도 없이 (한도는 맨 아래에서 따로 검증)
+G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0;   // 기존 게임 검증은 하루 제한 없이 (제한은 맨 아래에서 따로 검증)
 
 const [a, b, c, d] = ['에이', '비이', '씨이', '디이'].map((n) => mk(n));
 const x = mk('엑스', '9999');
