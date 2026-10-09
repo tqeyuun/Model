@@ -644,7 +644,7 @@ var ROUTES = {
     var uniq = {}; labels.forEach(function (l) { uniq[l] = 1; });
     if (Object.keys(uniq).length !== labels.length || labels.some(function (l) { return l.length > 40; })) fail(400, '선택지는 서로 달라야 하고 40자 이내예요.');
     var mins = Number(body.closes_in_minutes), closes = mins > 0 ? now() + Math.min(mins, 60 * 24 * 30) * 6e4 : '';
-    if (isDup('bets', function (r) { return r.creator_id === u.id && r.title === title; })) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+    if (isDup('bets', function (r) { return r.creator_id === u.id && r.title === title; })) fail(409, '연타');
     var b = tbl('bets').insert({ title: title, creator_id: u.id, status: 'open', winner: '', closes_at: closes, created_at: now() });
     labels.forEach(function (l) { tbl('options').insert({ bet_id: b.id, label: l }); });
     return betViews([b], u)[0];
@@ -711,7 +711,7 @@ var ROUTES = {
     if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주세요.');
     if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '점 이상이에요.');
     if (u.points < stake) fail(400, '포인트가 부족해요.');
-    if (isDup('rps', function (r) { return r.host_id === u.id && r.stake === stake && r.status === 'waiting'; })) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+    if (isDup('rps', function (r) { return r.host_id === u.id && r.stake === stake && r.status === 'waiting'; })) fail(409, '연타');
     if (tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
     u.points -= stake; tbl('users').save(u);   // 판돈은 방을 여는 순간 맡겨짐
     var r = tbl('rps').insert({ host_id: u.id, stake: stake, host_hand: hand, guest_id: '', guest_hand: '', status: 'waiting', result: '', created_at: now(), played_at: '' });
@@ -755,7 +755,7 @@ var ROUTES = {
     if (cap !== Math.floor(cap) || cap < L.MIN_PLAYERS || cap > L.MAX_PLAYERS) fail(400, '인원은 ' + L.MIN_PLAYERS + '~' + L.MAX_PLAYERS + '명이에요.');
     if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주세요.');
     if (u.points < stake) fail(400, '포인트가 부족해요.');
-    if (isDup('lun', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'waiting'; })) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+    if (isDup('lun', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'waiting'; })) fail(409, '연타');
     if (openRooms('lun', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
     addPoints(u.id, -stake);
     var r = tbl('lun').insert({ host_id: u.id, stake: stake, cap: cap, status: 'waiting', winner_id: '', created_at: now(), played_at: '' });
@@ -806,7 +806,7 @@ var ROUTES = {
     if (slots !== Math.floor(slots) || slots < L.MIN_SLOTS || slots > L.MAX_SLOTS) fail(400, '인원은 ' + L.MIN_SLOTS + '~' + L.MAX_SLOTS + '명이에요.');
     if (slot !== Math.floor(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주세요.');
     if (u.points < stake) fail(400, '포인트가 부족해요.');
-    if (isDup('lad', function (r) { return r.host_id === u.id && r.stake === stake && r.slots === slots && r.status === 'waiting'; })) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+    if (isDup('lad', function (r) { return r.host_id === u.id && r.stake === stake && r.slots === slots && r.status === 'waiting'; })) fail(409, '연타');
     if (openRooms('lad', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
     addPoints(u.id, -stake);
     var r = tbl('lad').insert({ host_id: u.id, stake: stake, slots: slots, status: 'waiting', win_end: '', rungs: '', winner_id: '', created_at: now(), played_at: '' });

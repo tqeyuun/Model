@@ -581,7 +581,7 @@ const routes = {
     return tx(() => {
       const f = q1('SELECT points FROM users WHERE id=?', u.id);
       if (f.points < stake) fail(400, '포인트가 부족해요.');
-      if (isDup("SELECT 1 FROM rps WHERE host_id=? AND stake=? AND status='waiting'", u.id, stake)) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+      if (isDup("SELECT 1 FROM rps WHERE host_id=? AND stake=? AND status='waiting'", u.id, stake)) fail(409, '연타');
       if (q1("SELECT COUNT(*) n FROM rps WHERE host_id=? AND status='waiting'", u.id).n >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
       run('UPDATE users SET points=points-? WHERE id=?', stake, u.id);   // 판돈은 방을 여는 순간 맡겨짐
       const id = Number(run('INSERT INTO rps(host_id,stake,host_hand,created_at) VALUES (?,?,?,?)', u.id, stake, hand, now()).lastInsertRowid);
@@ -630,7 +630,7 @@ const routes = {
     if (!Number.isInteger(num) || num < G.LUN.MIN || num > G.LUN.MAX) fail(400, `숫자는 ${G.LUN.MIN}~${G.LUN.MAX} 중에 골라주세요.`);
     return tx(() => {
       if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족해요.');
-      if (isDup("SELECT 1 FROM lun WHERE host_id=? AND stake=? AND cap=? AND status='waiting'", u.id, stake, cap)) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+      if (isDup("SELECT 1 FROM lun WHERE host_id=? AND stake=? AND cap=? AND status='waiting'", u.id, stake, cap)) fail(409, '연타');
       if (openRooms('lun', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
       pay(u.id, -stake);
       const id = Number(run('INSERT INTO lun(host_id,stake,cap,created_at) VALUES (?,?,?,?)', u.id, stake, cap, now()).lastInsertRowid);
@@ -688,7 +688,7 @@ const routes = {
     if (!Number.isInteger(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주세요.');
     return tx(() => {
       if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족해요.');
-      if (isDup("SELECT 1 FROM lad WHERE host_id=? AND stake=? AND slots=? AND status='waiting'", u.id, stake, slots)) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+      if (isDup("SELECT 1 FROM lad WHERE host_id=? AND stake=? AND slots=? AND status='waiting'", u.id, stake, slots)) fail(409, '연타');
       if (openRooms('lad', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
       pay(u.id, -stake);
       const id = Number(run('INSERT INTO lad(host_id,stake,slots,created_at) VALUES (?,?,?,?)', u.id, stake, slots, now()).lastInsertRowid);
@@ -824,7 +824,7 @@ const routes = {
     const mins = Number(body.closes_in_minutes);
     const closes = mins > 0 ? now() + Math.min(mins, 60 * 24 * 30) * 6e4 : null;
     return tx(() => {
-      if (isDup('SELECT 1 FROM bets WHERE creator_id=? AND title=?', u.id, title)) fail(409, '방금 같은 걸 만들었어요. (연타 방지) 잠시 뒤에 다시 해주세요.');
+      if (isDup('SELECT 1 FROM bets WHERE creator_id=? AND title=?', u.id, title)) fail(409, '연타');
       const id = Number(run('INSERT INTO bets(title,creator_id,closes_at,created_at) VALUES (?,?,?,?)', title, u.id, closes, now()).lastInsertRowid);
       for (const l of labels) run('INSERT INTO options(bet_id,label) VALUES (?,?)', id, l);
       return betView(q1('SELECT * FROM bets WHERE id=?', id), u);

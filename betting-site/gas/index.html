@@ -155,7 +155,7 @@ function api(method, url, body) {
       .handle(token || '', '', method, url, body || {});
   });
 }
-function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+function toast(m) { if (m === '연타') return; const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 // 처리 중에 같은 버튼을 또 눌러도 무시 (연타해도 방/도박이 여러 개 생기지 않게)
 const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };
 function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false }; LS.del('token'); render(); }
@@ -174,7 +174,13 @@ function nm(o, force = {}) {
 function renderHeader() {
   $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
-async function refresh() {
+let refreshP = null;
+function refresh() {   // 이미 진행 중이면 끝난 뒤 한 번 더 (동작 직후 호출이 옛 데이터로 끝나지 않게). 요청이 쌓이지는 않음
+  if (!token) return Promise.resolve();
+  if (refreshP) return refreshP = refreshP.then(refreshBody, refreshBody);
+  return refreshP = refreshBody().finally(() => { refreshP = null; });
+}
+async function refreshBody() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
   try {
     ({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));
@@ -241,7 +247,13 @@ function renderChat() {
   box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:${m.color || `hsl(${hue(m.name)} 90% 70%)`}">${nm(m)}</div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보세요 👋</p>';
   if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
 }
+let chatPolling = false;
 async function pollChat() {
+  if (!token || tab !== 'chat' || !chatBet || chatPolling) return;
+  chatPolling = true;
+  try { await pollChatBody(); } finally { chatPolling = false; }
+}
+async function pollChatBody() {
   if (!token || tab !== 'chat' || !chatBet) return;
   const bid = chatBet;
   try {
