@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>관리자</title>
+<style>
+:root{--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif;
+ background-image:radial-gradient(600px 300px at 90% -5%,rgba(255,45,149,.28),transparent),radial-gradient(500px 300px at 5% 5%,rgba(34,211,238,.18),transparent);background-attachment:fixed}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{margin:6px 0 12px;font-size:22px;background:linear-gradient(90deg,var(--pink),var(--dog));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:17px;margin:0 0 8px}.mute{color:var(--mute);font-size:13px}
+.card{background:linear-gradient(160deg,#14141f,var(--card));border:1px solid var(--line);border-radius:16px;padding:14px;margin:14px 0;box-shadow:0 8px 30px rgba(255,45,149,.1)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px}.stat b{display:block;font-size:22px;color:var(--cyan);text-shadow:0 0 10px rgba(34,211,238,.6)}
+input,button{font:inherit;border-radius:10px;border:1px solid var(--line);padding:7px 10px;background:#07070c;color:var(--ink);outline:none}
+input{width:110px}button{cursor:pointer}button:hover{filter:brightness(1.3)}
+button.pri{background:linear-gradient(90deg,var(--pri),var(--pink));border:0;font-weight:700}
+button.danger{border-color:var(--lose);color:var(--lose)}
+table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.acts{display:flex;gap:4px;flex-wrap:wrap}.tag{font-size:11px;padding:1px 8px;border-radius:99px;background:#26243a;color:var(--cyan)}
+.msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--pri),var(--pink));font-weight:700;padding:10px 18px;border-radius:12px;z-index:9}
+.opts button{margin:2px}
+</style>
+</head>
+<body>
+<main id="app"><p class="mute">불러오는 중…</p></main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// 키는 주소의 # 뒤에 있어서 서버 로그에 남지 않아요. 한 번 읽으면 주소창에서 지워요.
+let key = location.hash.slice(1) || sessionStorage.getItem('adminKey') || '';
+if (key) { sessionStorage.setItem('adminKey', key); history.replaceState(null, '', location.pathname); }
+let data = null;
+
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || '오류');
+  return j;
+}
+function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2400); }
+const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+const load = async () => { try { data = await api('GET', '/api/admin/overview'); render(); } catch (e) { $('#app').innerHTML = `<h1>🔒 관리자</h1><div class="card">${esc(e.message)}<br><span class="mute">서버를 켤 때 터미널에 나온 관리자 링크로 들어와 주세요.</span></div>`; } };
+
+const userAct = guard(async (user_id, action, value) => {
+  if (action === 'delete' && !confirm('이 유저를 삭제할까요?')) return;
+  await api('POST', '/api/admin/user', { user_id, action, value }); toast('완료'); await load();
+});
+const askPoints = (id, action) => { const v = prompt(action === 'set_points' ? '새 점수?' : '더할 점수? (빼려면 -100)'); if (v !== null && v !== '') userAct(id, action, Number(v)); };
+const askPin = (id) => { const v = prompt('새 PIN 4자리?'); if (v) userAct(id, 'reset_pin', v); };
+const betAct = guard(async (bet_id, action, option_id) => {
+  const msg = { delete: '내기를 삭제할까요? (진행 중이면 환불)', cancel: '취소하고 전액 환불할까요?', resolve: '이 선택지를 정답으로 확정할까요?' }[action];
+  if (msg && !confirm(msg)) return;
+  await api('POST', '/api/admin/bet', { bet_id, action, option_id }); toast('완료'); await load();
+});
+const gift = guard(async () => {
+  const v = Number($('#gift').value);
+  if (!confirm(`모든 유저에게 ${v}점을 줄까요?`)) return;
+  await api('POST', '/api/admin/gift', { amount: v }); toast('🎁 지급 완료'); await load();
+});
+
+function render() {
+  const st = data.stats;
+  const S = { open: '진행', closed: '마감', resolved: '확정', cancelled: '취소' };
+  $('#app').innerHTML = `<h1>🛠 관리자 콘솔</h1>
+  <div class="stats">
+    <div class="stat">유저<b>${st.users}</b></div><div class="stat">유통 포인트<b>${st.points.toLocaleString()}</b></div>
+    <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}</b></div>
+    <div class="stat">🍀 럭키 당첨<b>${st.lucky}</b></div></div>
+  <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="점수"> <button class="pri" onclick="gift()">모두에게 주기</button></div>
+  <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${u.points.toLocaleString()}점</td><td><div class="acts">
+    <button onclick="askPoints(${u.id},'add_points')">± 더하기</button><button onclick="askPoints(${u.id},'set_points')">= 설정</button>
+    <button onclick="askPin(${u.id})">PIN 초기화</button><button class="danger" onclick="userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>
+  <div class="card"><h2>내기</h2>${data.bets.map((b) => `<div style="border-bottom:1px solid var(--line);padding:8px 0">
+    <b>${esc(b.title)}</b> <span class="tag">${S[b.status]}</span> <span class="mute">by ${esc(b.creator)} · 총 ${b.total}점</span>
+    <div class="opts mute">${b.options.map((o) => `${b.winner === o.id ? '🏆' : ''}${esc(o.label)} (${o.pool}점/${o.bettors}명) ${b.status === 'open' || b.status === 'closed' ? `<button onclick="betAct(${b.id},'resolve',${o.id})">정답</button>` : ''}`).join(' · ')}</div>
+    <div class="acts" style="margin-top:4px">${b.status === 'open' ? `<button onclick="betAct(${b.id},'close')">마감</button>` : ''}${b.status === 'open' || b.status === 'closed' ? `<button onclick="betAct(${b.id},'cancel')">취소(환불)</button>` : ''}<button class="danger" onclick="betAct(${b.id},'delete')">삭제</button></div></div>`).join('') || '<p class="mute">내기가 없어요.</p>'}</div>`;
+}
+load(); setInterval(() => { if (document.activeElement?.tagName !== 'INPUT') load(); }, 8000);
+</script>
+</body>
+</html>

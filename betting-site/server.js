@@ -13,6 +13,8 @@ const MIN_BET = 10;
 const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
 const UNDERDOG_SHARE = 0.30;    // 이긴 쪽 판돈 비중이 이 값 미만이면 역배
 const UNDERDOG_BONUS = 0.20;    // 역배 적중 시 총 판돈의 20%를 보너스로 추가 지급
+const LUCKY_CHANCE = Number(process.env.LUCKY_CHANCE ?? 0.07); // 이긴 사람마다 7% 확률로 럭키 보너스
+const LUCKY_BONUS = 0.5;        // 럭키 당첨 시 받은 금액의 50%를 추가 지급
 
 const db = new DatabaseSync(DB_FILE);
 db.exec(`
@@ -26,11 +28,23 @@ CREATE TABLE IF NOT EXISTS bets (
   status TEXT NOT NULL DEFAULT 'open',  -- open | closed | resolved | cancelled
   winner INTEGER, closes_at INTEGER, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, label TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wagers (
   id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, option_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
   amount INTEGER NOT NULL, payout INTEGER, created_at INTEGER NOT NULL);
 `);
 
+try { db.exec('ALTER TABLE wagers ADD COLUMN lucky INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
+
+// 관리자 키: ADMIN_KEY 환경변수가 있으면 그것, 없으면 최초 실행 때 생성해 DB에 저장
+let ADMIN_KEY = process.env.ADMIN_KEY;
+if (!ADMIN_KEY) {
+  ADMIN_KEY = db.prepare("SELECT v FROM settings WHERE k='admin_key'").get()?.v;
+  if (!ADMIN_KEY) {
+    ADMIN_KEY = require('node:crypto').randomBytes(18).toString('hex');
+    db.prepare("INSERT INTO settings VALUES ('admin_key', ?)").run(ADMIN_KEY);
+  }
+}
 const now = () => Date.now();
 const q = (sql, ...a) => db.prepare(sql).all(...a);
 const q1 = (sql, ...a) => db.prepare(sql).get(...a);
@@ -60,9 +74,11 @@ function settle(bet, winnerOptionId) {
   const pot = total + (underdog ? Math.floor(total * UNDERDOG_BONUS) : 0);
   let paid = 0;
   winners.forEach((w, i) => {
-    const pay = i === winners.length - 1 && !underdog ? total - paid : Math.floor((pot * w.amount) / winPool);
-    paid += pay;
-    run('UPDATE wagers SET payout=? WHERE id=?', pay, w.id);
+    const base = i === winners.length - 1 && !underdog ? total - paid : Math.floor((pot * w.amount) / winPool);
+    paid += base;
+    const lucky = Math.random() < LUCKY_CHANCE;
+    const pay = base + (lucky ? Math.max(1, Math.floor(base * LUCKY_BONUS)) : 0);
+    run('UPDATE wagers SET payout=?, lucky=? WHERE id=?', pay, lucky ? 1 : 0, w.id);
     run('UPDATE users SET points=points+? WHERE id=?', pay, w.user_id);
   });
   for (const w of wagers) if (w.option_id !== winnerOptionId) run('UPDATE wagers SET payout=0 WHERE id=?', w.id);
@@ -81,7 +97,7 @@ function betView(b, me) {
   const opts = q('SELECT id,label FROM options WHERE bet_id=? ORDER BY id', b.id);
   const sums = Object.fromEntries(q('SELECT option_id o, SUM(amount) s, COUNT(*) n FROM wagers WHERE bet_id=? GROUP BY option_id', b.id).map((r) => [r.o, r]));
   const total = Object.values(sums).reduce((s, r) => s + r.s, 0);
-  const mine = me ? q('SELECT option_id,amount,payout FROM wagers WHERE bet_id=? AND user_id=?', b.id, me.id) : [];
+  const mine = me ? q('SELECT option_id,amount,payout,lucky FROM wagers WHERE bet_id=? AND user_id=?', b.id, me.id) : [];
   const creator = q1('SELECT name FROM users WHERE id=?', b.creator_id)?.name;
   return {
     id: b.id, title: b.title, creator, mine_created: me?.id === b.creator_id, status: b.status,
@@ -99,6 +115,7 @@ function betView(b, me) {
     }),
     my_payout: mine.length && (b.status === 'resolved' || b.status === 'cancelled') ? mine.reduce((s, m) => s + (m.payout || 0), 0) : null,
     my_total: mine.reduce((s, m) => s + m.amount, 0),
+    my_lucky: mine.some((m) => m.lucky),
   };
 }
 const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5 };
@@ -121,6 +138,30 @@ function throttle(key) {
   const a = (attempts.get(key) || []).filter((t) => now() - t < 3e5);
   if (a.length >= 10) fail(429, '로그인 시도가 너무 많아요. 5분 뒤 다시 해주세요.');
   a.push(now()); attempts.set(key, a);
+}
+
+function betAction(bet, body) {
+  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 내기예요.');
+  if (body.action === 'close') { run("UPDATE bets SET status='closed' WHERE id=?", bet.id); return { ok: true }; }
+  if (body.action === 'cancel') {
+    for (const w of q('SELECT * FROM wagers WHERE bet_id=?', bet.id)) refund(w);
+    run("UPDATE bets SET status='cancelled' WHERE id=?", bet.id);
+    return { ok: true };
+  }
+  if (body.action === 'resolve') {
+    const opt = q1('SELECT * FROM options WHERE id=? AND bet_id=?', Number(body.option_id), bet.id) || fail(400, '정답 선택지를 골라주세요.');
+    const r = settle(bet, opt.id);
+    run('UPDATE bets SET status=?, winner=? WHERE id=?', r.refunded ? 'cancelled' : 'resolved', r.refunded ? null : opt.id, bet.id);
+    return { ok: true, ...r };
+  }
+  fail(400, '알 수 없는 동작이에요.');
+}
+function adminOnly(req) {
+  throttle('admin|' + req.socket.remoteAddress);
+  const k = String(req.headers['x-admin-key'] || '');
+  const a = Buffer.from(k), b = Buffer.from(ADMIN_KEY);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) fail(403, '관리자 키가 틀렸어요.');
+  attempts.delete('admin|' + req.socket.remoteAddress); // 성공하면 카운트 초기화
 }
 
 // ---------- API ----------
@@ -186,20 +227,7 @@ const routes = {
     return tx(() => {
       const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '내기가 없어요.');
       if (bet.creator_id !== u.id) fail(403, '내기를 연 사람만 할 수 있어요.');
-      if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 내기예요.');
-      if (body.action === 'close') { run("UPDATE bets SET status='closed' WHERE id=?", bet.id); return { ok: true }; }
-      if (body.action === 'cancel') {
-        for (const w of q('SELECT * FROM wagers WHERE bet_id=?', bet.id)) refund(w);
-        run("UPDATE bets SET status='cancelled' WHERE id=?", bet.id);
-        return { ok: true };
-      }
-      if (body.action === 'resolve') {
-        const opt = q1('SELECT * FROM options WHERE id=? AND bet_id=?', Number(body.option_id), bet.id) || fail(400, '정답 선택지를 골라주세요.');
-        const r = settle(bet, opt.id);
-        run("UPDATE bets SET status=?, winner=? WHERE id=?", r.refunded ? 'cancelled' : 'resolved', r.refunded ? null : opt.id, bet.id);
-        return { ok: true, ...r };
-      }
-      fail(400, '알 수 없는 동작이에요.');
+      return betAction(bet, body);
     });
   },
   'POST /api/aid': (req, body, u) => {
@@ -211,6 +239,56 @@ const routes = {
       run('UPDATE users SET points=points+?, last_aid=? WHERE id=?', DAILY_AID, now(), u.id);
       return { ok: true };
     });
+  },
+  'GET /api/admin/overview': (req) => {
+    adminOnly(req); sweep();
+    const users = q('SELECT id,name,points,created_at FROM users ORDER BY points DESC');
+    const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
+    const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
+    return { users, bets, stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
+  },
+  'POST /api/admin/user': (req, body) => {
+    adminOnly(req);
+    return tx(() => {
+      const u = q1('SELECT * FROM users WHERE id=?', Number(body.user_id)) || fail(404, '유저가 없어요.');
+      const v = Number(body.value);
+      if (body.action === 'set_points' || body.action === 'add_points') {
+        if (!Number.isInteger(v)) fail(400, '숫자를 넣어주세요.');
+        const next = body.action === 'set_points' ? v : u.points + v;
+        if (next < 0) fail(400, '0점 미만으로는 못 해요.');
+        run('UPDATE users SET points=? WHERE id=?', next, u.id);
+      } else if (body.action === 'reset_pin') {
+        const pin = String(body.value || '');
+        if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
+        const salt = crypto.randomBytes(8).toString('hex');
+        run('UPDATE users SET salt=?, hash=? WHERE id=?', salt, hashPin(pin, salt), u.id);
+        run('DELETE FROM sessions WHERE user_id=?', u.id);
+      } else if (body.action === 'delete') {
+        if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
+        run('DELETE FROM sessions WHERE user_id=?', u.id);
+        run('DELETE FROM users WHERE id=?', u.id);
+      } else fail(400, '알 수 없는 동작이에요.');
+      return { ok: true };
+    });
+  },
+  'POST /api/admin/bet': (req, body) => {
+    adminOnly(req);
+    return tx(() => {
+      const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '내기가 없어요.');
+      if (body.action === 'delete') {
+        if (bet.status === 'open' || bet.status === 'closed') for (const w of q('SELECT * FROM wagers WHERE bet_id=?', bet.id)) refund(w);
+        run('DELETE FROM wagers WHERE bet_id=?', bet.id); run('DELETE FROM options WHERE bet_id=?', bet.id); run('DELETE FROM bets WHERE id=?', bet.id);
+        return { ok: true };
+      }
+      return betAction(bet, body);
+    });
+  },
+  'POST /api/admin/gift': (req, body) => {
+    adminOnly(req);
+    const v = Number(body.amount);
+    if (!Number.isInteger(v) || v <= 0 || v > 1e6) fail(400, '1~1000000 사이 정수를 넣어주세요.');
+    run('UPDATE users SET points=points+?', v);
+    return { ok: true };
   },
   'GET /api/ranking': () => q(`
     SELECT u.name, u.points,
@@ -240,11 +318,15 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
-  const file = path.join(__dirname, 'public', url.pathname === '/' ? 'index.html' : url.pathname);
+  const page = url.pathname === '/' ? 'index.html' : url.pathname === '/admin' ? 'admin.html' : url.pathname;
+  const file = path.join(__dirname, 'public', page);
   if (!file.startsWith(path.join(__dirname, 'public')) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end('Not found'); }
   res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
   fs.createReadStream(file).pipe(res);
 });
 
-if (require.main === module) server.listen(PORT, () => console.log(`http://localhost:${PORT}`));
-module.exports = { server, UNDERDOG_BONUS, UNDERDOG_SHARE };
+if (require.main === module) server.listen(PORT, () => {
+  console.log(`사이트:  http://localhost:${PORT}`);
+  console.log(`관리자:  http://localhost:${PORT}/admin#${ADMIN_KEY}   (이 링크는 나만 알고 있기!)`);
+});
+module.exports = { server, ADMIN_KEY, UNDERDOG_BONUS, UNDERDOG_SHARE };

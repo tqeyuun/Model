@@ -5,26 +5,43 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>친구 내기판</title>
 <style>
-:root{--bg:#f6f7fb;--card:#fff;--ink:#1c1e26;--mute:#6b7080;--line:#e4e6ee;--pri:#5b5bf0;--win:#16a34a;--lose:#dc2626;--dog:#f59e0b}
-@media (prefers-color-scheme:dark){:root{--bg:#14151b;--card:#1e2028;--ink:#eceef5;--mute:#9aa0b3;--line:#2e313c;--pri:#8585ff}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif}
+:root{--bg:#000;--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:var(--ink);font:16px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif;min-height:100vh;
+ background-image:radial-gradient(600px 300px at 10% -5%,rgba(168,85,247,.28),transparent),radial-gradient(500px 300px at 95% 5%,rgba(255,45,149,.2),transparent),radial-gradient(500px 400px at 50% 110%,rgba(34,211,238,.14),transparent);background-attachment:fixed}
 main{max-width:640px;margin:0 auto;padding:16px}
-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-header b{font-size:18px}.pts{font-weight:700;color:var(--pri)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
-h2{font-size:17px;margin:0 0 4px}.mute{color:var(--mute);font-size:13px}
-input,button{font:inherit;border-radius:10px;border:1px solid var(--line);padding:10px 12px;background:var(--card);color:var(--ink)}
-input{width:100%;margin:4px 0}button{cursor:pointer}button.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
-button:disabled{opacity:.5;cursor:default}
-.tabs{display:flex;gap:6px;margin:12px 0}.tabs button{flex:1}.tabs .on{background:var(--pri);color:#fff;border-color:var(--pri)}
-.opt{margin:10px 0}.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin:4px 0}.bar i{display:block;height:100%;background:var(--pri)}
-.opt.dog .bar i{background:var(--dog)}.opt.won .bar i{background:var(--win)}
-.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
-.tag{font-size:12px;padding:1px 7px;border-radius:99px;background:var(--dog);color:#fff;margin-left:6px}
-.tag.s{background:var(--mute)}.win{color:var(--win);font-weight:700}.lose{color:var(--lose);font-weight:700}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header b{font-size:20px;background:linear-gradient(90deg,var(--cyan),var(--pri),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 8px rgba(168,85,247,.6))}
+.pts{font-weight:800;color:var(--dog);text-shadow:0 0 10px rgba(255,184,0,.7)}
+.card{position:relative;background:linear-gradient(160deg,#14141f,var(--card));border:1px solid var(--line);border-radius:16px;padding:14px;margin:14px 0;box-shadow:0 0 0 1px rgba(168,85,247,.08),0 8px 30px rgba(168,85,247,.12);transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(168,85,247,.5),0 10px 36px rgba(255,45,149,.2)}
+h2{font-size:18px;margin:0 0 4px}.mute{color:var(--mute);font-size:13px}
+input,button{font:inherit;border-radius:12px;border:1px solid var(--line);padding:10px 12px;background:#07070c;color:var(--ink);outline:none}
+input{width:100%;margin:4px 0}input:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(168,85,247,.25)}
+button{cursor:pointer;transition:transform .1s,filter .15s}button:hover:not(:disabled){filter:brightness(1.25)}button:active:not(:disabled){transform:scale(.96)}
+button.pri{background:linear-gradient(90deg,var(--pri),var(--pink));border:0;color:#fff;font-weight:700;box-shadow:0 0 16px rgba(255,45,149,.45)}
+button:disabled{opacity:.4;cursor:default}
+.tabs{display:flex;gap:6px;margin:12px 0}.tabs button{flex:1;font-weight:600}
+.tabs .on{background:linear-gradient(90deg,var(--cyan),var(--pri));color:#000;border:0;box-shadow:0 0 16px rgba(34,211,238,.5)}
+.opt{margin:12px 0;padding:8px 10px;border-radius:12px;border:1px solid transparent}
+.bar{height:10px;background:#1a1a28;border-radius:8px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--pri));box-shadow:0 0 12px var(--pri);transition:width .5s}
+.opt.dog{border-color:rgba(255,184,0,.45);background:rgba(255,184,0,.06);animation:glow 2s infinite}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink));box-shadow:0 0 12px var(--dog)}
+.opt.won{border-color:var(--win);background:rgba(52,245,160,.07);box-shadow:0 0 18px rgba(52,245,160,.3)}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan));box-shadow:0 0 12px var(--win)}
+@keyframes glow{50%{box-shadow:0 0 16px rgba(255,184,0,.35)}}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:linear-gradient(90deg,var(--dog),var(--pink));color:#000;margin-left:6px;vertical-align:middle}
+.tag.s{background:#26243a;color:var(--cyan)}
+.win{color:var(--win);font-weight:800;text-shadow:0 0 10px rgba(52,245,160,.6)}.lose{color:var(--lose);font-weight:800}
+.lucky{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:99px;font-weight:800;color:#000;background:linear-gradient(90deg,#fff176,#ffb800,#ff2d95,#a855f7,#22d3ee);background-size:300%;animation:rb 2s linear infinite;box-shadow:0 0 14px rgba(255,184,0,.8)}
+@keyframes rb{to{background-position:300% 0}}
 .betrow{display:flex;gap:6px;margin-top:6px}.betrow input{margin:0}
-.msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:9;max-width:90%}
+.msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff;font-weight:700;padding:10px 18px;border-radius:12px;z-index:9;max-width:90%;box-shadow:0 0 24px rgba(255,45,149,.6)}
 table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}td:nth-child(n+3),th:nth-child(n+3){text-align:right}
+tr:nth-child(2) td:first-child{color:#ffd700}tr:nth-child(3) td:first-child{color:#c0c0c0}tr:nth-child(4) td:first-child{color:#cd7f32}
+tr:nth-child(2){background:rgba(255,215,0,.07)}
 </style>
 </head>
 <body>
@@ -63,7 +80,7 @@ function render() {
 }
 
 function authView() {
-  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN. 처음이면 가입하면 1000점 지급! (실제 돈과 무관한 사이트 전용 포인트)</p>
+  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN. 처음이면 가입하면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
   <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password">
   <div class="betrow"><button class="pri" style="flex:1" onclick="auth('login')">로그인</button><button style="flex:1" onclick="auth('signup')">가입</button></div></div>`;
 }
@@ -89,7 +106,7 @@ function betView(b) {
   let result = '';
   if (b.my_total && (b.status === 'resolved' || b.status === 'cancelled')) {
     const net = b.my_payout - b.my_total;
-    result = b.status === 'cancelled' ? `<p class="mute">환불됨 (${b.my_total}점)</p>` : `<p class="${net >= 0 ? 'win' : 'lose'}">${net >= 0 ? '+' : ''}${net}점 (${b.my_total}점 걸고 ${b.my_payout}점 받음)</p>`;
+    result = b.status === 'cancelled' ? `<p class="mute">환불됨 (${b.my_total}점)</p>` : `<p class="${net >= 0 ? 'win' : 'lose'}">${net >= 0 ? '+' : ''}${net}점 (${b.my_total}점 걸고 ${b.my_payout}점 받음)${b.my_lucky ? '<span class="lucky">🍀 럭키 보너스!</span>' : ''}</p>`;
   }
   const mgr = b.mine_created && (b.status === 'open' || b.status === 'closed') ? `<div class="betrow">
     ${open ? `<button onclick="act(${b.id},'close')">지금 마감</button>` : ''}<button onclick="if(confirm('취소하고 전부 환불할까요?'))act(${b.id},'cancel')">취소(환불)</button></div>` : '';

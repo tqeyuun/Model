@@ -1,6 +1,7 @@
 process.env.DB_FILE = ':memory:';
+process.env.LUCKY_CHANCE = '0'; // 기본 테스트는 럭키 끔(결정적)
 const assert = require('node:assert');
-const { server } = require('./server');
+const { server, ADMIN_KEY } = require('./server');
 server.listen(0, async () => {
   const base = `http://localhost:${server.address().port}`;
   const call = async (m, p, b, t) => {
@@ -46,6 +47,29 @@ server.listen(0, async () => {
     await call('POST', '/api/wager', { option_id: bet3.options[0].id, amount: 50 }, a);
     await call('POST', '/api/bets/action', { bet_id: bet3.id, action: 'resolve', option_id: bet3.options[1].id }, a);
     assert.equal(await pts(a), 1380 - 50 + 50);
+
+    // 관리자 API
+    const adm = (m, p, b, k = ADMIN_KEY) => fetch(base + p, { method: m, headers: { 'Content-Type': 'application/json', 'X-Admin-Key': k }, body: b ? JSON.stringify(b) : undefined }).then(async (r) => ({ s: r.status, j: await r.json() }));
+    assert.equal((await adm('GET', '/api/admin/overview', null, 'wrong')).s, 403, '키 없으면 거부');
+    const ov = (await adm('GET', '/api/admin/overview')).j;
+    assert.equal(ov.users.length, 4);
+    const ua = ov.users.find((u) => u.name === 'a');
+    await adm('POST', '/api/admin/user', { user_id: ua.id, action: 'add_points', value: 500 });
+    assert.equal(await pts(a), 1380 + 500);
+    assert.equal((await adm('POST', '/api/admin/user', { user_id: ua.id, action: 'add_points', value: -99999 })).s, 400);
+    const bBefore = await pts(b);
+    await adm('POST', '/api/admin/gift', { amount: 100 });
+    assert.equal(await pts(b), bBefore + 100, '전체 지급');
+    await adm('POST', '/api/admin/user', { user_id: ua.id, action: 'reset_pin', value: '9999' });
+    assert.equal((await call('GET', '/api/me', null, a)).s, 401, 'PIN 초기화하면 기존 세션 종료');
+    assert.equal((await call('POST', '/api/login', { name: 'a', pin: '9999' })).s, 200);
+    // 관리자 강제 정산(진행 중 내기 삭제 시 환불)
+    const bet4 = (await call('POST', '/api/bets', { title: '4', options: ['U', 'V'] }, b)).j;
+    const before4 = await pts(b);
+    await call('POST', '/api/wager', { option_id: bet4.options[0].id, amount: 100 }, b);
+    await adm('POST', '/api/admin/bet', { bet_id: bet4.id, action: 'delete' });
+    assert.equal(await pts(b), before4, '삭제하면 환불');
+
     console.log('모든 테스트 통과');
     process.exitCode = 0;
   } catch (e) { console.error(e); process.exitCode = 1; }
