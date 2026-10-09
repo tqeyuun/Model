@@ -46,22 +46,22 @@ tr:nth-child(2){background:rgba(255,215,0,.07)}
 :root{--c0:#22d3ee;--c1:#ff2d95;--c2:#ffb800;--c3:#34f5a0;--c4:#a855f7;--c5:#ff6b3d}
 header b{font-size:22px;letter-spacing:.5px}
 .card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#22d3ee,#a855f7,#ff2d95)}
-.card h2{background:linear-gradient(90deg,#fff,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.card h2{color:var(--ink)}   /* 그라데이션 글자는 이모지를 실루엣으로 덮어서 단색으로 */
 .opt{--c:var(--c0);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 7%,transparent)}
 .opt .bar i{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 55%,#fff));box-shadow:0 0 14px var(--c)}
 .opt .lbl{color:var(--c);font-weight:700;text-shadow:0 0 10px color-mix(in srgb,var(--c) 60%,transparent)}
 .opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink))}
 .opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan))}
 .opt button.pri{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 50%,var(--pink)));box-shadow:0 0 16px color-mix(in srgb,var(--c) 60%,transparent);color:#000}
-.tabs button:nth-child(1).on{background:linear-gradient(90deg,#22d3ee,#34f5a0)}
-.tabs button:nth-child(2).on{background:linear-gradient(90deg,#ff2d95,#ffb800);box-shadow:0 0 16px rgba(255,45,149,.5)}
-.tabs button:nth-child(3).on{background:linear-gradient(90deg,#a855f7,#22d3ee);box-shadow:0 0 16px rgba(168,85,247,.5)}
+
+
+
 .tabs button{border-width:2px}
-.tabs button:nth-child(1){border-color:#22d3ee55}.tabs button:nth-child(2){border-color:#ff2d9555}.tabs button:nth-child(3){border-color:#a855f755}
+
 .tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
 
-.tabs button{padding:10px 4px}.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#ffb800);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
-.tabs button:nth-child(3).on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5)}.tabs button:nth-child(3){border-color:#ff6b3d55}
+.tabs button{padding:10px 4px}
+
 #chatbox{height:50vh;overflow-y:auto;padding:6px;margin:8px 0;background:#07070c;border:1px solid var(--line);border-radius:12px}
 .cm{margin:8px 0;max-width:85%}.cm.me{margin-left:auto;text-align:right}
 .cn{font-size:12px;font-weight:700}.cn span{color:var(--mute);font-weight:400;margin-left:4px}
@@ -70,8 +70,8 @@ header b{font-size:22px;letter-spacing:.5px}
 button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 
 .tabs button{font-size:13px;padding:10px 2px}
-.tabs button:nth-child(4).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(4){border-color:#ffb80055}
-.tabs button:nth-child(5).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(5){border-color:#34f5a055}
+
+
 .ttl{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;margin-right:5px;border-radius:99px;color:#000;background:linear-gradient(90deg,#ffb800,#ff2d95);vertical-align:middle}
 .nm{font-weight:700}
 .nm.fx-glow{color:#fff;text-shadow:0 0 6px #22d3ee,0 0 14px #a855f7,0 0 24px #ff2d95}
@@ -91,10 +91,32 @@ button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 .hands.pick{margin:12px 0}.hand.sel{border-color:var(--win);background:rgba(52,245,160,.12);box-shadow:0 0 16px rgba(52,245,160,.45)}
 .rec{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.rec.me{background:rgba(168,85,247,.08)}
 
-.tabs button:nth-child(3).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(3){border-color:#ffb80055}
-.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
+
+
 .tabs.mode button:nth-child(n){border-color:var(--line)}.tabs.mode button.on{border-color:transparent}
 .card.done{opacity:.5;transition:opacity .15s}.card.done:hover{opacity:.9;transform:none}
+
+.tabs button.t-bets.on{background:linear-gradient(90deg,#22d3ee,#34f5a0);box-shadow:0 0 16px rgba(34,211,238,.45)}.tabs button.t-bets{border-color:#22d3ee55}
+.tabs button.t-new.on{background:linear-gradient(90deg,#ff2d95,#ffb800);box-shadow:0 0 16px rgba(255,45,149,.5)}.tabs button.t-new{border-color:#ff2d9555}
+.tabs button.t-casino.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5)}.tabs button.t-casino{border-color:#ff6b3d55}
+.tabs button.t-shop.on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button.t-shop{border-color:#ffb80055}
+.tabs button.t-rank.on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button.t-rank{border-color:#34f5a055}
+.tabs:not(.mode) button{font-size:13px;padding:10px 2px;border-width:2px}
+.tabs.mode{flex-wrap:wrap}.tabs.mode button{flex:1 1 calc(50% - 6px);font-size:14px;padding:9px 6px}
+.tabs.mode button.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5);color:#fff;border-color:transparent}
+.nums{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0}.nums.n4{grid-template-columns:repeat(4,1fr)}.nums.n5{grid-template-columns:repeat(5,1fr)}.nums.n6{grid-template-columns:repeat(3,1fr)}
+.num{padding:10px 0;font-weight:800;font-size:16px;border-width:2px}.num.sel{border-color:var(--win);background:rgba(52,245,160,.15);box-shadow:0 0 14px rgba(52,245,160,.4)}
+.seats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.seat{padding:6px 12px;border-radius:99px;border:1px dashed var(--line);font-size:13px;color:var(--mute)}.seat.on{border-style:solid;color:var(--ink);background:#1b1b2b}.seat.mine{border-color:var(--win)}
+button.seat.free{border-style:solid;border-color:var(--cyan);color:var(--cyan);cursor:pointer}
+.pn{display:inline-block;padding:1px 9px;border-radius:99px;background:#1b1b2b;margin:2px;font-size:13px;border:1px solid transparent}.pn.uq{border-color:var(--cyan)}.pn.win{background:rgba(52,245,160,.2);border-color:var(--win)}
+.card.sub{padding:10px}.card.sub.me{border-color:var(--pri)}
+.lv,.lr{stroke:#3a3856;stroke-width:3;stroke-linecap:round}
+.rules p,.rules ul,.rules ol{margin:6px 0}.rules li{margin:4px 0}.rules summary{cursor:pointer;font-size:16px}.rules b{color:var(--cyan)}.rules ul,.rules ol{padding-left:20px}
+.hand-row{display:flex;flex-wrap:wrap;margin:4px 0}
+.pc{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:60px;margin:3px;border-radius:8px;background:#f5f5fa;color:#111;font-weight:800;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.pc.red{color:#d92d3a}.pc.back{background:repeating-linear-gradient(45deg,#3b2a8c,#3b2a8c 6px,#2a1f66 6px,#2a1f66 12px);color:#fff}
+.reels{display:flex;gap:8px;justify-content:center;margin:14px 0}.reel{width:78px;height:78px;display:flex;align-items:center;justify-content:center;font-size:42px;background:#07070c;border:2px solid var(--line);border-radius:14px}
 </style>
 </head>
 <body>
@@ -113,7 +135,7 @@ async function api(method, url, body) {
 }
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
-function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; localStorage.removeItem('token'); render(); }
+function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false }; localStorage.removeItem('token'); render(); }
 
 let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;
 let chatBet = null;
@@ -134,6 +156,7 @@ async function refresh() {
   try {
     [user, bets, ranking, rps] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking'), api('GET', '/api/rps')]);
     notifyRps();
+    await gamesTick();
     const seen = JSON.parse(localStorage.getItem('luckySeen') || '[]');
     const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
     if (fresh.length) { localStorage.setItem('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); }
@@ -145,13 +168,13 @@ async function refresh() {
 function render() {
   renderHeader();
   $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','도박'],['new','만들기'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    <div class="tabs">${[['bets','도박'],['new','만들기'],['casino','🎰 카지노'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
+    ${bodyView()}`;
   if (!token) initGoogle();
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
-const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
+const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); loadGame(); };
 
 function authView() {
   if (pending) return `<div class="card"><h2>🎉 구글 인증 완료!</h2><p class="mute">친구들에게 보일 닉네임을 정해주세요. (12자 이내, 나중에 ✏️로 바꿀 수 있어요)</p>
@@ -287,10 +310,12 @@ const create = guard(async () => {
 });
 /* ---------- 가위바위보 ---------- */
 const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { rock: '바위', paper: '보', scissors: '가위' };
-const setListMode = (m) => { listMode = m; render(); };
+const setListMode = (m) => { listMode = m; render(); loadGame(); };
 const setCreateMode = (m) => { createMode = m; render(); };
 function modeToggle(mode, fn) {
-  const items = fn === 'setListMode' ? [['bets', '🎲 도박'], ['rps', '✊ 가위바위보']] : [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방']];
+  const items = fn === 'setListMode' ? [['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기']]
+    : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
+    : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
   return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
@@ -348,6 +373,241 @@ function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으�
   localStorage.setItem('rpsSeen', JSON.stringify(seen.concat(fresh.map((r) => r.id))));
   const f = fresh[0], other = f.host.name === user.name ? f.guest.name : f.host.name;
   toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼어요! +' + f.net + '점' : f.net < 0 ? '졌어요 ' + f.net + '점' : '비겼어요'}`);
+}
+
+/* ---------- 새 게임: 최저 유일 숫자 · 사다리타기 · 블랙잭 · 슬롯머신 ---------- */
+let lun = { rooms: [], recent: [] }, lad = { rooms: [], recent: [] }, bj = { game: null, recent: [], rules: { MIN_BET: 10, MAX_BET: 500 } }, slotData = null;
+let casinoMode = 'bj', createNum = null, createCap = 3, createSlots = 3, createSeat = null, watch = { lun: false, lad: false }, gamesInit = false;
+let slotUi = { reels: ['❔', '❔', '❔'], msg: '', busy: false };
+const curView = () => (tab === 'bets' ? listMode : tab === 'casino' ? casinoMode : null);
+const setCasinoMode = (m) => { casinoMode = m; render(); loadGame(); };
+const rerenderKeep = () => { const v = {}; document.querySelectorAll('#app input').forEach((i) => { if (i.id) v[i.id] = i.value; }); render(); Object.keys(v).forEach((id) => { const e = document.getElementById(id); if (e) e.value = v[id]; }); };
+const NUMS = (fn, sel) => `<div class="nums">${Array.from({ length: 10 }, (_, i) => `<button class="num ${sel === i + 1 ? 'sel' : ''}" onclick="${fn}(${i + 1})">${i + 1}</button>`).join('')}</div>`;
+const netText = (n) => (n > 0 ? `+${n}점` : n < 0 ? `${n}점` : '±0');
+const netCls = (n) => (n > 0 ? 'win' : n < 0 ? 'lose' : 'mute');
+
+async function fetchLun() { lun = await api('GET', '/api/lun'); watch.lun = lun.rooms.some((r) => r.joined); notifyMulti('lun', lun.recent, '🤫 최저 유일 숫자'); }
+async function fetchLad() { lad = await api('GET', '/api/ladder'); watch.lad = lad.rooms.some((r) => r.joined); notifyMulti('lad', lad.recent, '🪜 사다리타기'); }
+function notifyMulti(kind, recent, label) {   // 내가 낀 방이 내가 없는 사이 결판났으면 알려줌
+  const key = 'seen_' + kind, mine = recent.filter((r) => r.mine), raw = localStorage.getItem(key);
+  if (raw === null) { localStorage.setItem(key, JSON.stringify(mine.map((r) => r.id))); return; }
+  const seen = JSON.parse(raw), fresh = mine.filter((r) => !seen.includes(r.id));
+  if (!fresh.length) return;
+  localStorage.setItem(key, JSON.stringify(seen.concat(fresh.map((r) => r.id))));
+  const f = fresh[0];
+  toast(`${label} 결과: ${f.net > 0 ? '이겼어요! ' : f.net < 0 ? '졌어요 ' : ''}${f.net === 0 ? '승자 없음, 판돈은 그대로' : netText(f.net)}`);
+}
+function markSeen(kind, id) { try { const k = 'seen_' + kind, a = JSON.parse(localStorage.getItem(k) || '[]'); if (!a.includes(id)) localStorage.setItem(k, JSON.stringify(a.concat(id))); } catch { /* 무시 */ } }
+async function loadGame() {
+  if (!token) return;
+  const view = curView();
+  try {
+    if (view === 'lun') await fetchLun();
+    else if (view === 'lad') await fetchLad();
+    else if (view === 'bj') { const d = await api('GET', '/api/blackjack'); if (curView() !== 'bj') return; bj = d; }
+    else if (view === 'slots') { const d = await api('GET', '/api/slots'); if (curView() !== 'slots') return; slotData = d; }
+    else return;
+  } catch (e) { return; }
+  if (curView() === view && !(document.activeElement && document.activeElement.tagName === 'INPUT') && !slotUi.busy) render();
+}
+async function gamesTick() {
+  const view = curView();
+  if (!gamesInit) { gamesInit = true; try { await Promise.all([fetchLun(), fetchLad()]); } catch (e) { /* 무시 */ } }
+  else {
+    if (watch.lun && view !== 'lun') { try { await fetchLun(); } catch (e) { /* 무시 */ } }
+    if (watch.lad && view !== 'lad') { try { await fetchLad(); } catch (e) { /* 무시 */ } }
+  }
+  await loadGame();
+}
+
+/* ---- 🤫 최저 유일 숫자 ---- */
+const LUN_RULES = `<details %OPEN% class="rules"><summary><b>🤫 최저 유일 숫자가 뭐예요?</b></summary>
+  <p>모두가 <b>1~10 중 숫자 하나를 몰래</b> 내요. 다 모이면 한꺼번에 공개돼요.</p>
+  <p>같은 숫자를 낸 사람이 둘 이상이면 그 숫자는 <b>무효</b>예요. 남은 숫자 중 <b>가장 작은 숫자</b>를 낸 사람이 <b>판돈 전부</b>를 가져가요.</p>
+  <p class="mute">예) 민수 1, 지은 1, 철수 3, 영희 7 → 1은 겹쳐서 무효 → 안 겹친 3·7 중 작은 3을 낸 <b>철수 승!</b></p>
+  <p class="mute">작은 숫자가 유리하지만 다들 그렇게 생각하니까 겹치기 쉬워요. 친구들의 속마음을 읽어보세요. 전부 겹치면 승자가 없고 판돈은 돌려받아요.</p></details>`;
+function lunLobby() {
+  const rooms = lun.rooms.map((r) => {
+    const seats = `<div class="seats">${Array.from({ length: r.cap }, (_, i) => `<span class="seat ${r.players[i] ? 'on' : ''}">${r.players[i] ? esc(r.players[i].name) : '빈자리'}</span>`).join('')}</div>`;
+    const body = r.joined
+      ? `<div class="mute">내가 낸 숫자: <b style="color:var(--cyan)">${r.my_num}</b> (다른 사람에겐 안 보여요)</div>` + (r.mine ? `<div class="betrow"><button class="pri" onclick="startLun(${r.id})" ${r.count < LUN_MIN ? 'disabled' : ''}>지금 시작 (${r.count}명으로)</button><button onclick="cancelLun(${r.id})">방 닫고 환불</button></div>` : '')
+      : `<div class="mute">숫자를 눌러 참가하세요 (${r.stake}점이 빠져나가요)</div>${NUMS('joinLun.bind(null,' + r.id + ')')}`;
+    return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}점</b></div>
+      <div class="mute">${r.count}/${r.cap}명 · 다 모이면 바로 결과가 나와요</div>${seats}${body}</div>`;
+  }).join('');
+  const rec = lun.recent.map((r) => `<div class="rec ${r.mine ? 'me' : ''}"><div>${r.players.map((p) => `<span class="pn ${p.unique ? 'uq' : ''} ${r.winner && p.name === r.winner.name ? 'win' : ''}">${esc(p.name)} ${p.num}</span>`).join('')}</div>
+    <span class="mute">${r.winner ? '🏆 ' + esc(r.winner.name) + ' 승 · 판돈 ' + (r.stake * r.players.length) + '점' : '겹쳐서 승자 없음 · 환불'}</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>`).join('');
+  return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없어요. 만들기 탭에서 방을 열어보세요!</p>'}
+    <div class="card"><h2>최근 결과</h2><div class="mute">파란 테두리 = 안 겹친 숫자, 초록 = 승자</div>${rec || '<p class="mute">아직 결과가 없어요.</p>'}</div>`;
+}
+const LUN_MIN = 3;
+const joinLun = guard(async (roomId, num) => {
+  const r = lun.rooms.find((x) => x.id === roomId);
+  if (!confirm(`${r.stake}점을 내고 숫자 ${num}으로 참가할까요?\n(숫자는 결과가 나올 때까지 아무에게도 안 보여요)`)) return;
+  const res = await api('POST', '/api/lun/join', { room_id: roomId, num });
+  toast(res.resolved ? '자리가 다 차서 결과가 나왔어요! 최근 결과를 확인하세요' : '참가했어요. 다른 사람들을 기다려요');
+  await refresh(); await loadGame(); if (res.resolved) markSeen('lun', roomId);
+});
+const startLun = guard(async (id) => { await api('POST', '/api/lun/start', { room_id: id }); markSeen('lun', id); toast('시작했어요! 최근 결과를 확인하세요'); await refresh(); await loadGame(); });
+const cancelLun = guard(async (id) => { if (!confirm('방을 닫으면 참가자 모두에게 판돈이 환불돼요. 닫을까요?')) return; await api('POST', '/api/lun/cancel', { room_id: id }); toast('방을 닫고 환불했어요'); await refresh(); await loadGame(); });
+function lunCreateView() {
+  return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div><div class="card"><h2>🤫 최저 유일 숫자 방 만들기</h2>
+    <input id="lstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000점)">
+    <div class="mute" style="margin-top:8px">몇 명이 모이면 시작할까요? (방장이 3명 이상이면 먼저 시작할 수도 있어요)</div>
+    <div class="nums n4">${[3, 4, 5, 6].map((n) => `<button class="num ${createCap === n ? 'sel' : ''}" onclick="pickCap(${n})">${n}명</button>`).join('')}</div>
+    <div class="mute">내 숫자 (비공개)</div>${NUMS('pickNum', createNum)}
+    <button class="pri" style="width:100%" onclick="createLun()">방 열기</button></div>`;
+}
+const pickCap = (n) => { createCap = n; rerenderKeep(); };
+const pickNum = (n) => { createNum = n; rerenderKeep(); };
+const createLun = guard(async () => {
+  if (!createNum) throw new Error('내 숫자를 먼저 골라주세요.');
+  await api('POST', '/api/lun/create', { stake: Number($('#lstake').value), cap: createCap, num: createNum });
+  createNum = null; listMode = 'lun'; tab = 'bets'; toast('방을 열었어요! 사람들을 기다려요'); await refresh(); await loadGame();
+});
+
+/* ---- 🪜 사다리타기 ---- */
+const LAD_RULES = `<details %OPEN% class="rules"><summary><b>🪜 사다리타기가 뭐예요?</b></summary>
+  <p>방장이 <b>인원(2~6명)과 판돈</b>을 정하고 방을 열어요. 사람들이 <b>자리(번호)를 골라 앉아요.</b> 모두 같은 판돈을 내요.</p>
+  <p><b>자리가 다 차는 순간</b> 사다리가 만들어지고, 아래쪽에서 <b>딱 한 칸이 당첨</b>으로 정해져요. 그 칸에 도착한 사람이 <b>판돈 전부</b>를 가져가요.</p>
+  <p class="mute">사다리는 자리가 다 찬 뒤에야 만들어지니까 미리 알고 고를 수는 없어요. 어느 자리든 당첨 확률은 똑같이 1/인원수예요.</p></details>`;
+const LCOL = ['#22d3ee', '#ff2d95', '#ffb800', '#34f5a0', '#a855f7', '#ff6b3d'];
+function ladderSvg(r) {
+  const N = r.slots, R = r.rungs.length, W = Math.max(240, N * 62), H = 250, top = 38, bot = H - 40, gap = (bot - top) / R;
+  const x = (i) => 28 + i * (W - 56) / Math.max(1, N - 1), yy = (ri) => top + (ri + 0.5) * gap;
+  let g = '';
+  for (let i = 0; i < N; i++) g += `<line class="lv" x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${bot}"/>`;
+  r.rungs.forEach((row, ri) => row.forEach((i) => { g += `<line class="lr" x1="${x(i)}" y1="${yy(ri)}" x2="${x(i + 1)}" y2="${yy(ri)}"/>`; }));
+  r.seats.forEach((s) => {
+    const win = s.end === r.win_end, pts = [[x(s.path[0]), top]];
+    for (let ri = 0; ri < R; ri++) { pts.push([x(s.path[ri]), yy(ri)]); pts.push([x(s.path[ri + 1]), yy(ri)]); }
+    pts.push([x(s.path[R]), bot]);
+    g += `<polyline fill="none" stroke="${LCOL[s.slot % 6]}" stroke-width="${win ? 5 : 3}" stroke-opacity="${win ? 1 : .55}" stroke-linecap="round" stroke-linejoin="round" points="${pts.map((p) => p.join(',')).join(' ')}"/>`;
+    g += `<text x="${x(s.slot)}" y="${top - 14}" text-anchor="middle" font-size="11" fill="${LCOL[s.slot % 6]}">${esc(s.name.length > 4 ? s.name.slice(0, 4) + '…' : s.name)}</text>`;
+  });
+  for (let i = 0; i < N; i++) g += `<text x="${x(i)}" y="${bot + 22}" text-anchor="middle" font-size="${i === r.win_end ? 18 : 12}" fill="${i === r.win_end ? '#ffb800' : '#8d8aa8'}">${i === r.win_end ? '🏆' : '꽝'}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W + 40}px;display:block;margin:6px auto">${g}</svg>`;
+}
+function ladLobby() {
+  const rooms = lad.rooms.map((r) => {
+    const taken = r.seats.filter(Boolean).length;
+    const seats = `<div class="seats">${r.seats.map((s, i) => s ? `<span class="seat on ${s.mine ? 'mine' : ''}">${i + 1}번 ${esc(s.name)}</span>`
+      : r.joined ? `<span class="seat">${i + 1}번 빈자리</span>` : `<button class="seat free" onclick="joinLad(${r.id},${i})">${i + 1}번 앉기</button>`).join('')}</div>`;
+    return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}점</b></div>
+      <div class="mute">${taken}/${r.slots}명 · 자리가 다 차면 바로 사다리를 타요 ${r.joined ? '' : '· 앉으면 ' + r.stake + '점이 빠져나가요'}</div>${seats}
+      ${r.mine ? `<button onclick="cancelLad(${r.id})">방 닫고 환불</button>` : ''}</div>`;
+  }).join('');
+  const rec = lad.recent.map((r) => `<div class="card sub ${r.mine ? 'me' : ''}"><div class="row"><span class="mute">🏆 ${esc(r.winner.name)} 당첨 · 판돈 ${r.stake * r.slots}점</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>${ladderSvg(r)}</div>`).join('');
+  return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없어요. 만들기 탭에서 방을 열어보세요!</p>'}
+    <h2 style="margin:16px 4px 0">최근 결과</h2>${rec || '<p class="mute">아직 결과가 없어요.</p>'}`;
+}
+const joinLad = guard(async (roomId, slot) => {
+  const r = lad.rooms.find((x) => x.id === roomId);
+  if (!confirm(`${slot + 1}번 자리에 앉을까요? (${r.stake}점이 빠져나가요)\n자리가 다 차면 바로 결과가 나와요.`)) return;
+  const res = await api('POST', '/api/ladder/join', { room_id: roomId, slot });
+  toast(res.resolved ? '자리가 다 차서 사다리를 탔어요! 결과를 확인하세요' : '앉았어요. 다른 사람들을 기다려요');
+  await refresh(); await loadGame(); if (res.resolved) markSeen('lad', roomId);
+});
+const cancelLad = guard(async (id) => { if (!confirm('방을 닫으면 앉은 사람 모두에게 판돈이 환불돼요. 닫을까요?')) return; await api('POST', '/api/ladder/cancel', { room_id: id }); toast('방을 닫고 환불했어요'); await refresh(); await loadGame(); });
+function ladCreateView() {
+  return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div><div class="card"><h2>🪜 사다리타기 방 만들기</h2>
+    <input id="dstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000점)">
+    <div class="mute" style="margin-top:8px">몇 명이 할까요?</div>
+    <div class="nums n5">${[2, 3, 4, 5, 6].map((n) => `<button class="num ${createSlots === n ? 'sel' : ''}" onclick="pickSlots(${n})">${n}명</button>`).join('')}</div>
+    <div class="mute">내가 앉을 자리</div>
+    <div class="nums n6">${Array.from({ length: createSlots }, (_, i) => `<button class="num ${createSeat === i ? 'sel' : ''}" onclick="pickSeat(${i})">${i + 1}번</button>`).join('')}</div>
+    <button class="pri" style="width:100%" onclick="createLad()">방 열기</button></div>`;
+}
+const pickSlots = (n) => { createSlots = n; if (createSeat !== null && createSeat >= n) createSeat = null; rerenderKeep(); };
+const pickSeat = (i) => { createSeat = i; rerenderKeep(); };
+const createLad = guard(async () => {
+  if (createSeat === null) throw new Error('내가 앉을 자리를 먼저 골라주세요.');
+  await api('POST', '/api/ladder/create', { stake: Number($('#dstake').value), slots: createSlots, slot: createSeat });
+  createSeat = null; listMode = 'lad'; tab = 'bets'; toast('방을 열었어요! 사람들을 기다려요'); await refresh(); await loadGame();
+});
+
+/* ---- 🃏 블랙잭 ---- */
+const BJ_RULES = `<details %OPEN% class="rules"><summary><b>🃏 블랙잭 하는 법</b></summary>
+  <p><b>목표</b>: 카드 숫자의 합을 <b>21에 최대한 가깝게</b> 만들어서 딜러(컴퓨터)를 이기는 게임이에요. <b>21을 넘으면(버스트) 바로 져요.</b></p>
+  <p><b>카드 점수</b>: 2~10은 적힌 숫자 그대로, <b>J·Q·K는 10점</b>, <b>A는 1점 또는 11점</b>이에요(터지지 않는 쪽으로 자동 계산).</p>
+  <p><b>진행 순서</b></p>
+  <ol>
+    <li>건 돈(10~500점)을 정하고 시작하면, 나와 딜러가 카드를 2장씩 받아요. <b>딜러의 카드 한 장은 뒤집혀서 안 보여요.</b></li>
+    <li>내 차례에 고를 수 있는 것:
+      <ul><li><b>✋ 히트</b>: 카드 한 장 더 받기 (합이 21을 넘으면 패배, 정확히 21이면 자동으로 멈춰요)</li>
+      <li><b>🛑 스탠드</b>: 더 안 받고 멈추기</li>
+      <li><b>✌️ 더블다운</b>: 건 돈을 <b>2배로 올리고 카드를 딱 한 장만</b> 받고 끝내기 (처음 받은 2장일 때만, 점수가 모자라면 못 해요)</li></ul></li>
+    <li>내가 멈추면 딜러가 카드를 공개해요. 딜러는 <b>합이 16 이하면 계속 받고, 17 이상이면 멈춰야</b> 해요. (딜러에게는 선택권이 없어요)</li>
+  </ol>
+  <p><b>결과와 받는 돈</b></p>
+  <ul><li>내 합이 딜러보다 높거나 딜러가 21을 넘으면 <b>승리 → 건 돈의 2배</b>를 돌려받아요 (순이익 +1배)</li>
+    <li>합이 같으면 <b>무승부 → 건 돈 그대로</b></li>
+    <li>내 합이 낮거나 21을 넘으면 <b>패배 → 건 돈을 잃어요</b></li>
+    <li><b>🃏 블랙잭</b>: 처음 받은 2장이 <b>A + 10점 카드(10·J·Q·K) = 21</b>이면 <b>건 돈의 2.5배</b>를 받아요 (순이익 +1.5배, 3:2). 딜러도 블랙잭이면 무승부, 딜러만 블랙잭이면 바로 패배예요.</li></ul>
+  <p class="mute"><b>예시</b> 100점을 걸었는데 나는 10 + 7 = 17, 딜러는 9(공개) + ?. 스탠드하니 딜러가 9 + 6 = 15 → 한 장 더 받아 K → 25로 버스트! → <b>승리, 200점 돌려받아요 (+100)</b>.</p>
+  <p class="mute"><b>팁</b> 내 합이 11 이하면 히트해도 터지지 않아요. 합이 17 이상이면 보통 스탠드. 딜러의 공개 카드가 2~6이면 딜러가 터지기 쉬우니 12~16에서도 멈추는 게 유리할 때가 많아요.</p>
+  <p class="mute">※ 카드 나누기(스플릿)와 보험은 없어요. 판마다 카드 한 벌(52장)을 새로 섞어요. 서버가 카드를 정하고, 딜러의 뒤집힌 카드는 결과가 나오기 전까지 내 화면으로 보내지지도 않아요.</p></details>`;
+const cardHtml = (c) => (c ? `<span class="pc ${c.red ? 'red' : ''}">${c.rank}${c.suit}</span>` : '<span class="pc back">?</span>');
+const BJ_MSG = { blackjack: ['🃏 블랙잭! 3:2로 받아요', 'win'], win: ['이겼어요!', 'win'], lose: ['졌어요', 'lose'], push: ['무승부 · 건 돈을 돌려받아요', 'mute'], bust: ['버스트! 21을 넘었어요', 'lose'] };
+const OUT_TXT = { blackjack: '블랙잭', win: '승', lose: '패', push: '무', bust: '버스트' };
+function bjTable() {
+  const g = bj.game, active = g && g.status === 'playing', last = (g && g.bet) || 50;
+  let table = '';
+  if (g) {
+    const [msg, cls] = g.status === 'done' ? BJ_MSG[g.outcome] : ['', ''];
+    table = `<div class="mute">딜러 ${g.status === 'done' ? g.dv.total : g.dv.total + ' + ?'}${g.status === 'done' && g.dv.total > 21 ? ' (버스트)' : ''}</div><div class="hand-row">${g.dealer.map(cardHtml).join('')}</div>
+      <div class="mute" style="margin-top:8px">나 ${g.pv.total}${g.pv.soft && g.pv.total <= 21 ? ' (A를 11로 계산 중)' : ''} · 건 돈 ${g.wagered}점${g.doubled ? ' (더블다운)' : ''}</div><div class="hand-row">${g.player.map(cardHtml).join('')}</div>
+      ${g.status === 'done' ? `<p class="${cls}" style="font-size:18px;margin:10px 0 4px">${msg} <b>${netText(g.net)}</b></p>` : ''}`;
+  }
+  const actions = active
+    ? `<div class="betrow"><button class="pri" onclick="bjAct('hit')">✋ 히트</button><button class="pri" onclick="bjAct('stand')">🛑 스탠드</button>${g.can_double ? `<button onclick="bjAct('double')">✌️ 더블다운 (+${g.bet}점)</button>` : ''}</div>`
+    : `<div class="betrow" style="margin-top:10px"><input id="bjbet" type="number" min="${bj.rules.MIN_BET}" max="${bj.rules.MAX_BET}" step="10" value="${last}"><button class="pri" onclick="bjStart()">${g ? '새 판 시작' : '시작'}</button></div><div class="mute">건 돈 ${bj.rules.MIN_BET}~${bj.rules.MAX_BET}점</div>`;
+  const rec = bj.recent.length ? bj.recent.map((r) => `<div class="rec"><span>${OUT_TXT[r.outcome]}</span><span class="mute">${r.wagered}점 걸고</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없어요.</p>';
+  return `<div class="card"><h2>🃏 블랙잭</h2>${table || '<div class="mute">딜러와 21에 가까운 쪽이 이기는 카드 게임이에요. 처음이면 아래 설명을 먼저 읽어보세요!</div>'}${actions}</div><div class="card">${BJ_RULES.replace('%OPEN%', bj.recent.length ? '' : 'open')}</div><div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
+}
+const bjStart = guard(async () => { bj = await api('POST', '/api/blackjack/start', { bet: Number($('#bjbet').value) }); bjAfter(); });
+const bjAct = guard(async (act) => {
+  if (act === 'double' && !confirm('건 돈을 2배로 올리고 카드 한 장만 받고 끝내요. 할까요?')) return;
+  bj = await api('POST', '/api/blackjack/' + act, {}); bjAfter();
+});
+async function bjAfter() { if (bj.game && bj.game.status === 'done') { const [m] = BJ_MSG[bj.game.outcome]; toast(`${m} ${netText(bj.game.net)}`); } render(); await refresh(); }
+
+/* ---- 🎰 슬롯머신 ---- */
+function slotTable() {
+  if (!slotData) return '<p class="mute">불러오는 중…</p>';
+  const d = slotData, pay = d.symbols.map((s, i) => `<div class="row"><span style="font-size:20px">${s}${s}${s}</span><b class="pts">×${d.triple[i]}</b></div>`).join('');
+  const rec = d.recent.length ? d.recent.map((r) => `<div class="rec"><span>${r.reels.join(' ')}</span><span class="mute">${r.bet}점</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없어요.</p>';
+  return `<div class="card"><h2>🎰 슬롯머신</h2><div class="mute">버튼을 누르면 릴 3개가 돌아가요. 건 돈 ${d.min}~${d.max}점.</div>
+    <div class="reels">${slotUi.reels.map((s) => `<div class="reel">${s}</div>`).join('')}</div>
+    ${slotUi.msg ? `<p class="${slotUi.cls}" style="text-align:center;font-size:18px;margin:4px 0 10px">${slotUi.msg}</p>` : ''}
+    <div class="betrow"><input id="sbet" type="number" min="${d.min}" max="${d.max}" step="10" value="${slotUi.bet || 50}"><button class="pri" onclick="spinSlots()" ${slotUi.busy ? 'disabled' : ''}>🎰 돌리기</button></div></div>
+    <div class="card"><h2>배당표 <span class="mute">(건 돈의 몇 배를 돌려받는지)</span></h2>${pay}
+    <div class="row"><span style="font-size:20px">🍒🍒 <span class="mute" style="font-size:13px">(🍒 정확히 2개)</span></span><b class="pts">×${d.cherry2}</b></div>
+    <div class="row"><span style="font-size:20px">🍒 <span class="mute" style="font-size:13px">(🍒 정확히 1개)</span></span><b class="pts">×${d.cherry1}</b></div>
+    <p class="mute">그 외 조합은 꽝이에요. 그림이 나올 가능성은 🍒가 가장 높고 7️⃣이 가장 낮아요. 오래 하면 평균적으로 건 돈의 약 91%를 돌려받아요(딜러가 조금 유리해요). 당첨금은 소수점 이하를 버려요.</p></div>
+    <div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
+}
+const spinSlots = guard(async () => {
+  if (slotUi.busy) return;
+  const bet = Number($('#sbet').value), syms = slotData.symbols;
+  slotUi.busy = true; slotUi.msg = ''; slotUi.bet = bet;
+  const t = setInterval(() => { document.querySelectorAll('.reel').forEach((e) => { e.textContent = syms[Math.floor(Math.random() * syms.length)]; }); }, 70);
+  try {
+    const [r] = await Promise.all([api('POST', '/api/slots/spin', { bet }), new Promise((res) => setTimeout(res, 800))]);
+    slotUi.reels = r.reels;
+    slotUi.msg = r.mult > 0 ? `당첨! ×${r.mult} ${netText(r.net)}` : `아쉬워요 ${netText(r.net)}`; slotUi.cls = r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute';
+  } finally { clearInterval(t); slotUi.busy = false; }
+  await refresh(); try { slotData = await api('GET', '/api/slots'); } catch (e) { /* 무시 */ } render();
+});
+
+/* ---- 화면 조립 ---- */
+function bodyView() {
+  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없어요. 하나 열어보세요!</p>'));
+  if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView }[createMode] || newView)();
+  if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임이에요. 이기면 점수가 새로 생기고 지면 사라져요.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
+  if (tab === 'chat') return chatView();
+  if (tab === 'shop') return shopView();
+  return rankView();
 }
 
 let shop = [], shopLoaded = false;

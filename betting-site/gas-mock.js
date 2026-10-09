@@ -47,6 +47,7 @@ function makeSandbox() {
     Logger: { log() {} },
   };
   vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(__dirname + '/gas/Games.gs', 'utf8'), sb);   // 게임 규칙 (Node 서버와 같은 games-core.js)
   vm.runInContext(fs.readFileSync(__dirname + '/gas/Code.gs', 'utf8'), sb);
   return { sb, sheets, cache, props };
 }

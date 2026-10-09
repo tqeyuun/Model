@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const G = require('./games-core');   // 게임 규칙 (구글 앱스 스크립트 버전과 같은 파일)
 
 const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.db');
@@ -40,6 +41,15 @@ CREATE TABLE IF NOT EXISTS rps (
   id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, host_hand TEXT NOT NULL,
   guest_id INTEGER, guest_hand TEXT, status TEXT NOT NULL DEFAULT 'waiting',  -- waiting | done | cancelled
   result TEXT, created_at INTEGER NOT NULL, played_at INTEGER);  -- result: host | guest | draw
+CREATE TABLE IF NOT EXISTS lun (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, cap INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'waiting', winner_id INTEGER, created_at INTEGER NOT NULL, played_at INTEGER);      -- waiting | done | cancelled
+CREATE TABLE IF NOT EXISTS lun_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL, user_id INTEGER NOT NULL, num INTEGER NOT NULL, joined_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS lad (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, slots INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'waiting', win_end INTEGER, rungs TEXT, winner_id INTEGER, created_at INTEGER NOT NULL, played_at INTEGER);
+CREATE TABLE IF NOT EXISTS lad_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL, user_id INTEGER NOT NULL, slot INTEGER NOT NULL, joined_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS bj (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, bet INTEGER NOT NULL, state TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'playing', outcome TEXT, payout INTEGER, created_at INTEGER NOT NULL, finished_at INTEGER);
+CREATE TABLE IF NOT EXISTS slots (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, bet INTEGER NOT NULL, reels TEXT NOT NULL, payout INTEGER NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wagers (
   id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, option_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
@@ -151,6 +161,99 @@ function rpsView(u) {
     result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id),
   }));
   return { rooms, recent };
+}
+
+// ---------- 🤫 최저 유일 숫자 / 🪜 사다리타기 (여러 명이 방에 모여서 하는 게임) ----------
+const ROOM_STAKE_MAX = 1000;
+const playerView = (id) => rpsPlayer(id);
+const pay = (userId, delta) => run('UPDATE users SET points=points+? WHERE id=?', delta, userId);
+function checkStake(raw) {
+  const stake = Number(raw);
+  if (!Number.isInteger(stake) || stake < MIN_BET || stake > ROOM_STAKE_MAX) fail(400, `판돈은 ${MIN_BET}~${ROOM_STAKE_MAX}점이에요.`);
+  return stake;
+}
+const openRooms = (table, uid) => q1(`SELECT COUNT(*) n FROM ${table} WHERE host_id=? AND status='waiting'`, uid).n;
+const sameRoomHost = (hostId, u) => { const h = q1('SELECT grp FROM users WHERE id=?', hostId); return !!h && (h.grp || null) === grpOf(u); };
+
+// 12시간 동안 다 안 모인 방은 닫고 모두에게 환불
+function roomsSweep() {
+  for (const [table, pt, col] of [['lun', 'lun_p', 'room_id'], ['lad', 'lad_p', 'room_id']]) {
+    const old = q(`SELECT * FROM ${table} WHERE status='waiting' AND created_at<?`, now() - RPS_EXPIRE_MS);
+    if (!old.length) continue;
+    tx(() => { for (const r of old) { for (const p of q(`SELECT user_id FROM ${pt} WHERE ${col}=?`, r.id)) pay(p.user_id, r.stake); run(`UPDATE ${table} SET status='cancelled' WHERE id=?`, r.id); } });
+  }
+}
+function lunResolve(room) {
+  const ps = q('SELECT * FROM lun_p WHERE room_id=? ORDER BY id', room.id);
+  const w = G.lunWinner(ps.map((p) => p.num));
+  if (w < 0) for (const p of ps) pay(p.user_id, room.stake);                  // 전부 겹침 → 환불
+  else pay(ps[w].user_id, room.stake * ps.length);                              // 승자가 판돈 전체
+  run("UPDATE lun SET status='done', winner_id=?, played_at=? WHERE id=?", w < 0 ? null : ps[w].user_id, now(), room.id);
+}
+function lunView(u) {
+  roomsSweep();
+  const rooms = q("SELECT r.* FROM lun r JOIN users h ON h.id=r.host_id WHERE r.status='waiting' AND h.grp IS ? ORDER BY r.id DESC LIMIT 30", grpOf(u)).map((r) => {
+    const ps = q('SELECT user_id,num FROM lun_p WHERE room_id=? ORDER BY id', r.id), me = ps.find((p) => p.user_id === u.id);
+    return { id: r.id, stake: r.stake, cap: r.cap, count: ps.length, host: playerView(r.host_id), players: ps.map((p) => playerView(p.user_id)),
+      mine: r.host_id === u.id, joined: !!me, my_num: me ? me.num : null };           // 다른 사람의 숫자는 절대 안 보냄
+  });
+  const recent = q("SELECT r.* FROM lun r JOIN users h ON h.id=r.host_id WHERE r.status='done' AND h.grp IS ? ORDER BY r.id DESC LIMIT 10", grpOf(u)).map((r) => {
+    const ps = q('SELECT user_id,num FROM lun_p WHERE room_id=? ORDER BY id', r.id), me = ps.some((p) => p.user_id === u.id);
+    const cnt = {}; ps.forEach((p) => { cnt[p.num] = (cnt[p.num] || 0) + 1; });
+    return { id: r.id, stake: r.stake, at: r.played_at, winner: r.winner_id ? playerView(r.winner_id) : null,
+      players: ps.map((p) => ({ ...playerView(p.user_id), num: p.num, unique: cnt[p.num] === 1 })), mine: me,
+      net: !me ? null : !r.winner_id ? 0 : r.winner_id === u.id ? r.stake * (ps.length - 1) : -r.stake };
+  });
+  return { rooms, recent, rules: G.LUN };
+}
+
+function ladderResolve(room) {
+  const ps = q('SELECT * FROM lad_p WHERE room_id=? ORDER BY slot', room.id);
+  const rungs = G.ladderMake(room.slots), winEnd = G.ladderWinEnd(room.slots);
+  const winner = ps.find((p) => G.ladderEnd(rungs, p.slot) === winEnd);
+  pay(winner.user_id, room.stake * room.slots);
+  run("UPDATE lad SET status='done', rungs=?, win_end=?, winner_id=?, played_at=? WHERE id=?", JSON.stringify(rungs), winEnd, winner.user_id, now(), room.id);
+}
+function ladderView(u) {
+  roomsSweep();
+  const rooms = q("SELECT r.* FROM lad r JOIN users h ON h.id=r.host_id WHERE r.status='waiting' AND h.grp IS ? ORDER BY r.id DESC LIMIT 30", grpOf(u)).map((r) => {
+    const ps = q('SELECT user_id,slot FROM lad_p WHERE room_id=?', r.id), bySlot = {};
+    ps.forEach((p) => { bySlot[p.slot] = p.user_id; });
+    return { id: r.id, stake: r.stake, slots: r.slots, host: playerView(r.host_id), mine: r.host_id === u.id,
+      seats: Array.from({ length: r.slots }, (_, i) => (bySlot[i] === undefined ? null : { ...playerView(bySlot[i]), mine: bySlot[i] === u.id })),
+      joined: ps.some((p) => p.user_id === u.id) };
+  });
+  const recent = q("SELECT r.* FROM lad r JOIN users h ON h.id=r.host_id WHERE r.status='done' AND h.grp IS ? ORDER BY r.id DESC LIMIT 10", grpOf(u)).map((r) => {
+    const ps = q('SELECT user_id,slot FROM lad_p WHERE room_id=? ORDER BY slot', r.id), rungs = JSON.parse(r.rungs);
+    return { id: r.id, stake: r.stake, slots: r.slots, at: r.played_at, win_end: r.win_end, rungs, winner: playerView(r.winner_id),
+      seats: ps.map((p) => ({ ...playerView(p.user_id), slot: p.slot, end: G.ladderEnd(rungs, p.slot), path: G.ladderPath(rungs, p.slot), mine: p.user_id === u.id })),
+      mine: ps.some((p) => p.user_id === u.id), net: !ps.some((p) => p.user_id === u.id) ? null : r.winner_id === u.id ? r.stake * (r.slots - 1) : -r.stake };
+  });
+  return { rooms, recent, rules: G.LADDER };
+}
+
+// ---------- 🃏 블랙잭 / 🎰 슬롯머신 (서버 딜러와 하는 혼자 게임) ----------
+const bjActive = (uid) => q1("SELECT * FROM bj WHERE user_id=? AND status='playing'", uid);
+function bjSave(row, st) {
+  run('UPDATE bj SET state=?, status=?, outcome=?, payout=?, finished_at=? WHERE id=?', JSON.stringify(st), st.status, st.outcome, st.payout, st.status === 'done' ? now() : null, row.id);
+  if (st.status === 'done') pay(row.user_id, st.payout);
+}
+function bjView(u) {
+  const row = bjActive(u.id) || q1("SELECT * FROM bj WHERE user_id=? ORDER BY id DESC LIMIT 1", u.id);
+  const recent = q("SELECT bet, state, outcome, payout FROM bj WHERE user_id=? AND status='done' ORDER BY id DESC LIMIT 8", u.id).map((r) => {
+    const st = JSON.parse(r.state), w = st.bet * (st.doubled ? 2 : 1);
+    return { outcome: r.outcome, wagered: w, net: r.payout - w };
+  });
+  return { game: row ? { id: row.id, ...G.bjView(JSON.parse(row.state)) } : null, recent, rules: G.BJ };
+}
+function slotView(u) {
+  const recent = q('SELECT bet, reels, payout FROM slots WHERE user_id=? ORDER BY id DESC LIMIT 8', u.id).map((r) => ({ bet: r.bet, reels: JSON.parse(r.reels).map((i) => G.SLOT.SYMBOLS[i]), net: r.payout - r.bet }));
+  return { recent, symbols: G.SLOT.SYMBOLS, triple: G.SLOT.TRIPLE, cherry2: G.SLOT.CHERRY2, cherry1: G.SLOT.CHERRY1, min: G.SLOT.MIN_BET, max: G.SLOT.MAX_BET };
+}
+function checkBet(raw, min, max) {
+  const bet = Number(raw);
+  if (!Number.isInteger(bet) || bet < min || bet > max) fail(400, `건 돈은 ${min}~${max}점이에요.`);
+  return bet;
 }
 
 // ---------- 직렬화 ----------
@@ -385,6 +488,154 @@ const routes = {
       return { ok: true };
     });
   },
+  /* ---- 🤫 최저 유일 숫자 ---- */
+  'GET /api/lun': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return lunView(u); },
+  'POST /api/lun/create': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const stake = checkStake(body.stake), cap = Number(body.cap), num = Number(body.num);
+    if (!Number.isInteger(cap) || cap < G.LUN.MIN_PLAYERS || cap > G.LUN.MAX_PLAYERS) fail(400, `인원은 ${G.LUN.MIN_PLAYERS}~${G.LUN.MAX_PLAYERS}명이에요.`);
+    if (!Number.isInteger(num) || num < G.LUN.MIN || num > G.LUN.MAX) fail(400, `숫자는 ${G.LUN.MIN}~${G.LUN.MAX} 중에 골라주세요.`);
+    return tx(() => {
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족해요.');
+      if (openRooms('lun', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
+      pay(u.id, -stake);
+      const id = Number(run('INSERT INTO lun(host_id,stake,cap,created_at) VALUES (?,?,?,?)', u.id, stake, cap, now()).lastInsertRowid);
+      run('INSERT INTO lun_p(room_id,user_id,num,joined_at) VALUES (?,?,?,?)', id, u.id, num, now());
+      return { ok: true, id };
+    });
+  },
+  'POST /api/lun/join': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const num = Number(body.num);
+    if (!Number.isInteger(num) || num < G.LUN.MIN || num > G.LUN.MAX) fail(400, `숫자는 ${G.LUN.MIN}~${G.LUN.MAX} 중에 골라주세요.`);
+    return tx(() => {
+      const r = q1('SELECT * FROM lun WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (!sameRoomHost(r.host_id, u)) fail(404, '방이 없어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      if (q1('SELECT 1 FROM lun_p WHERE room_id=? AND user_id=?', r.id, u.id)) fail(400, '이미 들어간 방이에요.');
+      if (q1('SELECT COUNT(*) n FROM lun_p WHERE room_id=?', r.id).n >= r.cap) fail(400, '자리가 다 찼어요.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '포인트가 부족해요.');
+      pay(u.id, -r.stake);
+      run('INSERT INTO lun_p(room_id,user_id,num,joined_at) VALUES (?,?,?,?)', r.id, u.id, num, now());
+      const full = q1('SELECT COUNT(*) n FROM lun_p WHERE room_id=?', r.id).n >= r.cap;
+      if (full) lunResolve(r);
+      return { ok: true, id: r.id, resolved: full };
+    });
+  },
+  'POST /api/lun/start': (req, body, u) => {   // 방장이 모인 사람들(3명 이상)로 먼저 시작
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const r = q1('SELECT * FROM lun WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (r.host_id !== u.id) fail(403, '방을 만든 사람만 시작할 수 있어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      if (q1('SELECT COUNT(*) n FROM lun_p WHERE room_id=?', r.id).n < G.LUN.MIN_PLAYERS) fail(400, `최소 ${G.LUN.MIN_PLAYERS}명이 모여야 시작할 수 있어요.`);
+      lunResolve(r);
+      return { ok: true, id: r.id, resolved: true };
+    });
+  },
+  'POST /api/lun/cancel': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const r = q1('SELECT * FROM lun WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      for (const p of q('SELECT user_id FROM lun_p WHERE room_id=?', r.id)) pay(p.user_id, r.stake);
+      run("UPDATE lun SET status='cancelled' WHERE id=?", r.id);
+      return { ok: true };
+    });
+  },
+
+  /* ---- 🪜 사다리타기 ---- */
+  'GET /api/ladder': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return ladderView(u); },
+  'POST /api/ladder/create': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const stake = checkStake(body.stake), slots = Number(body.slots), slot = Number(body.slot);
+    if (!Number.isInteger(slots) || slots < G.LADDER.MIN_SLOTS || slots > G.LADDER.MAX_SLOTS) fail(400, `인원은 ${G.LADDER.MIN_SLOTS}~${G.LADDER.MAX_SLOTS}명이에요.`);
+    if (!Number.isInteger(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주세요.');
+    return tx(() => {
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족해요.');
+      if (openRooms('lad', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
+      pay(u.id, -stake);
+      const id = Number(run('INSERT INTO lad(host_id,stake,slots,created_at) VALUES (?,?,?,?)', u.id, stake, slots, now()).lastInsertRowid);
+      run('INSERT INTO lad_p(room_id,user_id,slot,joined_at) VALUES (?,?,?,?)', id, u.id, slot, now());
+      return { ok: true, id };
+    });
+  },
+  'POST /api/ladder/join': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const slot = Number(body.slot);
+    return tx(() => {
+      const r = q1('SELECT * FROM lad WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (!sameRoomHost(r.host_id, u)) fail(404, '방이 없어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      if (!Number.isInteger(slot) || slot < 0 || slot >= r.slots) fail(400, '자리를 골라주세요.');
+      if (q1('SELECT 1 FROM lad_p WHERE room_id=? AND user_id=?', r.id, u.id)) fail(400, '이미 들어간 방이에요.');
+      if (q1('SELECT 1 FROM lad_p WHERE room_id=? AND slot=?', r.id, slot)) fail(400, '이미 다른 사람이 앉은 자리예요.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '포인트가 부족해요.');
+      pay(u.id, -r.stake);
+      run('INSERT INTO lad_p(room_id,user_id,slot,joined_at) VALUES (?,?,?,?)', r.id, u.id, slot, now());
+      const full = q1('SELECT COUNT(*) n FROM lad_p WHERE room_id=?', r.id).n >= r.slots;
+      if (full) ladderResolve(r);          // 자리가 다 차는 순간 사다리를 만들어서 결판 (그 전엔 사다리가 존재하지 않음)
+      return { ok: true, id: r.id, resolved: full };
+    });
+  },
+  'POST /api/ladder/cancel': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const r = q1('SELECT * FROM lad WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      for (const p of q('SELECT user_id FROM lad_p WHERE room_id=?', r.id)) pay(p.user_id, r.stake);
+      run("UPDATE lad SET status='cancelled' WHERE id=?", r.id);
+      return { ok: true };
+    });
+  },
+
+  /* ---- 🃏 블랙잭 ---- */
+  'GET /api/blackjack': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return bjView(u); },
+  'POST /api/blackjack/start': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const bet = checkBet(body.bet, G.BJ.MIN_BET, G.BJ.MAX_BET);
+    return tx(() => {
+      if (bjActive(u.id)) fail(400, '진행 중인 판이 있어요. 먼저 끝내주세요.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족해요.');
+      pay(u.id, -bet);
+      const st = G.bjStart(bet);
+      const id = Number(run("INSERT INTO bj(user_id,bet,state,status,created_at) VALUES (?,?,?,'playing',?)", u.id, bet, JSON.stringify(st), now()).lastInsertRowid);
+      bjSave({ id, user_id: u.id }, st);
+      return bjView(u);
+    });
+  },
+  ...Object.fromEntries(['hit', 'stand', 'double'].map((act) => ['POST /api/blackjack/' + act, (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const row = bjActive(u.id) || fail(400, '진행 중인 판이 없어요. 새로 시작해주세요.');
+      const st = JSON.parse(row.state);
+      if (act === 'double') {
+        if (!G.bjCanDouble(st)) fail(400, '더블다운은 처음 카드 두 장일 때만 할 수 있어요.');
+        if (q1('SELECT points FROM users WHERE id=?', u.id).points < st.bet) fail(400, '더블다운할 포인트가 부족해요.');
+        pay(u.id, -st.bet);                                  // 추가로 같은 금액을 더 걸어요
+        G.bjDouble(st);
+      } else if (act === 'hit') G.bjHit(st); else G.bjStand(st);
+      bjSave(row, st);
+      return bjView(u);
+    });
+  }])),
+
+  /* ---- 🎰 슬롯머신 ---- */
+  'GET /api/slots': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return slotView(u); },
+  'POST /api/slots/spin': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const bet = checkBet(body.bet, G.SLOT.MIN_BET, G.SLOT.MAX_BET);
+    return tx(() => {
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족해요.');
+      const sp = G.slotSpin(), payout = G.slotPayout(bet, sp.mult);
+      pay(u.id, payout - bet);
+      run('INSERT INTO slots(user_id,bet,reels,payout,created_at) VALUES (?,?,?,?,?)', u.id, bet, JSON.stringify(sp.reels), payout, now());
+      return { reels: sp.reels.map((i) => G.SLOT.SYMBOLS[i]), mult: sp.mult, bet, payout, net: payout - bet, points: q1('SELECT points FROM users WHERE id=?', u.id).points };
+    });
+  },
+
   'GET /api/shop': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
     if (!SHOP_OPEN) return [];   // 닫혀 있으면 빈 목록 → 화면에 '준비 중' 표시
@@ -507,6 +758,7 @@ const routes = {
         run('DELETE FROM sessions WHERE user_id=?', u.id);
       } else if (body.action === 'delete') {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
+        if (q1("SELECT 1 FROM lun_p p JOIN lun r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM lad_p p JOIN lad r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM bj WHERE user_id=? AND status='playing'", u.id)) fail(400, '진행 중인 게임이 있어서 못 지워요. 끝나거나 닫힌 뒤에 지워주세요.');
         run("UPDATE rps SET status='cancelled' WHERE host_id=? AND status='waiting'", u.id);
         run('DELETE FROM sessions WHERE user_id=?', u.id);
         run('DELETE FROM messages WHERE user_id=?', u.id);

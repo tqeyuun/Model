@@ -63,10 +63,13 @@ a = cut(a, "async function api(", "function toast(", runner("''", 'key', ''));
 for (const bad of ['fetch(', 'location.hash', 'sessionStorage']) if (a.includes(bad)) throw new Error('남은 코드: ' + bad);
 fs.writeFileSync(path.join(__dirname, 'gas/admin.html'), a);
 
+/* ---------------- 게임 규칙: Node 서버와 같은 파일을 Games.gs 로 복사 ---------------- */
+fs.writeFileSync(path.join(__dirname, 'gas/Games.gs'), fs.readFileSync(path.join(__dirname, 'games-core.js'), 'utf8'));
+
 /* ---------------- 문법 검사 ---------------- */
 for (const f of ['index', 'admin']) {
   const html = fs.readFileSync(path.join(__dirname, `gas/${f}.html`), 'utf8').replace('<?!= adminKey ?>', '""');
   const m = /<script>([\s\S]*)<\/script>/.exec(html);
   new vm.Script(m[1]);   // 문법 오류가 있으면 여기서 예외
 }
-console.log('gas/index.html, gas/admin.html 생성 완료');
+console.log('gas/index.html, gas/admin.html, gas/Games.gs 생성 완료');

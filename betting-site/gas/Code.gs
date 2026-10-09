@@ -15,7 +15,13 @@ var SHEETS = {
   wagers: ['id', 'bet_id', 'option_id', 'user_id', 'amount', 'payout', 'lucky', 'created_at'],
   messages: ['id', 'user_id', 'text', 'created_at', 'bet_id'],
   items: ['user_id', 'item_id'],
-  rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at']
+  rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at'],
+  lun: ['id', 'host_id', 'stake', 'cap', 'status', 'winner_id', 'created_at', 'played_at'],
+  lunp: ['id', 'room_id', 'user_id', 'num', 'joined_at'],
+  lad: ['id', 'host_id', 'stake', 'slots', 'status', 'win_end', 'rungs', 'winner_id', 'created_at', 'played_at'],
+  ladp: ['id', 'room_id', 'user_id', 'slot', 'joined_at'],
+  bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
+  slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at']
 };
 
 /* ================= 웹 앱 진입점 ================= */
@@ -303,6 +309,116 @@ function rpsView(u) {
   return { rooms: rooms, recent: recent };
 }
 
+/* ================= 🤫 최저 유일 숫자 / 🪜 사다리타기 (여러 명이 방에 모여서 하는 게임) ================= */
+// 게임 규칙(GAMES)은 Games.gs — Node 서버와 같은 파일
+var ROOM_STAKE_MAX = 1000;
+function playerView(id) { return rpsPlayer(id); }
+function checkStake(raw) {
+  var stake = Number(raw);
+  if (stake !== Math.floor(stake) || stake < CFG.MIN_BET || stake > ROOM_STAKE_MAX) fail(400, '판돈은 ' + CFG.MIN_BET + '~' + ROOM_STAKE_MAX + '점이에요.');
+  return stake;
+}
+function openRooms(table, uid) { return tbl(table).where(function (r) { return r.host_id === uid && r.status === 'waiting'; }).length; }
+function byId(table, id) { id = Number(id); return tbl(table).find(function (r) { return r.id === id; }) || fail(404, '방이 없어요.'); }
+
+/** 12시간 동안 다 안 모인 방은 닫고 모두에게 환불 */
+function roomsSweep() {
+  [['lun', 'lunp'], ['lad', 'ladp']].forEach(function (pair) {
+    var old = function () { return tbl(pair[0]).where(function (r) { return r.status === 'waiting' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+    if (!old().length) return;
+    withLock(function () {
+      TBL[pair[0]] = null; TBL[pair[1]] = null; TBL.users = null;
+      old().forEach(function (r) {
+        tbl(pair[1]).where(function (p) { return p.room_id === r.id; }).forEach(function (p) { addPoints(p.user_id, r.stake); });
+        r.status = 'cancelled'; tbl(pair[0]).save(r);
+      });
+    });
+  });
+}
+function lunPlayers(room) { return tbl('lunp').where(function (p) { return p.room_id === room.id; }); }
+function lunResolve(room) {
+  var ps = lunPlayers(room), w = GAMES.lunWinner(ps.map(function (p) { return p.num; }));
+  if (w < 0) ps.forEach(function (p) { addPoints(p.user_id, room.stake); });          // 전부 겹침 → 환불
+  else addPoints(ps[w].user_id, room.stake * ps.length);                                // 승자가 판돈 전체
+  room.status = 'done'; room.winner_id = w < 0 ? '' : ps[w].user_id; room.played_at = now(); tbl('lun').save(room);
+}
+function lunView(u) {
+  roomsSweep();
+  var all = tbl('lun').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = lunPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0];
+    return { id: r.id, stake: r.stake, cap: r.cap, count: ps.length, host: playerView(r.host_id), players: ps.map(function (p) { return playerView(p.user_id); }),
+      mine: r.host_id === u.id, joined: !!me, my_num: me ? me.num : null };           // 다른 사람의 숫자는 절대 안 보냄
+  });
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 10).map(function (r) {
+    var ps = lunPlayers(r), cnt = {}, me = ps.some(function (p) { return p.user_id === u.id; });
+    ps.forEach(function (p) { cnt[p.num] = (cnt[p.num] || 0) + 1; });
+    return { id: r.id, stake: r.stake, at: r.played_at, winner: r.winner_id ? playerView(r.winner_id) : null,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.num = p.num; o.unique = cnt[p.num] === 1; return o; }), mine: me,
+      net: !me ? null : !r.winner_id ? 0 : r.winner_id === u.id ? r.stake * (ps.length - 1) : -r.stake };
+  });
+  return { rooms: rooms, recent: recent, rules: GAMES.LUN };
+}
+
+function ladPlayers(room) { return tbl('ladp').where(function (p) { return p.room_id === room.id; }); }
+function ladderResolve(room) {
+  var ps = ladPlayers(room), rungs = GAMES.ladderMake(room.slots), winEnd = GAMES.ladderWinEnd(room.slots);
+  var winner = ps.filter(function (p) { return GAMES.ladderEnd(rungs, p.slot) === winEnd; })[0];
+  addPoints(winner.user_id, room.stake * room.slots);
+  room.status = 'done'; room.rungs = JSON.stringify(rungs); room.win_end = winEnd; room.winner_id = winner.user_id; room.played_at = now(); tbl('lad').save(room);
+}
+function ladderView(u) {
+  roomsSweep();
+  var all = tbl('lad').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = ladPlayers(r), bySlot = {};
+    ps.forEach(function (p) { bySlot[p.slot] = p.user_id; });
+    var seats = [];
+    for (var i = 0; i < r.slots; i++) {
+      if (bySlot[i] === undefined) seats.push(null); else { var o = playerView(bySlot[i]); o.mine = bySlot[i] === u.id; seats.push(o); }
+    }
+    return { id: r.id, stake: r.stake, slots: r.slots, host: playerView(r.host_id), mine: r.host_id === u.id, seats: seats, joined: ps.some(function (p) { return p.user_id === u.id; }) };
+  });
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 10).map(function (r) {
+    var rungs = JSON.parse(r.rungs), ps = ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }), me = ps.some(function (p) { return p.user_id === u.id; });
+    return { id: r.id, stake: r.stake, slots: r.slots, at: r.played_at, win_end: r.win_end, rungs: rungs, winner: playerView(r.winner_id),
+      seats: ps.map(function (p) { var o = playerView(p.user_id); o.slot = p.slot; o.end = GAMES.ladderEnd(rungs, p.slot); o.path = GAMES.ladderPath(rungs, p.slot); o.mine = p.user_id === u.id; return o; }),
+      mine: me, net: !me ? null : r.winner_id === u.id ? r.stake * (r.slots - 1) : -r.stake };
+  });
+  return { rooms: rooms, recent: recent, rules: GAMES.LADDER };
+}
+
+/* ================= 🃏 블랙잭 / 🎰 슬롯머신 (서버 딜러와 하는 혼자 게임) ================= */
+function checkBet(raw, min, max) {
+  var bet = Number(raw);
+  if (bet !== Math.floor(bet) || bet < min || bet > max) fail(400, '건 돈은 ' + min + '~' + max + '점이에요.');
+  return bet;
+}
+function bjActive(uid) { return tbl('bj').find(function (r) { return r.user_id === uid && r.status === 'playing'; }); }
+function bjSave(row, st) {
+  row.state = JSON.stringify(st); row.status = st.status; row.outcome = st.outcome || ''; row.payout = st.payout;
+  row.finished_at = st.status === 'done' ? now() : '';
+  tbl('bj').save(row);
+  if (st.status === 'done') addPoints(row.user_id, st.payout);
+}
+function bjView(u) {
+  var mine = tbl('bj').where(function (r) { return r.user_id === u.id; });
+  var row = bjActive(u.id) || mine[mine.length - 1] || null;
+  var recent = mine.filter(function (r) { return r.status === 'done'; }).slice(-8).reverse().map(function (r) {
+    var st = JSON.parse(r.state), w = st.bet * (st.doubled ? 2 : 1);
+    return { outcome: r.outcome, wagered: w, net: r.payout - w };
+  });
+  var g = null;
+  if (row) { g = GAMES.bjView(JSON.parse(row.state)); g.id = row.id; }
+  return { game: g, recent: recent, rules: GAMES.BJ };
+}
+function slotView(u) {
+  var recent = tbl('slots').where(function (r) { return r.user_id === u.id; }).slice(-8).reverse().map(function (r) {
+    return { bet: r.bet, reels: JSON.parse(r.reels).map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), net: r.payout - r.bet };
+  });
+  return { recent: recent, symbols: GAMES.SLOT.SYMBOLS, triple: GAMES.SLOT.TRIPLE, cherry2: GAMES.SLOT.CHERRY2, cherry1: GAMES.SLOT.CHERRY1, min: GAMES.SLOT.MIN_BET, max: GAMES.SLOT.MAX_BET };
+}
+
 /* ================= API 경로 ================= */
 var ROUTES = {
   'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView(u) : [], rps: u ? rpsView(u) : null }; },
@@ -451,6 +567,122 @@ var ROUTES = {
     return { ok: true };
   },
 
+  /* ---- 🤫 최저 유일 숫자 ---- */
+  'GET /api/lun': function (body, u) { needLogin(u); return lunView(u); },
+  'POST /api/lun/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), cap = Number(body.cap), num = Number(body.num), L = GAMES.LUN;
+    if (cap !== Math.floor(cap) || cap < L.MIN_PLAYERS || cap > L.MAX_PLAYERS) fail(400, '인원은 ' + L.MIN_PLAYERS + '~' + L.MAX_PLAYERS + '명이에요.');
+    if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주세요.');
+    if (u.points < stake) fail(400, '포인트가 부족해요.');
+    if (openRooms('lun', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
+    addPoints(u.id, -stake);
+    var r = tbl('lun').insert({ host_id: u.id, stake: stake, cap: cap, status: 'waiting', winner_id: '', created_at: now(), played_at: '' });
+    tbl('lunp').insert({ room_id: r.id, user_id: u.id, num: num, joined_at: now() });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/lun/join': function (body, u) {
+    needLogin(u);
+    var num = Number(body.num), L = GAMES.LUN;
+    if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주세요.');
+    var r = byId('lun', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    var ps = lunPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방이에요.');
+    if (ps.length >= r.cap) fail(400, '자리가 다 찼어요.');
+    if (userById(u.id).points < r.stake) fail(400, '포인트가 부족해요.');
+    addPoints(u.id, -r.stake);
+    tbl('lunp').insert({ room_id: r.id, user_id: u.id, num: num, joined_at: now() });
+    var full = ps.length + 1 >= r.cap;
+    if (full) lunResolve(r);
+    return { ok: true, id: r.id, resolved: full };
+  },
+  'POST /api/lun/start': function (body, u) {   // 방장이 모인 사람들(3명 이상)로 먼저 시작
+    needLogin(u);
+    var r = byId('lun', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 시작할 수 있어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    if (lunPlayers(r).length < GAMES.LUN.MIN_PLAYERS) fail(400, '최소 ' + GAMES.LUN.MIN_PLAYERS + '명이 모여야 시작할 수 있어요.');
+    lunResolve(r);
+    return { ok: true, id: r.id, resolved: true };
+  },
+  'POST /api/lun/cancel': function (body, u) {
+    needLogin(u);
+    var r = byId('lun', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    lunPlayers(r).forEach(function (p) { addPoints(p.user_id, r.stake); });
+    r.status = 'cancelled'; tbl('lun').save(r);
+    return { ok: true };
+  },
+
+  /* ---- 🪜 사다리타기 ---- */
+  'GET /api/ladder': function (body, u) { needLogin(u); return ladderView(u); },
+  'POST /api/ladder/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), slots = Number(body.slots), slot = Number(body.slot), L = GAMES.LADDER;
+    if (slots !== Math.floor(slots) || slots < L.MIN_SLOTS || slots > L.MAX_SLOTS) fail(400, '인원은 ' + L.MIN_SLOTS + '~' + L.MAX_SLOTS + '명이에요.');
+    if (slot !== Math.floor(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주세요.');
+    if (u.points < stake) fail(400, '포인트가 부족해요.');
+    if (openRooms('lad', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
+    addPoints(u.id, -stake);
+    var r = tbl('lad').insert({ host_id: u.id, stake: stake, slots: slots, status: 'waiting', win_end: '', rungs: '', winner_id: '', created_at: now(), played_at: '' });
+    tbl('ladp').insert({ room_id: r.id, user_id: u.id, slot: slot, joined_at: now() });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/ladder/join': function (body, u) {
+    needLogin(u);
+    var slot = Number(body.slot), r = byId('lad', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    if (slot !== Math.floor(slot) || slot < 0 || slot >= r.slots) fail(400, '자리를 골라주세요.');
+    var ps = ladPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방이에요.');
+    if (ps.some(function (p) { return p.slot === slot; })) fail(400, '이미 다른 사람이 앉은 자리예요.');
+    if (userById(u.id).points < r.stake) fail(400, '포인트가 부족해요.');
+    addPoints(u.id, -r.stake);
+    tbl('ladp').insert({ room_id: r.id, user_id: u.id, slot: slot, joined_at: now() });
+    var full = ps.length + 1 >= r.slots;
+    if (full) ladderResolve(r);          // 자리가 다 차는 순간 사다리를 만들어서 결판 (그 전엔 사다리가 존재하지 않음)
+    return { ok: true, id: r.id, resolved: full };
+  },
+  'POST /api/ladder/cancel': function (body, u) {
+    needLogin(u);
+    var r = byId('lad', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    ladPlayers(r).forEach(function (p) { addPoints(p.user_id, r.stake); });
+    r.status = 'cancelled'; tbl('lad').save(r);
+    return { ok: true };
+  },
+
+  /* ---- 🃏 블랙잭 ---- */
+  'GET /api/blackjack': function (body, u) { needLogin(u); return bjView(u); },
+  'POST /api/blackjack/start': function (body, u) {
+    needLogin(u);
+    var bet = checkBet(body.bet, GAMES.BJ.MIN_BET, GAMES.BJ.MAX_BET);
+    if (bjActive(u.id)) fail(400, '진행 중인 판이 있어요. 먼저 끝내주세요.');
+    if (u.points < bet) fail(400, '포인트가 부족해요.');
+    addPoints(u.id, -bet);
+    var st = GAMES.bjStart(bet);
+    var row = tbl('bj').insert({ user_id: u.id, bet: bet, state: JSON.stringify(st), status: 'playing', outcome: '', payout: '', created_at: now(), finished_at: '' });
+    bjSave(row, st);
+    return bjView(userById(u.id));
+  },
+
+  /* ---- 🎰 슬롯머신 ---- */
+  'GET /api/slots': function (body, u) { needLogin(u); return slotView(u); },
+  'POST /api/slots/spin': function (body, u) {
+    needLogin(u);
+    var bet = checkBet(body.bet, GAMES.SLOT.MIN_BET, GAMES.SLOT.MAX_BET);
+    if (u.points < bet) fail(400, '포인트가 부족해요.');
+    var sp = GAMES.slotSpin(), payout = GAMES.slotPayout(bet, sp.mult);
+    addPoints(u.id, payout - bet);
+    tbl('slots').insert({ user_id: u.id, bet: bet, reels: JSON.stringify(sp.reels), payout: payout, created_at: now() });
+    return { reels: sp.reels.map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), mult: sp.mult, bet: bet, payout: payout, net: payout - bet, points: userById(u.id).points };
+  },
+
   'GET /api/shop': function (body, u) {
     needLogin(u);
     if (!CFG.SHOP_OPEN) return [];   // 닫혀 있으면 빈 목록 → 화면에 '준비 중' 표시
@@ -514,6 +746,10 @@ var ROUTES = {
     } else if (body.action === 'delete') {
       var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
       if (tbl('wagers').find(function (w) { return w.user_id === t.id && active[w.bet_id]; })) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
+      var waitingLun = {}, waitingLad = {};
+      tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
+      tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
+      if (tbl('lunp').find(function (p) { return p.user_id === t.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === t.id && waitingLad[p.room_id]; }) || bjActive(t.id)) fail(400, '진행 중인 게임이 있어서 못 지워요. 끝나거나 닫힌 뒤에 지워주세요.');
       tbl('rps').where(function (r) { return r.host_id === t.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
       tbl('messages').removeWhere(function (m) { return m.user_id === t.id; });
@@ -546,6 +782,22 @@ var ROUTES = {
     return { ok: true };
   }
 };
+
+['hit', 'stand', 'double'].forEach(function (act) {
+  ROUTES['POST /api/blackjack/' + act] = function (body, u) {
+    needLogin(u);
+    var row = bjActive(u.id) || fail(400, '진행 중인 판이 없어요. 새로 시작해주세요.');
+    var st = JSON.parse(row.state);
+    if (act === 'double') {
+      if (!GAMES.bjCanDouble(st)) fail(400, '더블다운은 처음 카드 두 장일 때만 할 수 있어요.');
+      if (userById(u.id).points < st.bet) fail(400, '더블다운할 포인트가 부족해요.');
+      addPoints(u.id, -st.bet);                                  // 추가로 같은 금액을 더 걸어요
+      GAMES.bjDouble(st);
+    } else if (act === 'hit') GAMES.bjHit(st); else GAMES.bjStand(st);
+    bjSave(row, st);
+    return bjView(userById(u.id));
+  };
+});
 
 /* ================= 설치 도우미 ================= */
 /** 한 번 실행하세요: 시트 탭을 만들고, '관리자' 탭에 관리자 링크를 적어줍니다. */
