@@ -114,7 +114,10 @@ const lst = state(a).bets;
 assert.equal(lst.find((x) => x.id === chatBetId).chat_count, 2);
 assert.equal(lst.find((x) => x.id === chatBet2Id).chat_count, 1);
 
-// 상점
+// 상점: 기본은 닫힘 → 빈 목록, 구매/장착 403, 포인트 불변
+assert.deepEqual(ok(call(a, 'GET', '/api/shop')), []);
+{ const p0 = pts(a); err(call(a, 'POST', '/api/shop/buy', { item_id: 't_gambler' }), 403); err(call(a, 'POST', '/api/shop/equip', { item_id: 't_gambler' }), 403); assert.equal(pts(a), p0); }
+sb.CFG.SHOP_OPEN = true;   // 이하 상점 로직은 열린 상태에서 검증
 err(call(a, 'POST', '/api/shop/buy', { item_id: 't_legend' }), 400);
 err(call(a, 'POST', '/api/shop/equip', { item_id: 't_gambler' }), 400);
 const pa = pts(a);

@@ -1,4 +1,5 @@
 process.env.DB_FILE = ':memory:';
+process.env.SHOP_OPEN = '1';   // 이 테스트는 상점이 열린 상태에서 구매/장착을 검증
 const assert = require('node:assert');
 const { server } = require('./server');
 server.listen(0, async () => {

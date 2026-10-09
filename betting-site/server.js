@@ -14,6 +14,7 @@ const RPS_HANDS = ['rock', 'paper', 'scissors'];           // 바위 보 가위
 const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
 const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
+const SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
 const MIN_BET = 10;
 const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
@@ -370,11 +371,13 @@ const routes = {
   },
   'GET /api/shop': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
+    if (!SHOP_OPEN) return [];   // 닫혀 있으면 빈 목록 → 화면에 '준비 중' 표시
     const owned = new Set(q('SELECT item_id FROM user_items WHERE user_id=?', u.id).map((r) => r.item_id));
     return SHOP.map((i) => ({ ...i, owned: owned.has(i.id), equipped: u[SLOT_COL[i.slot]] === i.id }));
   },
   'POST /api/shop/buy': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
+    if (!SHOP_OPEN) fail(403, '상점은 아직 준비 중이에요.');
     return tx(() => {
       const item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품이에요.');
       if (q1('SELECT 1 FROM user_items WHERE user_id=? AND item_id=?', u.id, item.id)) fail(400, '이미 가지고 있어요.');
@@ -388,6 +391,7 @@ const routes = {
   },
   'POST /api/shop/equip': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
+    if (!SHOP_OPEN) fail(403, '상점은 아직 준비 중이에요.');
     if (body.item_id === null) { // 해제: slot 지정
       const col = SLOT_COL[String(body.slot)] || fail(400, '잘못된 칸이에요.');
       run(`UPDATE users SET ${col}=NULL WHERE id=?`, u.id);

@@ -96,6 +96,7 @@ button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 .tabs button:nth-child(3).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(3){border-color:#ffb80055}
 .tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
 .tabs.mode button:nth-child(n){border-color:var(--line)}.tabs.mode button.on{border-color:transparent}
+.card.done{opacity:.5;transition:opacity .15s}.card.done:hover{opacity:.9;transform:none}
 </style>
 </head>
 <body>
@@ -163,7 +164,7 @@ function render() {
   $('#app').innerHTML = !token ? authView() : `
     <div class="tabs">${[['bets','도박'],['new','만들기'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : bets.map(betView).join('') || '<p class="mute">아직 도박이 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
+    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
@@ -222,6 +223,9 @@ const sendChat = guard(async () => {
 });
 setInterval(() => { if (!document.hidden) pollChat(); }, 4000); // 앱스 스크립트는 호출이 느려서 간격을 넉넉히
 
+// 진행 중·마감 대기 도박은 위에, 끝난(확정/취소) 도박은 맨 아래로 (각 그룹 안에서는 서버가 준 순서 유지)
+const isDone = (b) => b.status === 'resolved' || b.status === 'cancelled';
+const sortBets = (list) => [...list.filter((b) => !isDone(b)), ...list.filter(isDone)];
 function statusText(b) {
   if (b.status === 'open') return b.closes_at ? '마감 ' + new Date(b.closes_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '진행 중';
   return { closed: '마감됨 (결과 대기)', resolved: '결과 확정', cancelled: '취소/환불' }[b.status];
@@ -244,7 +248,8 @@ function betView(b) {
   const mgr = b.mine_created && (b.status === 'open' || b.status === 'closed') ? `<div class="betrow">
     ${open ? `<button onclick="act(${b.id},'close')">지금 마감</button>` : ''}<button onclick="if(confirm('취소하고 전부 환불할까요?'))act(${b.id},'cancel')">취소(환불)</button></div>` : '';
   const chat = `<div class="betrow"><button style="flex:1" onclick="openChat(${b.id})">💬 채팅방 들어가기${b.chat_count ? ' (' + b.chat_count + ')' : ''}</button></div>`;
-  return `<div class="card"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}점</div>${opts}${result}${chat}${mgr}</div>`;
+  const done = b.status === 'resolved' || b.status === 'cancelled';
+  return `<div class="card${done ? ' done' : ''}"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}점</div>${opts}${result}${chat}${mgr}</div>`;
 }
 const wager = guard(async (optionId) => {
   const amount = Number($('#a' + optionId).value);
@@ -338,11 +343,12 @@ function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으�
   if (fresh.some((r) => r.net > 0)) confetti(50);
 }
 
-let shop = [];
-const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); if (tab === 'shop') render(); });
+let shop = [], shopLoaded = false;
+const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); shopLoaded = true; if (tab === 'shop') render(); });
 const SLOTS = [['title', '호칭', '이름 앞에 붙는 칭호'], ['color', '닉네임 색', '글자 색'], ['fx', '닉네임 효과', '효과가 있으면 색보다 우선'], ['badge', '배지', '이름 앞 이모지']];
 function shopView() {
-  if (!shop.length) return '<p class="mute">불러오는 중…</p>';
+  if (!shopLoaded) return '<p class="mute">불러오는 중…</p>';
+  if (!shop.length) return `<div class="card" style="text-align:center"><h2>🛍 상점</h2><div style="font-size:44px;margin:10px 0">🔒</div><p>상점은 지금 <b>준비 중</b>이에요.</p><p class="mute">호칭, 닉네임 색, 배지 같은 꾸미기 아이템을 곧 열 거예요. 조금만 기다려주세요!</p></div>`;
   const preview = (i) => nm(user, { [i.slot]: i.value });
   return `<div class="card"><h2>🛍 상점</h2><div class="mute">내 모습: ${nm(user)} · 보유 <span class="pts">${user.points.toLocaleString()}점</span></div>
   <p class="mute">사면 바로 장착돼요. 칸마다 하나씩 장착할 수 있고, 한 번 산 건 언제든 바꿔 낄 수 있어요.</p></div>` +

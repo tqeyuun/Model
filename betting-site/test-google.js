@@ -39,6 +39,11 @@ fake.listen(0, () => {
       assert.equal((await call('GET', '/api/me', null, t2)).j.name, '지은이');
       // 구글 계정은 PIN 로그인 불가
       assert.equal((await call('POST', '/api/login', { name: '민수', pin: '0000' })).s, 401);
+      // 상점은 기본적으로 닫혀 있음 (SHOP_OPEN=1 일 때만 열림)
+      assert.deepEqual((await call('GET', '/api/shop', null, t1)).j, []);
+      assert.equal((await call('POST', '/api/shop/buy', { item_id: 't_gambler' }, t1)).s, 403);
+      assert.equal((await call('POST', '/api/shop/equip', { item_id: 't_gambler' }, t1)).s, 403);
+      assert.equal((await call('GET', '/api/me', null, t1)).j.points, 1000, '닫힌 상점에서는 포인트가 안 빠짐');
       // 채팅 (도박별)
       const cbet = (await call('POST', '/api/bets', { title: '채팅방', options: ['x', 'y'] }, t1)).j;
       const cbet2 = (await call('POST', '/api/bets', { title: '다른방', options: ['x', 'y'] }, t1)).j;

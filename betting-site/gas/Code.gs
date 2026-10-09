@@ -5,7 +5,7 @@
  * - 처음 한 번 showAdminLink()를 실행하면 시트의 '관리자' 탭에 관리자 링크가 생깁니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
-var CFG = { START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
+var CFG = { SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열려요 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
   users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge'],
@@ -442,11 +442,13 @@ var ROUTES = {
 
   'GET /api/shop': function (body, u) {
     needLogin(u);
+    if (!CFG.SHOP_OPEN) return [];   // 닫혀 있으면 빈 목록 → 화면에 '준비 중' 표시
     var owned = {}; tbl('items').where(function (r) { return r.user_id === u.id; }).forEach(function (r) { owned[r.item_id] = 1; });
     return SHOP.map(function (i) { var o = {}; for (var k in i) o[k] = i[k]; o.owned = !!owned[i.id]; o.equipped = u[SLOT_COL[i.slot]] === i.id; return o; });
   },
   'POST /api/shop/buy': function (body, u) {
     needLogin(u);
+    if (!CFG.SHOP_OPEN) fail(403, '상점은 아직 준비 중이에요.');
     var item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품이에요.');
     if (tbl('items').find(function (r) { return r.user_id === u.id && r.item_id === item.id; })) fail(400, '이미 가지고 있어요.');
     if (u.points < item.price) fail(400, '포인트가 부족해요.');
@@ -456,6 +458,7 @@ var ROUTES = {
   },
   'POST /api/shop/equip': function (body, u) {
     needLogin(u);
+    if (!CFG.SHOP_OPEN) fail(403, '상점은 아직 준비 중이에요.');
     if (body.item_id === null) {
       var col = SLOT_COL[String(body.slot)] || fail(400, '잘못된 칸이에요.');
       u[col] = ''; tbl('users').save(u); return { ok: true };
