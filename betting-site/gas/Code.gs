@@ -49,8 +49,8 @@ function handle(token, adminKey, method, url, body) {
 /* ================= 시트 = 테이블 ================= */
 var TBL = {};
 function tbl(name) { return TBL[name] || (TBL[name] = new Table(name)); }
-function toCell(v) { return v === null || v === undefined ? '' : (typeof v === 'string' && v !== '' ? '​' + v : v); } // 글자 앞 보이지 않는 표시 → 시트가 숫자/날짜/수식으로 오해하지 않게
-function fromCell(v) { return typeof v === 'string' ? v.replace(/^​/, '') : v; }
+function toCell(v) { return v === null || v === undefined ? '' : (typeof v === 'string' && v !== '' ? '\u200B' + v : v); } // 글자 앞 보이지 않는 표시 → 시트가 숫자/날짜/수식으로 오해하지 않게
+function fromCell(v) { return typeof v === 'string' ? v.replace(/^\u200B/, '') : v; }
 
 function Table(name) {
   this.name = name; this.cols = SHEETS[name]; this.rows = null;
