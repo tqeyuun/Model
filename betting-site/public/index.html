@@ -145,7 +145,8 @@ async function api(method, url, body) {
   return j;
 }
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
-const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+// 처리 중에 같은 버튼을 또 눌러도 무시 (연타해도 방/도박이 여러 개 생기지 않게)
+const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };
 function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false }; localStorage.removeItem('token'); render(); }
 
 let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;

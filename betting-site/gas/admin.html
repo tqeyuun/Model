@@ -57,7 +57,7 @@ function api(method, url, body) {
   });
 }
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2400); }
-const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };   // 연타 방지
 const load = async () => { try { data = await api('GET', '/api/admin/overview'); render(); } catch (e) { $('#app').innerHTML = `<h1>🔒 관리자</h1><div class="card">${esc(e.message)}<br><span class="mute">관리자 시트는 다른 사람에게 공유하지 마세요.</span></div>`; } };
 
 const userAct = guard(async (user_id, action, value) => {

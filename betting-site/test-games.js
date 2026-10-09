@@ -176,6 +176,14 @@ server.listen(0, async () => {
     assert.equal((await call('GET', '/api/slots', null, b)).j.triple.length, 6);
     assert.equal((await call('GET', '/api/slots', null)).s, 401);
 
+    /* ================= 연타 방지: 같은 조건의 방/도박을 바로 또 만들 수 없음 ================= */
+    { const t = await mk('연타', '1111');
+      const dup = async (p, b) => [(await call('POST', p, b, t)).s, (await call('POST', p, b, t)).s];
+      assert.deepEqual(await dup('/api/lun/create', { stake: 20, cap: 3, num: 1 }), [200, 409]);
+      assert.deepEqual(await dup('/api/ladder/create', { stake: 20, slots: 3, slot: 0 }), [200, 409]);
+      assert.deepEqual(await dup('/api/bets', { title: '연타 도박', options: ['x', 'y'] }), [200, 409]);
+      assert.equal((await call('POST', '/api/lun/create', { stake: 30, cap: 3, num: 1 }, t)).s, 200, '조건이 다르면 만들 수 있음'); }
+
     /* ================= 혼자 하는 게임 하루 제한 ================= */
     const realNow = Date.now; let shift = 0; Date.now = () => realNow() + shift;       // 날짜를 건너뛰어서 자정 초기화 검증
     try {

@@ -64,11 +64,12 @@ server.listen(0, async () => {
     assert.equal((await call('POST', '/api/rps/join', { room_id: r4.id, hand: 'rock' }, c)).s, 400, '닫힌 방');
 
     // 동시 방 3개 제한
-    for (let i = 0; i < 3; i++) assert.equal((await call('POST', '/api/rps/create', { hand: 'rock', stake: 10 }, a)).s, 200);
-    assert.equal((await call('POST', '/api/rps/create', { hand: 'rock', stake: 10 }, a)).s, 400);
+    for (let i = 0; i < 3; i++) assert.equal((await call('POST', '/api/rps/create', { hand: 'rock', stake: 10 + i * 10 }, a)).s, 200);   // 판돈을 다르게 3개
+    assert.equal((await call('POST', '/api/rps/create', { hand: 'rock', stake: 30 }, a)).s, 409, '방금 만든 것과 같은 조건 → 연타 방지');
+    assert.equal((await call('POST', '/api/rps/create', { hand: 'rock', stake: 99 }, a)).s, 400, '동시 방 3개 제한');
 
     // 전체 포인트 보존(비기거나 이기고 지는 것만 → 합계 불변)
-    const total = (await Promise.all([a, b, c].map(pts))).reduce((x, y) => x + y) + 30; // 열려있는 방 3개(10×3)는 맡겨진 상태
+    const total = (await Promise.all([a, b, c].map(pts))).reduce((x, y) => x + y) + 60; // 열려있는 방 3개(10+20+30)는 맡겨진 상태
     assert.equal(total, 3000);
     console.log('가위바위보 테스트 통과');
   } catch (e) { console.error(e); process.exitCode = 1; }

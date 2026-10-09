@@ -204,8 +204,9 @@ const rbefore = pts(ra);
 err(call(rb, 'POST', '/api/rps/cancel', { room_id: room4.id }), 403);
 ok(call(ra, 'POST', '/api/rps/cancel', { room_id: room4.id }));
 assert.equal(pts(ra), rbefore + 300);
-for (let i = 0; i < 3; i++) ok(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 10 }));
-err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 10 }), 400);               // 동시 3개 제한
+for (let i = 0; i < 3; i++) ok(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 10 + i * 10 }));   // 판돈을 다르게 3개
+err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 30 }), 409);                // 방금 만든 것과 같은 조건 → 연타 방지
+err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 99 }), 400);                // 동시 3개 제한
 // 12시간 지난 방은 자동으로 닫히고 환불 (락 재진입 없이)
 const rOld = ok(call(rc, 'POST', '/api/rps/create', { hand: 'rock', stake: 100 }));
 const rc0 = pts(rc);

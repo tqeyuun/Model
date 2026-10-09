@@ -144,6 +144,14 @@ assert.equal(sr.payout, 7); assert.equal(pts(b), s0 - 8);
 G.slotSpin = origSpin;
 assert.equal(ok(call(b, 'GET', '/api/slots')).recent.length, 3); assert.equal(ok(call(b, 'GET', '/api/slots')).triple.length, 6);
 err(call('', 'GET', '/api/slots'), 401);
+/* ===== 연타 방지: 같은 조건의 방/도박을 바로 또 만들 수 없음 ===== */
+{ const t = mk('연타', '1111');
+  const dup = (p, b) => [call(t, 'POST', p, b), call(t, 'POST', p, b)].map((r) => r.error ? r.code : 200);
+  assert.deepEqual(dup('/api/lun/create', { stake: 20, cap: 3, num: 1 }), [200, 409]);
+  assert.deepEqual(dup('/api/ladder/create', { stake: 20, slots: 3, slot: 0 }), [200, 409]);
+  assert.deepEqual(dup('/api/bets', { title: '연타 도박', options: ['x', 'y'] }), [200, 409]);
+  ok(call(t, 'POST', '/api/lun/create', { stake: 30, cap: 3, num: 1 })); }
+
 /* ===== 혼자 하는 게임 하루 제한 ===== */
 {
   const realNow = Date.now; let shift = 0; Date.now = () => realNow() + shift;
