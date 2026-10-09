@@ -37,7 +37,7 @@ s = cut(s, "let token = LS.get('token')", "async function api(", `const LS = { /
 let token = LS.get('token'), user = null, tab = 'bets', bets = [], ranking = [], busy = false;
 
 `);
-s = cut(s, "async function api(", "function confetti(", runner("token || ''", "''", "if (j.code === 401 && token) logout();"));
+s = cut(s, "async function api(", "function toast(", runner("token || ''", "''", "if (j.code === 401 && token) logout();"));
 s = rep(s, "let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;", "let chatMsgs = [], lastChatId = 0;");
 s = rep(s, "[user, bets, ranking, rps] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking'), api('GET', '/api/rps')]);",
            "({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));");

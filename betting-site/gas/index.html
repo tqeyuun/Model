@@ -58,8 +58,6 @@ header b{font-size:22px;letter-spacing:.5px}
 .tabs button:nth-child(3).on{background:linear-gradient(90deg,#a855f7,#22d3ee);box-shadow:0 0 16px rgba(168,85,247,.5)}
 .tabs button{border-width:2px}
 .tabs button:nth-child(1){border-color:#22d3ee55}.tabs button:nth-child(2){border-color:#ff2d9555}.tabs button:nth-child(3){border-color:#a855f755}
-.confetti{position:fixed;top:-20px;font-size:22px;pointer-events:none;z-index:20;animation:fall 1.8s ease-in forwards}
-@keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
 .tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
 
 .tabs button{padding:10px 4px}.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#ffb800);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
@@ -123,11 +121,6 @@ function api(method, url, body) {
       .handle(token || '', '', method, url, body || {});
   });
 }
-function confetti(n = 40) {
-  const e = ['🎉', '✨', '💎', '🪙', '🍀', '⭐', '💖'];
-  for (let i = 0; i < n; i++) { const d = document.createElement('span'); d.className = 'confetti'; d.textContent = e[i % e.length];
-    d.style.left = Math.random() * 100 + 'vw'; d.style.animationDelay = Math.random() * .6 + 's'; document.body.append(d); setTimeout(() => d.remove(), 2800); }
-}
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
 function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; LS.del('token'); render(); }
@@ -153,7 +146,7 @@ async function refresh() {
     notifyRps();
     const seen = JSON.parse(LS.get('luckySeen') || '[]');
     const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
-    if (fresh.length) { LS.set('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); confetti(70); }
+    if (fresh.length) { LS.set('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); }
     if (!$('#app').innerHTML || (tab !== 'new' && tab !== 'chat' && !(document.activeElement && document.activeElement.tagName === 'INPUT'))) render();
     else renderHeader();
   } catch (e) { /* 401 이면 logout 처리됨 */ }
@@ -254,14 +247,14 @@ function betView(b) {
 const wager = guard(async (optionId) => {
   const amount = Number($('#a' + optionId).value);
   await api('POST', '/api/wager', { option_id: optionId, amount });
-  toast('걸었어요! 🎲'); confetti(18); await refresh();
+  toast('걸었어요! 🎲'); await refresh();
 });
 const act = guard(async (bet_id, action, option_id) => {
   if (action === 'resolve' && !confirm('정답을 확정하면 되돌릴 수 없어요. 맞나요?')) return;
   await api('POST', '/api/bets/action', { bet_id, action, option_id });
   await refresh();
 });
-const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); confetti(); await refresh(); });
+const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); await refresh(); });
 
 function newView() {
   return `<div class="card"><h2>도박 열기</h2>
@@ -275,7 +268,7 @@ function newView() {
 function addOpt() { if (document.querySelectorAll('.o').length < 6) $('#os').insertAdjacentHTML('beforeend', `<input class="o" placeholder="선택지 ${document.querySelectorAll('.o').length + 1}">`); }
 const create = guard(async () => {
   await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
-  tab = 'bets'; toast('도박이 열렸어요!'); confetti(24); await refresh();
+  tab = 'bets'; toast('도박이 열렸어요!'); await refresh();
 });
 /* ---------- 가위바위보 ---------- */
 const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { rock: '바위', paper: '보', scissors: '가위' };
@@ -316,7 +309,7 @@ const createRps = guard(async () => {
   if (!createHand) throw new Error('먼저 가위·바위·보 중에 하나를 골라주세요.');
   const stake = Number($('#rs').value);
   await api('POST', '/api/rps/create', { hand: createHand, stake });
-  createHand = null; listMode = 'rps'; tab = 'bets'; toast('방을 열었어요! 상대를 기다려요 ✊'); confetti(12); await refresh();
+  createHand = null; listMode = 'rps'; tab = 'bets'; toast('방을 열었어요! 상대를 기다려요 ✊'); await refresh();
 });
 const joinRps = guard(async (roomId, hand) => {
   const room = rps.rooms.find((r) => r.id === roomId);
@@ -324,7 +317,7 @@ const joinRps = guard(async (roomId, hand) => {
   const r = await api('POST', '/api/rps/join', { room_id: roomId, hand });
   markRpsSeen(r.id);
   const head = `${HAND[hand]} vs ${HAND[r.host_hand]}`;
-  if (r.outcome === 'win') { toast(`${head}  이겼어요! +${r.net}점 🎉`); confetti(60); }
+  if (r.outcome === 'win') { toast(`${head}  이겼어요! +${r.net}점 🎉`); }
   else if (r.outcome === 'lose') toast(`${head}  졌어요… ${r.net}점`);
   else toast(`${head}  비겼어요! 판돈은 그대로`);
   await refresh();
@@ -340,7 +333,6 @@ function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으�
   LS.set('rpsSeen', JSON.stringify(seen.concat(fresh.map((r) => r.id))));
   const f = fresh[0], other = f.host.name === user.name ? f.guest.name : f.host.name;
   toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼어요! +' + f.net + '점' : f.net < 0 ? '졌어요 ' + f.net + '점' : '비겼어요'}`);
-  if (fresh.some((r) => r.net > 0)) confetti(50);
 }
 
 let shop = [], shopLoaded = false;
@@ -360,7 +352,7 @@ function shopView() {
         : `<button class="pri" ${user.points < i.price ? 'disabled' : ''} onclick="buy('${i.id}')">${i.price.toLocaleString()}점</button>`}</div>`).join('')}</div></div>`).join('');
 }
 const afterShop = async () => { await loadShop(); await refresh(); };
-const buy = guard(async (id) => { await api('POST', '/api/shop/buy', { item_id: id }); toast('구매 완료! ✨'); confetti(30); await afterShop(); });
+const buy = guard(async (id) => { await api('POST', '/api/shop/buy', { item_id: id }); toast('구매 완료! ✨'); await afterShop(); });
 const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_id: id }); await afterShop(); });
 const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
 
