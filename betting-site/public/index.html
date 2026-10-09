@@ -42,6 +42,26 @@ button:disabled{opacity:.4;cursor:default}
 table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}td:nth-child(n+3),th:nth-child(n+3){text-align:right}
 tr:nth-child(2) td:first-child{color:#ffd700}tr:nth-child(3) td:first-child{color:#c0c0c0}tr:nth-child(4) td:first-child{color:#cd7f32}
 tr:nth-child(2){background:rgba(255,215,0,.07)}
+
+/* ---- 더 화려하게 ---- */
+:root{--c0:#22d3ee;--c1:#ff2d95;--c2:#ffb800;--c3:#34f5a0;--c4:#a855f7;--c5:#ff6b3d}
+header b{background-size:300% 100%;animation:rb 5s linear infinite;font-size:22px;letter-spacing:.5px}
+.card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#22d3ee,#a855f7,#ff2d95,#ffb800,#34f5a0,#22d3ee);background-size:300% 100%;animation:rb 6s linear infinite}
+.card h2{background:linear-gradient(90deg,#fff,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.opt{--c:var(--c0);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 7%,transparent)}
+.opt .bar i{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 55%,#fff));box-shadow:0 0 14px var(--c)}
+.opt .lbl{color:var(--c);font-weight:700;text-shadow:0 0 10px color-mix(in srgb,var(--c) 60%,transparent)}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink))}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan))}
+.opt button.pri{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 50%,var(--pink)));box-shadow:0 0 16px color-mix(in srgb,var(--c) 60%,transparent);color:#000}
+.tabs button:nth-child(1).on{background:linear-gradient(90deg,#22d3ee,#34f5a0)}
+.tabs button:nth-child(2).on{background:linear-gradient(90deg,#ff2d95,#ffb800);box-shadow:0 0 16px rgba(255,45,149,.5)}
+.tabs button:nth-child(3).on{background:linear-gradient(90deg,#a855f7,#22d3ee);box-shadow:0 0 16px rgba(168,85,247,.5)}
+.tabs button{border-width:2px}
+.tabs button:nth-child(1){border-color:#22d3ee55}.tabs button:nth-child(2){border-color:#ff2d9555}.tabs button:nth-child(3){border-color:#a855f755}
+.confetti{position:fixed;top:-20px;font-size:22px;pointer-events:none;z-index:20;animation:fall 1.8s ease-in forwards}
+@keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:.2}}
+.tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
 </style>
 </head>
 <body>
@@ -58,6 +78,11 @@ async function api(method, url, body) {
   if (!r.ok) { if (r.status === 401 && token) logout(); throw new Error(j.error || '오류'); }
   return j;
 }
+function confetti(n = 40) {
+  const e = ['🎉', '✨', '💎', '🪙', '🍀', '⭐', '💖'];
+  for (let i = 0; i < n; i++) { const d = document.createElement('span'); d.className = 'confetti'; d.textContent = e[i % e.length];
+    d.style.left = Math.random() * 100 + 'vw'; d.style.animationDelay = Math.random() * .6 + 's'; document.body.append(d); setTimeout(() => d.remove(), 2800); }
+}
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
 const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
 function logout() { token = null; user = null; localStorage.removeItem('token'); render(); }
@@ -67,6 +92,9 @@ async function refresh() {
   if (document.activeElement && document.activeElement.tagName === 'INPUT' && tab === 'bets') return; // 입력 중엔 갱신 안 함
   try {
     [user, bets, ranking] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking')]);
+    const seen = JSON.parse(localStorage.getItem('luckySeen') || '[]');
+    const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
+    if (fresh.length) { localStorage.setItem('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); confetti(70); }
     render();
   } catch (e) { /* 401 이면 logout 처리됨 */ }
 }
@@ -95,9 +123,9 @@ function statusText(b) {
 }
 function betView(b) {
   const open = b.status === 'open';
-  const opts = b.options.map((o) => `
-    <div class="opt ${o.underdog && b.status !== 'resolved' ? 'dog' : ''} ${b.winner === o.id ? 'won' : ''}">
-      <div class="row"><span>${b.winner === o.id ? '🏆 ' : ''}${esc(o.label)}${o.underdog && !b.winner ? '<span class="tag">역배</span>' : ''}${o.my_amount ? `<span class="tag s">내 ${o.my_amount}점</span>` : ''}</span>
+  const opts = b.options.map((o, oi) => `
+    <div style="--c:var(--c${oi % 6})" class="opt ${o.underdog && b.status !== 'resolved' ? 'dog' : ''} ${b.winner === o.id ? 'won' : ''}">
+      <div class="row"><span class="lbl">${b.winner === o.id ? '🏆 ' : ''}${esc(o.label)}${o.underdog && !b.winner ? '<span class="tag">역배</span>' : ''}${o.my_amount ? `<span class="tag s">내 ${o.my_amount}점</span>` : ''}</span>
         <span class="mute">${o.pool}점 · ${o.bettors}명 · ${o.multiplier ? '×' + o.multiplier : '-'}</span></div>
       <div class="bar"><i style="width:${Math.round(o.share * 100)}%"></i></div>
       ${open ? `<div class="betrow"><input id="a${o.id}" type="number" min="10" step="10" placeholder="걸 점수" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}><button class="pri" onclick="wager(${o.id})" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}>걸기</button></div>` : ''}
@@ -115,14 +143,14 @@ function betView(b) {
 const wager = guard(async (optionId) => {
   const amount = Number($('#a' + optionId).value);
   await api('POST', '/api/wager', { option_id: optionId, amount });
-  toast('걸었어요! 🎲'); await refresh();
+  toast('걸었어요! 🎲'); confetti(18); await refresh();
 });
 const act = guard(async (bet_id, action, option_id) => {
   if (action === 'resolve' && !confirm('정답을 확정하면 되돌릴 수 없어요. 맞나요?')) return;
   await api('POST', '/api/bets/action', { bet_id, action, option_id });
   await refresh();
 });
-const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); await refresh(); });
+const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); confetti(); await refresh(); });
 
 function newView() {
   return `<div class="card"><h2>내기 열기</h2>
@@ -136,7 +164,7 @@ function newView() {
 function addOpt() { if (document.querySelectorAll('.o').length < 6) $('#os').insertAdjacentHTML('beforeend', `<input class="o" placeholder="선택지 ${document.querySelectorAll('.o').length + 1}">`); }
 const create = guard(async () => {
   await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
-  tab = 'bets'; toast('내기가 열렸어요!'); await refresh();
+  tab = 'bets'; toast('내기가 열렸어요!'); confetti(24); await refresh();
 });
 function rankView() {
   return `<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
