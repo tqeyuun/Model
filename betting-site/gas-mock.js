@@ -10,6 +10,7 @@ function makeSandbox() {
     const sh = {
       name, data,
       getLastRow: () => data.length,
+      getLastColumn: () => data.reduce((m, r) => Math.max(m, r.length), 0),
       getRange(r, c, nr = 1, nc = 1) {
         if (typeof r === 'string') { const m = /^([A-Z])(\d+)$/.exec(r); c = m[1].charCodeAt(0) - 64; r = Number(m[2]); }
         const rng = {

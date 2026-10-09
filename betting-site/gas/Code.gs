@@ -1,6 +1,6 @@
 /**
  * 도박장 (Google Apps Script 웹 앱 버전)
- * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·내기·채팅·상점)를 저장합니다.
+ * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·도박·채팅·상점)를 저장합니다.
  * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 포인트(실제 돈과 무관).
  * - 처음 한 번 showAdminLink()를 실행하면 시트의 '관리자' 탭에 관리자 링크가 생깁니다.
  */
@@ -13,7 +13,7 @@ var SHEETS = {
   bets: ['id', 'title', 'creator_id', 'status', 'winner', 'closes_at', 'created_at'],
   options: ['id', 'bet_id', 'label'],
   wagers: ['id', 'bet_id', 'option_id', 'user_id', 'amount', 'payout', 'lucky', 'created_at'],
-  messages: ['id', 'user_id', 'text', 'created_at'],
+  messages: ['id', 'user_id', 'text', 'created_at', 'bet_id'],
   items: ['user_id', 'item_id'],
   rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at']
 };
@@ -62,6 +62,8 @@ function Table(name) {
     this.sheet = ss.insertSheet(name);
     this.sheet.getRange(1, 1, 1, this.cols.length).setValues([this.cols]).setFontWeight('bold');
     this.sheet.setFrozenRows(1);
+  } else if (this.sheet.getLastColumn() < this.cols.length) {   // 버전업으로 열이 늘어난 경우 머리글만 보강
+    this.sheet.getRange(1, 1, 1, this.cols.length).setValues([this.cols]).setFontWeight('bold');
   }
 }
 Table.prototype.all = function () {
@@ -159,7 +161,7 @@ function meView(u) {
   return o;
 }
 
-/* ================= 내기 ================= */
+/* ================= 도박 ================= */
 function sweep() {
   var due = function () { return tbl('bets').where(function (b) { return b.status === 'open' && b.closes_at && b.closes_at <= now(); }); };
   if (!due().length) return;
@@ -175,6 +177,7 @@ function groupBy(rows, key) { var m = {}; rows.forEach(function (r) { (m[r[key]]
 function betViews(bets, me) {
   var optsBy = groupBy(tbl('options').all(), 'bet_id'), wagBy = groupBy(tbl('wagers').all(), 'bet_id');
   var names = {}; tbl('users').all().forEach(function (u) { names[u.id] = u.name; });
+  var chatBy = {}; tbl('messages').all().forEach(function (m) { chatBy[m.bet_id] = (chatBy[m.bet_id] || 0) + 1; });
   return bets.map(function (b) {
     var ws = wagBy[b.id] || [], total = ws.reduce(function (s, w) { return s + w.amount; }, 0);
     var mine = me ? ws.filter(function (w) { return w.user_id === me.id; }) : [];
@@ -190,7 +193,8 @@ function betViews(bets, me) {
       }),
       my_payout: mine.length && done ? mine.reduce(function (s, w) { return s + (Number(w.payout) || 0); }, 0) : null,
       my_total: mine.reduce(function (s, w) { return s + w.amount; }, 0),
-      my_lucky: mine.some(function (w) { return Number(w.lucky) === 1; })
+      my_lucky: mine.some(function (w) { return Number(w.lucky) === 1; }),
+      chat_count: chatBy[b.id] || 0
     };
   });
 }
@@ -218,7 +222,7 @@ function settle(bet, winnerId) {
 }
 
 function betAction(bet, body) {
-  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 내기예요.');
+  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 도박이에요.');
   if (body.action === 'close') { bet.status = 'closed'; tbl('bets').save(bet); return { ok: true }; }
   if (body.action === 'cancel') {
     tbl('wagers').where(function (w) { return w.bet_id === bet.id; }).forEach(refund);
@@ -234,7 +238,7 @@ function betAction(bet, body) {
   fail(400, '알 수 없는 동작이에요.');
 }
 function needLogin(u) { if (!u) fail(401, '로그인이 필요해요.'); return u; }
-function betById(id) { return tbl('bets').find(function (b) { return b.id === Number(id); }) || fail(404, '내기가 없어요.'); }
+function betById(id) { return tbl('bets').find(function (b) { return b.id === Number(id); }) || fail(404, '도박이 없어요.'); }
 
 function rankingView() {
   var wagers = tbl('wagers').all(), bets = {}; tbl('bets').all().forEach(function (b) { bets[b.id] = b.status; });
@@ -349,16 +353,16 @@ var ROUTES = {
     var oid = Number(body.option_id);
     var opt = tbl('options').find(function (o) { return o.id === oid; }) || fail(404, '선택지가 없어요.');
     var bet = betById(opt.bet_id);
-    if (bet.status !== 'open') fail(400, '이미 마감된 내기예요.');
+    if (bet.status !== 'open') fail(400, '이미 마감된 도박이에요.');
     if (u.points < amount) fail(400, '포인트가 부족해요.');
-    if (tbl('wagers').find(function (w) { return w.bet_id === bet.id && w.user_id === u.id && w.option_id !== opt.id; })) fail(400, '이 내기에는 이미 다른 선택지에 걸었어요.');
+    if (tbl('wagers').find(function (w) { return w.bet_id === bet.id && w.user_id === u.id && w.option_id !== opt.id; })) fail(400, '이 도박에는 이미 다른 선택지에 걸었어요.');
     u.points -= amount; tbl('users').save(u);
     tbl('wagers').insert({ bet_id: bet.id, option_id: opt.id, user_id: u.id, amount: amount, payout: '', lucky: 0, created_at: now() });
     return { ok: true };
   },
   'POST /api/bets/action': function (body, u) {
     needLogin(u); var bet = betById(body.bet_id);
-    if (bet.creator_id !== u.id) fail(403, '내기를 연 사람만 할 수 있어요.');
+    if (bet.creator_id !== u.id) fail(403, '도박을 연 사람만 할 수 있어요.');
     return betAction(bet, body);
   },
   'POST /api/aid': function (body, u) {
@@ -368,11 +372,13 @@ var ROUTES = {
     u.points += CFG.DAILY_AID; u.last_aid = now(); tbl('users').save(u); return { ok: true };
   },
 
+  // 채팅은 도박마다 따로: 목록에서 도박에 들어가서 그 안에서만 이야기해요
   'GET /api/chat': function (body, u, ctx) {
     needLogin(u);
-    var after = Number(ctx.qs.after) || 0, names = {};
+    var betId = Number(ctx.qs.bet) || 0, after = Number(ctx.qs.after) || 0, names = {};
+    betById(betId);
     tbl('users').all().forEach(function (x) { names[x.id] = x; });
-    var rows = tbl('messages').all().filter(function (m) { return m.id > after && names[m.user_id]; });
+    var rows = tbl('messages').all().filter(function (m) { return m.bet_id === betId && m.id > after && names[m.user_id]; });
     rows = after ? rows.slice(0, 100) : rows.slice(-60);
     return rows.map(function (m) {
       var o = { id: m.id, text: m.text, name: names[m.user_id].name, at: m.created_at, mine: m.user_id === u.id }, d = deco(names[m.user_id]);
@@ -382,13 +388,14 @@ var ROUTES = {
   },
   'POST /api/chat': function (body, u) {
     needLogin(u);
+    var bet = betById(body.bet_id);
     var text = String(body.text || '').trim();
     if (!text || text.length > 200) fail(400, '메시지는 1~200자예요.');
     var last = tbl('messages').all().filter(function (m) { return m.user_id === u.id; }).pop();
     if (last && now() - last.created_at < 800) fail(429, '너무 빨라요! 잠깐만요.');
-    tbl('messages').insert({ user_id: u.id, text: text, created_at: now() });
+    tbl('messages').insert({ user_id: u.id, text: text, created_at: now(), bet_id: bet.id });
     var all = tbl('messages').all();
-    if (all.length > 400) { tbl('messages').sheet.deleteRows(2, all.length - 300); TBL.messages = null; } // 오래된 건 정리
+    if (all.length > 600) { tbl('messages').sheet.deleteRows(2, all.length - 400); TBL.messages = null; } // 오래된 건 정리
     return { ok: true };
   },
 
@@ -464,7 +471,8 @@ var ROUTES = {
     var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at }; });
     var wag = tbl('wagers').all(), names = {}; tbl('users').all().forEach(function (x) { names[x.id] = x.name; });
     var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
-    var messages = tbl('messages').all().filter(function (m) { return names[m.user_id]; }).slice(-40).reverse().map(function (m) { return { id: m.id, text: m.text, created_at: m.created_at, name: names[m.user_id] }; });
+    var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
+    var messages = tbl('messages').all().filter(function (m) { return names[m.user_id]; }).slice(-40).reverse().map(function (m) { return { id: m.id, text: m.text, created_at: m.created_at, name: names[m.user_id], bet_title: titles[m.bet_id] || null }; });
     return { users: users, bets: bets, messages: messages, stats: {
       users: users.length, points: users.reduce(function (s, x) { return s + x.points; }, 0), wagers: wag.length,
       wagered: wag.reduce(function (s, w) { return s + w.amount; }, 0), lucky: wag.filter(function (w) { return Number(w.lucky) === 1; }).length } };
@@ -491,7 +499,7 @@ var ROUTES = {
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
     } else if (body.action === 'delete') {
       var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
-      if (tbl('wagers').find(function (w) { return w.user_id === t.id && active[w.bet_id]; })) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
+      if (tbl('wagers').find(function (w) { return w.user_id === t.id && active[w.bet_id]; })) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
       tbl('rps').where(function (r) { return r.host_id === t.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
       tbl('messages').removeWhere(function (m) { return m.user_id === t.id; });
@@ -506,6 +514,7 @@ var ROUTES = {
       if (bet.status === 'open' || bet.status === 'closed') tbl('wagers').where(function (w) { return w.bet_id === bet.id; }).forEach(refund);
       tbl('wagers').removeWhere(function (w) { return w.bet_id === bet.id; });
       tbl('options').removeWhere(function (o) { return o.bet_id === bet.id; });
+      tbl('messages').removeWhere(function (m) { return m.bet_id === bet.id; });
       tbl('bets').remove(bet); return { ok: true };
     }
     return betAction(bet, body);

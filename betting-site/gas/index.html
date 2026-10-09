@@ -92,6 +92,10 @@ button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 .hand span{font-size:30px;line-height:1.1}
 .hands.pick{margin:12px 0}.hand.sel{border-color:var(--win);background:rgba(52,245,160,.12);box-shadow:0 0 16px rgba(52,245,160,.45)}
 .rec{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.rec.me{background:rgba(168,85,247,.08)}
+
+.tabs button:nth-child(3).on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button:nth-child(3){border-color:#ffb80055}
+.tabs button:nth-child(4).on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button:nth-child(4){border-color:#34f5a055}
+.tabs.mode button:nth-child(n){border-color:var(--line)}.tabs.mode button.on{border-color:transparent}
 </style>
 </head>
 <body>
@@ -128,6 +132,7 @@ const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toas
 function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; LS.del('token'); render(); }
 
 let chatMsgs = [], lastChatId = 0;
+let chatBet = null;
 let rps = { rooms: [], recent: [] }, listMode = 'bets', createMode = 'bet', createHand = null;
 
 // 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
@@ -156,9 +161,9 @@ async function refresh() {
 function render() {
   renderHeader();
   $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','내기'],['new','만들기'],['chat','💬 채팅'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    <div class="tabs">${[['bets','도박'],['new','만들기'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
+    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : bets.map(betView).join('') || '<p class="mute">아직 도박이 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
@@ -185,8 +190,12 @@ const rename = guard(async () => {
 
 /* ---------- 채팅 ---------- */
 const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const openChat = (betId) => { chatBet = betId; chatMsgs = []; lastChatId = 0; tab = 'chat'; render(); window.scrollTo(0, 0); };
 function chatView() {
-  return `<div class="card"><h2>💬 전체 채팅</h2><div id="chatbox"></div>
+  const b = bets.find((x) => x.id === chatBet);
+  if (!b) return `<div class="card"><p class="mute">이 도박을 찾을 수 없어요.</p><button onclick="go('bets')">← 목록으로</button></div>`;
+  return `<div class="card"><div class="row"><button onclick="go('bets')">← 목록</button><span class="mute">${statusText(b)} · 총 ${b.total}점</span></div>
+  <h2 style="margin-top:8px">💬 ${esc(b.title)}</h2><div class="mute">이 도박을 보고 있는 사람들끼리 이야기해요.</div><div id="chatbox"></div>
   <div class="betrow"><input id="ci" maxlength="200" placeholder="메시지 입력…" autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()"><button class="pri" onclick="sendChat()">전송</button></div></div>`;
 }
 function renderChat() {
@@ -196,9 +205,11 @@ function renderChat() {
   if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
 }
 async function pollChat() {
-  if (!token || tab !== 'chat') return;
+  if (!token || tab !== 'chat' || !chatBet) return;
+  const bid = chatBet;
   try {
-    const rows = await api('GET', '/api/chat?after=' + lastChatId);
+    const rows = await api('GET', '/api/chat?bet=' + bid + '&after=' + lastChatId);
+    if (bid !== chatBet) return;   // 응답이 오는 사이 다른 방으로 옮겼으면 버림
     if (!lastChatId) chatMsgs = []; // 처음 불러올 때는 최근 기록으로 교체
     if (rows.length) { chatMsgs = chatMsgs.concat(rows).slice(-150); lastChatId = rows[rows.length - 1].id; renderChat(); }
     else if (!chatMsgs.length) renderChat();
@@ -207,7 +218,7 @@ async function pollChat() {
 const sendChat = guard(async () => {
   const i = $('#ci'); const text = i.value.trim(); if (!text) return;
   i.value = '';
-  await api('POST', '/api/chat', { text }); await pollChat();
+  await api('POST', '/api/chat', { bet_id: chatBet, text }); await pollChat();
 });
 setInterval(() => { if (!document.hidden) pollChat(); }, 4000); // 앱스 스크립트는 호출이 느려서 간격을 넉넉히
 
@@ -232,7 +243,8 @@ function betView(b) {
   }
   const mgr = b.mine_created && (b.status === 'open' || b.status === 'closed') ? `<div class="betrow">
     ${open ? `<button onclick="act(${b.id},'close')">지금 마감</button>` : ''}<button onclick="if(confirm('취소하고 전부 환불할까요?'))act(${b.id},'cancel')">취소(환불)</button></div>` : '';
-  return `<div class="card"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}점</div>${opts}${result}${mgr}</div>`;
+  const chat = `<div class="betrow"><button style="flex:1" onclick="openChat(${b.id})">💬 채팅방 들어가기${b.chat_count ? ' (' + b.chat_count + ')' : ''}</button></div>`;
+  return `<div class="card"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}점</div>${opts}${result}${chat}${mgr}</div>`;
 }
 const wager = guard(async (optionId) => {
   const amount = Number($('#a' + optionId).value);
@@ -247,25 +259,25 @@ const act = guard(async (bet_id, action, option_id) => {
 const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100점!'); confetti(); await refresh(); });
 
 function newView() {
-  return `<div class="card"><h2>내기 열기</h2>
+  return `<div class="card"><h2>도박 열기</h2>
   <input id="t" placeholder="예) 오늘 점심 메뉴는?" maxlength="80">
   <div id="os"><input class="o" placeholder="선택지 1"><input class="o" placeholder="선택지 2"></div>
   <button onclick="addOpt()">+ 선택지 추가</button>
   <input id="m" type="number" min="0" placeholder="몇 분 뒤 마감? (비우면 직접 마감)">
-  <p class="mute">내기를 연 사람이 마감 후 정답을 확정해요. 공정하게 부탁해요 🤝</p>
+  <p class="mute">도박을 연 사람이 마감 후 정답을 확정해요. 공정하게 부탁해요 🤝</p>
   <button class="pri" onclick="create()">열기</button></div>`;
 }
 function addOpt() { if (document.querySelectorAll('.o').length < 6) $('#os').insertAdjacentHTML('beforeend', `<input class="o" placeholder="선택지 ${document.querySelectorAll('.o').length + 1}">`); }
 const create = guard(async () => {
   await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
-  tab = 'bets'; toast('내기가 열렸어요!'); confetti(24); await refresh();
+  tab = 'bets'; toast('도박이 열렸어요!'); confetti(24); await refresh();
 });
 /* ---------- 가위바위보 ---------- */
 const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { rock: '바위', paper: '보', scissors: '가위' };
 const setListMode = (m) => { listMode = m; render(); };
 const setCreateMode = (m) => { createMode = m; render(); };
 function modeToggle(mode, fn) {
-  const items = fn === 'setListMode' ? [['bets', '🎲 내기'], ['rps', '✊ 가위바위보']] : [['bet', '🎲 내기 만들기'], ['rps', '✊ 가위바위보 방']];
+  const items = fn === 'setListMode' ? [['bets', '🎲 도박'], ['rps', '✊ 가위바위보']] : [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방']];
   return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');

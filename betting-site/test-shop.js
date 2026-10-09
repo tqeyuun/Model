@@ -22,8 +22,9 @@ server.listen(0, async () => {
     const me = (await call('GET', '/api/me', null, t)).j;
     assert.equal(me.title, '도박꾼'); assert.equal(me.fx, 'glow');
     // 채팅/랭킹에도 꾸밈 반영
-    await call('POST', '/api/chat', { text: 'hi' }, t);
-    assert.equal((await call('GET', '/api/chat', null, t)).j[0].title, '도박꾼');
+    const sb = (await call('POST', '/api/bets', { title: '상점테스트', options: ['a', 'b'] }, t)).j;
+    await call('POST', '/api/chat', { bet_id: sb.id, text: 'hi' }, t);
+    assert.equal((await call('GET', `/api/chat?bet=${sb.id}`, null, t)).j[0].title, '도박꾼');
     assert.equal((await call('GET', '/api/ranking')).j[0].fx, 'glow');
     // 해제/재장착
     await call('POST', '/api/shop/equip', { item_id: null, slot: 'title' }, t);

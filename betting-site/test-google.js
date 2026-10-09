@@ -39,15 +39,28 @@ fake.listen(0, () => {
       assert.equal((await call('GET', '/api/me', null, t2)).j.name, '지은이');
       // 구글 계정은 PIN 로그인 불가
       assert.equal((await call('POST', '/api/login', { name: '민수', pin: '0000' })).s, 401);
-      // 채팅
-      assert.equal((await call('GET', '/api/chat')).s, 401);
-      assert.equal((await call('POST', '/api/chat', { text: '안녕' }, t1)).s, 200);
-      assert.equal((await call('POST', '/api/chat', { text: '연타' }, t1)).s, 429, '도배 방지');
-      assert.equal((await call('POST', '/api/chat', { text: 'x'.repeat(201) }, t2)).s, 400);
-      assert.equal((await call('POST', '/api/chat', { text: '<b>hi</b>' }, t2)).s, 200);
-      const log = (await call('GET', '/api/chat', null, t2)).j;
+      // 채팅 (도박별)
+      const cbet = (await call('POST', '/api/bets', { title: '채팅방', options: ['x', 'y'] }, t1)).j;
+      const cbet2 = (await call('POST', '/api/bets', { title: '다른방', options: ['x', 'y'] }, t1)).j;
+      assert.equal((await call('GET', `/api/chat?bet=${cbet.id}`)).s, 401);
+      assert.equal((await call('GET', '/api/chat?bet=99999', null, t1)).s, 404, '없는 도박');
+      assert.equal((await call('POST', '/api/chat', { bet_id: 99999, text: 'x' }, t1)).s, 404);
+      assert.equal((await call('POST', '/api/chat', { bet_id: cbet.id, text: '안녕' }, t1)).s, 200);
+      assert.equal((await call('POST', '/api/chat', { bet_id: cbet.id, text: '연타' }, t1)).s, 429, '도배 방지');
+      assert.equal((await call('POST', '/api/chat', { bet_id: cbet.id, text: 'x'.repeat(201) }, t2)).s, 400);
+      assert.equal((await call('POST', '/api/chat', { bet_id: cbet.id, text: '<b>hi</b>' }, t2)).s, 200);
+      const log = (await call('GET', `/api/chat?bet=${cbet.id}`, null, t2)).j;
       assert.deepEqual(log.map((m) => [m.name, m.mine]), [['민수', false], ['지은이', true]]);
-      assert.equal((await call('GET', `/api/chat?after=${log[0].id}`, null, t1)).j.length, 1);
+      assert.equal((await call('GET', `/api/chat?bet=${cbet.id}&after=${log[0].id}`, null, t1)).j.length, 1);
+      // 방 분리: 다른 도박에서는 안 보임, 채팅 수는 도박 카드에 표시
+      assert.deepEqual((await call('GET', `/api/chat?bet=${cbet2.id}`, null, t1)).j, []);
+      await new Promise((r) => setTimeout(r, 900));
+      assert.equal((await call('POST', '/api/chat', { bet_id: cbet2.id, text: '여긴 다른 방' }, t1)).s, 200);
+      assert.deepEqual((await call('GET', `/api/chat?bet=${cbet2.id}`, null, t2)).j.map((m) => m.text), ['여긴 다른 방']);
+      assert.equal((await call('GET', `/api/chat?bet=${cbet.id}`, null, t2)).j.length, 2);
+      const list = (await call('GET', '/api/bets', null, t1)).j;
+      assert.equal(list.find((b) => b.id === cbet.id).chat_count, 2);
+      assert.equal(list.find((b) => b.id === cbet2.id).chat_count, 1);
       console.log('구글/닉네임/채팅 테스트 통과');
     } catch (e) { console.error(e); process.exitCode = 1; }
     server.close(); fake.close();

@@ -17,7 +17,13 @@ const signup = (n) => ok(call('', 'POST', '/api/signup', { name: n, pin: '1234' 
 const state = (t) => ok(call(t, 'GET', '/api/state'));
 const pts = (t) => state(t).me.points;
 
+// 업그레이드: 예전 버전의 messages 시트(열 4개, bet_id 없음)가 이미 있어도 동작해야 함
+const oldSheet = sb.SpreadsheetApp.getActiveSpreadsheet().insertSheet('messages');
+oldSheet.appendRow(['id', 'user_id', 'text', 'created_at']);
+oldSheet.appendRow([1, 1, '\u200B옛 전체채팅', 1]);
 const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(signup);
+const chatBetId = ok(call(a, 'POST', '/api/bets', { title: '채팅방', options: ['가', '나'] })).id;
+const chatBet2Id = ok(call(a, 'POST', '/api/bets', { title: '다른방', options: ['가', '나'] })).id;
 err(call('', 'POST', '/api/signup', { name: 'a', pin: '1234' }), 409);
 err(call('', 'POST', '/api/login', { name: 'a', pin: '0000' }), 401);
 assert.ok(ok(call('', 'POST', '/api/login', { name: 'a', pin: '1234' })).token);
@@ -27,8 +33,8 @@ assert.equal(state(a).me.points, 1000);
 // 시트에 글자가 숫자/수식으로 오인되지 않는지: 이름이 "123", 채팅이 "=1+1" 이어도 그대로
 const t123 = signup('123');
 assert.equal(state(t123).me.name, '123');
-ok(call(t123, 'POST', '/api/chat', { text: '=1+1' }));
-assert.equal(ok(call(t123, 'GET', '/api/chat'))[0].text, '=1+1');
+ok(call(t123, 'POST', '/api/chat', { bet_id: chatBetId, text: '=1+1' }));
+assert.equal(ok(call(t123, 'GET', `/api/chat?bet=${chatBetId}`))[0].text, '=1+1');
 
 // 역배: 1명 100 vs 3명 100씩 → 비중 25% < 30% → 보너스 20%
 const bet = ok(call(a, 'POST', '/api/bets', { title: '테스트', options: ['X', 'Y'] }));
@@ -87,13 +93,26 @@ ok(call(b, 'POST', '/api/nickname', { name: '비비' }));
 assert.equal(state(b).me.name, '비비');
 
 // 채팅
-err(call('', 'GET', '/api/chat'), 401);
-ok(call(a, 'POST', '/api/chat', { text: '안녕' }));
-err(call(a, 'POST', '/api/chat', { text: '연타' }), 429);
-err(call(b, 'POST', '/api/chat', { text: 'x'.repeat(201) }), 400);
-const log = ok(call(b, 'GET', '/api/chat'));
+err(call('', 'GET', `/api/chat?bet=${chatBetId}`), 401);
+err(call(b, 'GET', '/api/chat?bet=99999'), 404);
+err(call(b, 'POST', '/api/chat', { bet_id: 99999, text: 'x' }), 404);
+ok(call(a, 'POST', '/api/chat', { bet_id: chatBetId, text: '안녕' }));
+err(call(a, 'POST', '/api/chat', { bet_id: chatBetId, text: '연타' }), 429);
+err(call(b, 'POST', '/api/chat', { bet_id: chatBetId, text: 'x'.repeat(201) }), 400);
+const log = ok(call(b, 'GET', `/api/chat?bet=${chatBetId}`));
 assert.deepEqual(log.map((m) => m.text), ['=1+1', '안녕']);
-assert.equal(ok(call(b, 'GET', `/api/chat?after=${log[0].id}`)).length, 1);
+assert.equal(ok(call(b, 'GET', `/api/chat?bet=${chatBetId}&after=${log[0].id}`)).length, 1);
+
+// 방 분리와 채팅 수
+assert.deepEqual(oldSheet.data[0], ['id', 'user_id', 'text', 'created_at', 'bet_id'], '머리글에 bet_id 열이 보강돼야 함');
+assert.ok(!JSON.stringify(ok(call(b, 'GET', `/api/chat?bet=${chatBetId}`))).includes('옛 전체채팅'), '예전 전체 채팅은 도박방에 안 섞임');
+assert.deepEqual(ok(call(b, 'GET', `/api/chat?bet=${chatBet2Id}`)), []);
+vm.runInContext('Date.now = (function (o) { return function () { return o() + 5000; }; })(Date.now);', sb);   // 도배 방지 시간 건너뛰기
+ok(call(a, 'POST', '/api/chat', { bet_id: chatBet2Id, text: '여긴 다른 방' }));
+assert.deepEqual(ok(call(b, 'GET', `/api/chat?bet=${chatBet2Id}`)).map((m) => m.text), ['여긴 다른 방']);
+const lst = state(a).bets;
+assert.equal(lst.find((x) => x.id === chatBetId).chat_count, 2);
+assert.equal(lst.find((x) => x.id === chatBet2Id).chat_count, 1);
 
 // 상점
 err(call(a, 'POST', '/api/shop/buy', { item_id: 't_legend' }), 400);
@@ -104,7 +123,7 @@ assert.equal(pts(a), pa - 300);
 err(call(a, 'POST', '/api/shop/buy', { item_id: 't_gambler' }), 400);
 assert.equal(state(a).me.title, '도박꾼');
 assert.equal(state(a).ranking.find((r) => r.title === '도박꾼').name, 'a');
-assert.equal(ok(call(a, 'GET', '/api/chat')).find((m) => m.text === '안녕').title, '도박꾼');
+assert.equal(ok(call(a, 'GET', `/api/chat?bet=${chatBetId}`)).find((m) => m.text === '안녕').title, '도박꾼');
 ok(call(a, 'POST', '/api/shop/equip', { item_id: null, slot: 'title' }));
 assert.equal(state(a).me.title, null);
 ok(call(a, 'POST', '/api/shop/equip', { item_id: 't_gambler' }));

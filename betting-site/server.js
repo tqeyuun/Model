@@ -1,4 +1,4 @@
-// 친구들끼리 쓰는 포인트 내기 사이트. 외부 패키지 없음 (Node 22+).
+// 친구들끼리 쓰는 포인트 도박 사이트. 외부 패키지 없음 (Node 22+).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS wagers (
   amount INTEGER NOT NULL, payout INTEGER, created_at INTEGER NOT NULL);
 `);
 
+try { db.exec('ALTER TABLE messages ADD COLUMN bet_id INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
 for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
 db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
@@ -96,7 +97,7 @@ function settle(bet, winnerOptionId) {
   const winners = wagers.filter((w) => w.option_id === winnerOptionId);
   const winPool = winners.reduce((s, w) => s + w.amount, 0);
   if (winPool === 0 || winPool === total) {
-    // 아무도 못 맞혔거나 전원이 같은 쪽: 내기 성립 안 됨 → 환불
+    // 아무도 못 맞혔거나 전원이 같은 쪽: 도박 성립 안 됨 → 환불
     for (const w of wagers) refund(w);
     return { refunded: true, total, underdog: false };
   }
@@ -119,7 +120,7 @@ function refund(w) {
   run('UPDATE users SET points=points+? WHERE id=?', w.amount, w.user_id);
 }
 
-// 마감 시간이 지난 open 내기는 closed 로 전환
+// 마감 시간이 지난 open 도박은 closed 로 전환
 function sweep() { run("UPDATE bets SET status='closed' WHERE status='open' AND closes_at IS NOT NULL AND closes_at<=?", now()); }
 
 // ---------- 가위바위보 ----------
@@ -174,6 +175,7 @@ function betView(b, me) {
     my_payout: mine.length && (b.status === 'resolved' || b.status === 'cancelled') ? mine.reduce((s, m) => s + (m.payout || 0), 0) : null,
     my_total: mine.reduce((s, m) => s + m.amount, 0),
     my_lucky: mine.some((m) => m.lucky),
+    chat_count: q1('SELECT COUNT(*) n FROM messages WHERE bet_id=?', b.id).n,
   };
 }
 const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, ...deco(u) };
@@ -199,7 +201,7 @@ function throttle(key) {
 }
 
 function betAction(bet, body) {
-  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 내기예요.');
+  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 도박이에요.');
   if (body.action === 'close') { run("UPDATE bets SET status='closed' WHERE id=?", bet.id); return { ok: true }; }
   if (body.action === 'cancel') {
     for (const w of q('SELECT * FROM wagers WHERE bet_id=?', bet.id)) refund(w);
@@ -296,22 +298,28 @@ const routes = {
     run('UPDATE users SET name=? WHERE id=?', name, u.id);
     return { ok: true };
   },
+  // 채팅은 도박마다 따로: 목록에서 도박에 들어가서 그 안에서만 이야기해요
   'GET /api/chat': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
-    const after = Number(new URL(req.url, 'http://x').searchParams.get('after')) || 0;
+    const sp = new URL(req.url, 'http://x').searchParams;
+    const betId = Number(sp.get('bet')) || 0, after = Number(sp.get('after')) || 0;
+    if (!q1('SELECT 1 FROM bets WHERE id=?', betId)) fail(404, '도박이 없어요.');
+    const cols = 'm.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge';
     const rows = after
-      ? q('SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id>? ORDER BY m.id LIMIT 100', after)
-      : q('SELECT * FROM (SELECT m.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 60) ORDER BY id');
+      ? q(`SELECT ${cols} FROM messages m JOIN users u ON u.id=m.user_id WHERE m.bet_id=? AND m.id>? ORDER BY m.id LIMIT 100`, betId, after)
+      : q(`SELECT * FROM (SELECT ${cols} FROM messages m JOIN users u ON u.id=m.user_id WHERE m.bet_id=? ORDER BY m.id DESC LIMIT 60) ORDER BY id`, betId);
     return rows.map((r) => ({ id: r.id, text: r.text, name: r.name, at: r.created_at, mine: r.user_id === u.id, ...deco(r) }));
   },
   'POST /api/chat': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
+    const betId = Number(body.bet_id) || 0;
+    if (!q1('SELECT 1 FROM bets WHERE id=?', betId)) fail(404, '도박이 없어요.');
     const text = String(body.text || '').trim();
     if (!text || text.length > 200) fail(400, '메시지는 1~200자예요.');
     const last = q1('SELECT created_at FROM messages WHERE user_id=? ORDER BY id DESC LIMIT 1', u.id);
     if (last && now() - last.created_at < 800) fail(429, '너무 빨라요! 잠깐만요.');
-    run('INSERT INTO messages(user_id,text,created_at) VALUES (?,?,?)', u.id, text, now());
-    run('DELETE FROM messages WHERE id < (SELECT MAX(id) FROM messages) - 1000');
+    run('INSERT INTO messages(user_id,bet_id,text,created_at) VALUES (?,?,?,?)', u.id, betId, text, now());
+    run('DELETE FROM messages WHERE id < (SELECT MAX(id) FROM messages) - 2000');
     return { ok: true };
   },
   'GET /api/rps': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return rpsView(u); },
@@ -418,12 +426,12 @@ const routes = {
       sweep();
       const opt = q1('SELECT * FROM options WHERE id=?', Number(body.option_id)) || fail(404, '선택지가 없어요.');
       const bet = q1('SELECT * FROM bets WHERE id=?', opt.bet_id);
-      if (bet.status !== 'open') fail(400, '이미 마감된 내기예요.');
+      if (bet.status !== 'open') fail(400, '이미 마감된 도박이에요.');
       const fresh = q1('SELECT points FROM users WHERE id=?', u.id);
       if (fresh.points < amount) fail(400, '포인트가 부족해요.');
-      // 한 내기에서 두 선택지에 동시에 걸어 헷지하는 건 막음
+      // 한 도박에서 두 선택지에 동시에 걸어 헷지하는 건 막음
       const other = q1('SELECT 1 FROM wagers WHERE bet_id=? AND user_id=? AND option_id<>?', bet.id, u.id, opt.id);
-      if (other) fail(400, '이 내기에는 이미 다른 선택지에 걸었어요.');
+      if (other) fail(400, '이 도박에는 이미 다른 선택지에 걸었어요.');
       run('UPDATE users SET points=points-? WHERE id=?', amount, u.id);
       run('INSERT INTO wagers(bet_id,option_id,user_id,amount,created_at) VALUES (?,?,?,?,?)', bet.id, opt.id, u.id, amount, now());
       return { ok: true };
@@ -433,8 +441,8 @@ const routes = {
   'POST /api/bets/action': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
     return tx(() => {
-      const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '내기가 없어요.');
-      if (bet.creator_id !== u.id) fail(403, '내기를 연 사람만 할 수 있어요.');
+      const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '도박이 없어요.');
+      if (bet.creator_id !== u.id) fail(403, '도박을 연 사람만 할 수 있어요.');
       return betAction(bet, body);
     });
   },
@@ -453,7 +461,7 @@ const routes = {
     const users = q('SELECT id,name,points,created_at FROM users ORDER BY points DESC');
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
-    const messages = q('SELECT m.id, m.text, m.created_at, u.name FROM messages m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 40');
+    const messages = q('SELECT m.id, m.text, m.created_at, u.name, b.title bet_title FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN bets b ON b.id=m.bet_id ORDER BY m.id DESC LIMIT 40');
     return { users, bets, messages, stats: { users: users.length, points: users.reduce((x, y) => x + y.points, 0), wagers: wagers.n, wagered: wagers.s, lucky: wagers.l } };
   },
   'POST /api/admin/user': (req, body) => {
@@ -477,7 +485,7 @@ const routes = {
         run('UPDATE users SET salt=?, hash=? WHERE id=?', salt, hashPin(pin, salt), u.id);
         run('DELETE FROM sessions WHERE user_id=?', u.id);
       } else if (body.action === 'delete') {
-        if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
+        if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
         run("UPDATE rps SET status='cancelled' WHERE host_id=? AND status='waiting'", u.id);
         run('DELETE FROM sessions WHERE user_id=?', u.id);
         run('DELETE FROM messages WHERE user_id=?', u.id);
@@ -490,10 +498,10 @@ const routes = {
   'POST /api/admin/bet': (req, body) => {
     adminOnly(req);
     return tx(() => {
-      const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '내기가 없어요.');
+      const bet = q1('SELECT * FROM bets WHERE id=?', Number(body.bet_id)) || fail(404, '도박이 없어요.');
       if (body.action === 'delete') {
         if (bet.status === 'open' || bet.status === 'closed') for (const w of q('SELECT * FROM wagers WHERE bet_id=?', bet.id)) refund(w);
-        run('DELETE FROM wagers WHERE bet_id=?', bet.id); run('DELETE FROM options WHERE bet_id=?', bet.id); run('DELETE FROM bets WHERE id=?', bet.id);
+        run('DELETE FROM wagers WHERE bet_id=?', bet.id); run('DELETE FROM messages WHERE bet_id=?', bet.id); run('DELETE FROM options WHERE bet_id=?', bet.id); run('DELETE FROM bets WHERE id=?', bet.id);
         return { ok: true };
       }
       return betAction(bet, body);
