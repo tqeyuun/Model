@@ -272,6 +272,17 @@ var ROUTES = {
     CacheService.getScriptCache().remove('login|' + name);
     return { token: newSession(u.id) };
   },
+  // 닉네임이 있으면 로그인, 없으면 (확인 후) 가입 — 버튼 하나로 처리
+  'POST /api/enter': function (body, u, ctx) {
+    var name = String(body.name || '').trim();
+    if (tbl('users').find(function (x) { return x.name === name; })) return ROUTES['POST /api/login'](body, u, ctx);
+    if (!body.create) {
+      checkName(name);
+      if (!/^\d{4}$/.test(String(body.pin || ''))) fail(400, 'PIN은 숫자 4자리예요.');
+      return { new_user: true };
+    }
+    return ROUTES['POST /api/signup'](body, u, ctx);
+  },
   'POST /api/nickname': function (body, u) {
     needLogin(u); var name = checkName(body.name);
     var other = tbl('users').find(function (x) { return x.name === name; });

@@ -223,6 +223,17 @@ const routes = {
     if (!u || !u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
     return { token: newSession(u.id) };
   },
+  // 닉네임이 있으면 로그인, 없으면 (확인 후) 가입 — 버튼 하나로 처리
+  'POST /api/enter': (req, body) => {
+    const name = String(body.name || '').trim();
+    if (q1('SELECT 1 FROM users WHERE name=?', name)) return routes['POST /api/login'](req, body);
+    if (!body.create) {
+      checkName(name);
+      if (!/^\d{4}$/.test(String(body.pin || ''))) fail(400, 'PIN은 숫자 4자리예요.');
+      return { new_user: true };
+    }
+    return routes['POST /api/signup'](req, body);
+  },
   'GET /api/config': () => ({ google_client_id: GOOGLE_CLIENT_ID || null }),
   'POST /api/google': async (req, body) => {
     throttle('google|' + req.socket.remoteAddress);

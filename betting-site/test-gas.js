@@ -143,6 +143,16 @@ ok(call('', 'POST', '/api/admin/chat', { id: msg.id }, K));
 ok(call('', 'POST', '/api/admin/user', { user_id: ov.users.find((u) => u.name === '123').id, action: 'delete' }, K));
 assert.equal(ok(call('', 'GET', '/api/admin/overview', {}, K)).users.length, 4);
 
+// 하나로 합친 시작하기: 있으면 로그인, 없으면 확인 후 가입
+assert.equal(ok(call('', 'POST', '/api/enter', { name: '신입', pin: '4321' })).new_user, true);
+err(call('', 'POST', '/api/login', { name: '신입', pin: '4321' }), 401);             // 아직 가입 안 됨
+const nt = ok(call('', 'POST', '/api/enter', { name: '신입', pin: '4321', create: true })).token;
+assert.equal(state(nt).me.points, 1000);
+assert.ok(ok(call('', 'POST', '/api/enter', { name: '신입', pin: '4321' })).token);   // 이제는 로그인
+err(call('', 'POST', '/api/enter', { name: '신입', pin: '0000' }), 401);              // PIN 틀림
+err(call('', 'POST', '/api/enter', { name: '새로운', pin: '12' }), 400);              // PIN 형식
+err(call('', 'POST', '/api/enter', { name: '', pin: '1234' }), 400);                  // 빈 닉네임
+
 // 관리자 링크 생성 + 페이지 서빙
 vm.runInContext('showAdminLink()', sb);
 assert.ok(sheets['관리자'].data[1][0].includes('?admin=' + K));

@@ -43,9 +43,9 @@ s = rep(s, "[user, bets, ranking] = await Promise.all([api('GET', '/api/me'), ap
            "({ me: user, bets, ranking } = await api('GET', '/api/state'));");
 s = rep(s, "  if (!token) initGoogle();\n", "");
 s = cut(s, "function authView() {", "const auth = guard(", `function authView() {
-  return \`<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음이면 닉네임과 PIN을 정하고 '가입'을 누르세요. 가입하면 1000점 지급! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
-  <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password">
-  <div class="betrow"><button class="pri" style="flex:1" onclick="auth('login')">로그인</button><button style="flex:1" onclick="auth('signup')">가입</button></div></div>\`;
+  return \`<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음 쓰는 닉네임이면 새 계정이 만들어지고 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password" onkeydown="if(event.key==='Enter')auth()">
+  <div class="betrow"><button class="pri" style="flex:1" onclick="auth()">시작하기</button></div></div>\`;
 }
 `);
 s = cut(s, "function initGoogle() {", "const rename = guard(", "");
