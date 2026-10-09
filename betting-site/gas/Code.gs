@@ -8,7 +8,7 @@ var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', sci
 var CFG = { SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열려요 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
-  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge'],
+  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp'],
   sessions: ['token', 'user_id', 'created_at'],
   bets: ['id', 'title', 'creator_id', 'status', 'winner', 'closes_at', 'created_at'],
   options: ['id', 'bet_id', 'label'],
@@ -102,6 +102,12 @@ function hashPin(pin, salt) {
   var d = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret('PEPPER') + salt + pin);
   return Utilities.base64Encode(d);
 }
+/** PIN이 같은 사람끼리만 같은 '방'. 방 번호(grp)는 PIN에서 만든 값이고, 도박·가위바위보·채팅·랭킹은 같은 방끼리만 보여요. */
+function groupKey(pin) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret('PEPPER') + 'grp:' + pin)).slice(0, 16);
+}
+function grpOf(u) { return u && u.grp ? String(u.grp) : ''; }
+function sameRoom(userId, me) { var o = userById(userId); return !!o && grpOf(o) === grpOf(me); }
 function throttle(key, limit) {
   var c = CacheService.getScriptCache(), n = Number(c.get(key) || 0);
   if (n >= limit) fail(429, '시도가 너무 많아요. 5분 뒤 다시 해주세요.');
@@ -156,7 +162,8 @@ function deco(r) {
   return { title: v('eq_title'), color: v('eq_color'), fx: v('eq_fx'), badge: v('eq_badge') };
 }
 function meView(u) {
-  var o = { id: u.id, name: u.name, points: u.points, can_aid: u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5 };
+  var o = { id: u.id, name: u.name, points: u.points, can_aid: u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u); }).length };
   var d = deco(u); for (var k in d) o[k] = d[k];
   return o;
 }
@@ -240,9 +247,9 @@ function betAction(bet, body) {
 function needLogin(u) { if (!u) fail(401, '로그인이 필요해요.'); return u; }
 function betById(id) { return tbl('bets').find(function (b) { return b.id === Number(id); }) || fail(404, '도박이 없어요.'); }
 
-function rankingView() {
+function rankingView(me) {
   var wagers = tbl('wagers').all(), bets = {}; tbl('bets').all().forEach(function (b) { bets[b.id] = b.status; });
-  return tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
+  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(me); }).sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
     var mine = wagers.filter(function (w) { return w.user_id === u.id && bets[w.bet_id] === 'resolved'; });
     var o = { name: u.name, points: u.points, wins: mine.filter(function (w) { return w.payout > 0; }).length, losses: mine.filter(function (w) { return w.payout === 0; }).length };
     var d = deco(u); for (var k in d) o[k] = d[k];
@@ -250,7 +257,7 @@ function rankingView() {
   });
 }
 function betsList(u) {
-  var bets = tbl('bets').all().slice().sort(function (a, b) {
+  var bets = tbl('bets').all().filter(function (b) { return sameRoom(b.creator_id, u); }).sort(function (a, b) {
     var ao = a.status === 'open' || a.status === 'closed' ? 1 : 0, bo = b.status === 'open' || b.status === 'closed' ? 1 : 0;
     return bo - ao || b.id - a.id;
   }).slice(0, 100);
@@ -285,11 +292,11 @@ function rpsNet(r, myId) {
 function rpsView(u) {
   rpsSweep();
   var all = tbl('rps').all();
-  var rooms = all.filter(function (r) { return r.status === 'waiting'; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
     return { id: r.id, stake: r.stake, created_at: r.created_at, host: rpsPlayer(r.host_id), mine: r.host_id === u.id,
       my_hand: r.host_id === u.id ? r.host_hand : null }; // 방장의 손은 본인에게만 보임
   });
-  var recent = all.filter(function (r) { return r.status === 'done'; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 15).map(function (r) {
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 15).map(function (r) {
     return { id: r.id, stake: r.stake, host: rpsPlayer(r.host_id), guest: rpsPlayer(r.guest_id), host_hand: r.host_hand, guest_hand: r.guest_hand,
       result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id) };
   });
@@ -298,14 +305,14 @@ function rpsView(u) {
 
 /* ================= API 경로 ================= */
 var ROUTES = {
-  'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView() : [], rps: u ? rpsView(u) : null }; },
+  'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView(u) : [], rps: u ? rpsView(u) : null }; },
 
   'POST /api/signup': function (body, u, ctx) {
     var name = checkName(body.name), pin = String(body.pin || '');
     if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
     if (tbl('users').find(function (x) { return x.name === name; })) fail(409, '이미 있는 닉네임이에요.');
     var salt = Utilities.getUuid().slice(0, 8);
-    var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now() });
+    var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: groupKey(pin) });
     return { token: newSession(nu.id) };
   },
   'POST /api/login': function (body) {
@@ -313,6 +320,7 @@ var ROUTES = {
     throttle('login|' + name, 10);
     var u = tbl('users').find(function (x) { return x.name === name; });
     if (!u || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
+    if (!u.grp) { u.grp = groupKey(pin); tbl('users').save(u); }   // 예전 계정은 처음 로그인할 때 방이 정해짐
     CacheService.getScriptCache().remove('login|' + name);
     return { token: newSession(u.id) };
   },
@@ -353,6 +361,7 @@ var ROUTES = {
     var oid = Number(body.option_id);
     var opt = tbl('options').find(function (o) { return o.id === oid; }) || fail(404, '선택지가 없어요.');
     var bet = betById(opt.bet_id);
+    if (!sameRoom(bet.creator_id, u)) fail(404, '도박이 없어요.');
     if (bet.status !== 'open') fail(400, '이미 마감된 도박이에요.');
     if (u.points < amount) fail(400, '포인트가 부족해요.');
     if (tbl('wagers').find(function (w) { return w.bet_id === bet.id && w.user_id === u.id && w.option_id !== opt.id; })) fail(400, '이 도박에는 이미 다른 선택지에 걸었어요.');
@@ -376,7 +385,7 @@ var ROUTES = {
   'GET /api/chat': function (body, u, ctx) {
     needLogin(u);
     var betId = Number(ctx.qs.bet) || 0, after = Number(ctx.qs.after) || 0, names = {};
-    betById(betId);
+    if (!sameRoom(betById(betId).creator_id, u)) fail(404, '도박이 없어요.');
     tbl('users').all().forEach(function (x) { names[x.id] = x; });
     var rows = tbl('messages').all().filter(function (m) { return m.bet_id === betId && m.id > after && names[m.user_id]; });
     rows = after ? rows.slice(0, 100) : rows.slice(-60);
@@ -389,6 +398,7 @@ var ROUTES = {
   'POST /api/chat': function (body, u) {
     needLogin(u);
     var bet = betById(body.bet_id);
+    if (!sameRoom(bet.creator_id, u)) fail(404, '도박이 없어요.');
     var text = String(body.text || '').trim();
     if (!text || text.length > 200) fail(400, '메시지는 1~200자예요.');
     var last = tbl('messages').all().filter(function (m) { return m.user_id === u.id; }).pop();
@@ -417,6 +427,7 @@ var ROUTES = {
     if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주세요.');
     var rid = Number(body.room_id);
     var r = tbl('rps').find(function (x) { return x.id === rid; }) || fail(404, '방이 없어요.');
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없어요.');   // 다른 PIN 방의 가위바위보에는 못 들어옴
     if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
     if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없어요.');
     if (u.points < r.stake) fail(400, '포인트가 부족해요.');
@@ -471,7 +482,7 @@ var ROUTES = {
   /* ---- 관리자 ---- */
   'GET /api/admin/overview': function (body, u, ctx) {
     adminOnly(ctx); sweep();
-    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at }; });
+    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, grp: x.grp ? String(x.grp).slice(0, 4) : null }; });
     var wag = tbl('wagers').all(), names = {}; tbl('users').all().forEach(function (x) { names[x.id] = x.name; });
     var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
     var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
@@ -496,7 +507,7 @@ var ROUTES = {
     } else if (body.action === 'reset_pin') {
       var pin = String(body.value || '');
       if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
-      var salt = Utilities.getUuid().slice(0, 8); t.salt = salt; t.hash = hashPin(pin, salt); tbl('users').save(t);
+      var salt = Utilities.getUuid().slice(0, 8); t.salt = salt; t.hash = hashPin(pin, salt); t.grp = groupKey(pin); tbl('users').save(t);   // PIN이 바뀌면 방도 바뀜
       var keys = tbl('sessions').where(function (s) { return s.user_id === t.id; }).map(function (s) { return 's_' + s.token; });
       if (keys.length) CacheService.getScriptCache().removeAll(keys);
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });

@@ -78,7 +78,7 @@ function render() {
     <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}</b></div>
     <div class="stat">🍀 럭키 당첨<b>${st.lucky}</b></div></div>
   <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="점수"> <button class="pri" onclick="gift()">모두에게 주기</button></div>
-  <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${u.points.toLocaleString()}점</td><td><div class="acts">
+  <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b> ${u.grp ? `<span class="tag" title="같은 PIN 방 번호">방 ${esc(u.grp)}</span>` : '<span class="tag">방 없음</span>'}</td><td>${u.points.toLocaleString()}점</td><td><div class="acts">
     <button onclick="askPoints(${u.id},'add_points')">± 더하기</button><button onclick="askPoints(${u.id},'set_points')">= 설정</button>
     <button onclick="askName(${u.id})">닉네임</button><button onclick="askPin(${u.id})">PIN 초기화</button><button class="danger" onclick="userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>
   <div class="card"><h2>💬 최근 채팅</h2>${data.messages.map((m) => `<div class="mute"><b style="color:var(--cyan)">${esc(m.name)}</b>${m.bet_title ? ` <span class="tag">${esc(m.bet_title)}</span>` : ''}: ${esc(m.text)} <button class="danger" style="padding:0 6px" onclick="delMsg(${m.id})">삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>

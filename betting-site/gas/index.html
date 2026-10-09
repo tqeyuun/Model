@@ -144,7 +144,7 @@ function nm(o, force = {}) {
   return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
 }
 function renderHeader() {
-  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}점</span> <span class="mute" title="같은 PIN으로 들어온 사람 수">👥${user.group_size || 1}</span> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
 async function refresh() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
@@ -170,7 +170,7 @@ function render() {
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
 
 function authView() {
-  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음 쓰는 닉네임이면 새 계정이 만들어지고 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  return `<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음 쓰는 닉네임이면 새 계정이 만들어지고 1000점이 지급돼요! <b>PIN이 같은 사람들끼리만</b> 같은 방에서 도박·가위바위보·채팅을 해요. 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>
   <input id="n" placeholder="닉네임" maxlength="12"><input id="p" placeholder="PIN 4자리" inputmode="numeric" maxlength="4" type="password" onkeydown="if(event.key==='Enter')auth()">
   <div class="betrow"><button class="pri" style="flex:1" onclick="auth()">시작하기</button></div></div>`;
 }
@@ -178,7 +178,7 @@ const auth = guard(async () => {
   const body = { name: $('#n').value, pin: $('#p').value };
   let r = await api('POST', '/api/enter', body);
   if (r.new_user) {   // 없는 닉네임이면 새 계정 — 오타일 수 있어서 한 번 확인
-    if (!confirm(`'${body.name.trim()}' 닉네임으로 새 계정을 만들까요? (1000점 지급)\n이미 계정이 있다면 닉네임 오타일 수 있어요.`)) return;
+    if (!confirm(`'${body.name.trim()}' 닉네임으로 새로 시작할까요? (1000점 지급)\n\nPIN이 같은 사람들끼리만 같은 방에서 해요. 이 PIN으로 처음 들어오는 게 맞나요?\n(이미 계정이 있다면 닉네임이나 PIN을 잘못 입력한 걸 수 있어요.)`)) return;
     r = await api('POST', '/api/enter', { ...body, create: true });
   }
   token = r.token; LS.set('token', token); render(); await refresh();

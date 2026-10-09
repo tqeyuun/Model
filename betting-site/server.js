@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS wagers (
 
 try { db.exec('ALTER TABLE messages ADD COLUMN bet_id INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
+try { db.exec('ALTER TABLE users ADD COLUMN grp TEXT'); } catch { /* 이미 있음 */ }
 for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
 db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_google ON users(google_sub)');
@@ -141,11 +142,11 @@ const rpsNet = (r, myId) => {
 };
 function rpsView(u) {
   rpsSweep();
-  const rooms = q("SELECT * FROM rps WHERE status='waiting' ORDER BY id DESC LIMIT 30").map((r) => ({
+  const rooms = q("SELECT r.* FROM rps r JOIN users h ON h.id=r.host_id WHERE r.status='waiting' AND h.grp IS ? ORDER BY r.id DESC LIMIT 30", grpOf(u)).map((r) => ({
     id: r.id, stake: r.stake, created_at: r.created_at, host: rpsPlayer(r.host_id), mine: r.host_id === u.id,
     my_hand: r.host_id === u.id ? r.host_hand : null,   // 방장의 손은 본인에게만 보임
   }));
-  const recent = q("SELECT * FROM rps WHERE status='done' ORDER BY id DESC LIMIT 15").map((r) => ({
+  const recent = q("SELECT r.* FROM rps r JOIN users h ON h.id=r.host_id WHERE r.status='done' AND h.grp IS ? ORDER BY r.id DESC LIMIT 15", grpOf(u)).map((r) => ({
     id: r.id, stake: r.stake, host: rpsPlayer(r.host_id), guest: rpsPlayer(r.guest_id), host_hand: r.host_hand, guest_hand: r.guest_hand,
     result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id),
   }));
@@ -179,10 +180,22 @@ function betView(b, me) {
     chat_count: q1('SELECT COUNT(*) n FROM messages WHERE bet_id=?', b.id).n,
   };
 }
-const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, ...deco(u) };
+const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ?', grpOf(u)).n, ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
+// PIN이 같은 사람끼리만 같은 '방'. 방 번호(grp)는 PIN에서 만든 값이고, 도박·가위바위보·채팅·랭킹은 같은 방끼리만 보여요.
+function pepper() {
+  let r = q1("SELECT v FROM settings WHERE k='pepper'");
+  if (!r) { run("INSERT INTO settings VALUES ('pepper', ?)", crypto.randomBytes(16).toString('hex')); r = q1("SELECT v FROM settings WHERE k='pepper'"); }
+  return r.v;
+}
+const groupKey = (pin) => crypto.createHash('sha256').update('grp:' + pepper() + pin).digest('hex').slice(0, 16);
+const grpOf = (u) => (u && u.grp) || null;
+// 같은 방의 도박만 볼 수 있음 (도박을 연 사람의 방 기준). 아니면 null.
+function visibleBet(betId, u) {
+  return q1('SELECT b.* FROM bets b JOIN users c ON c.id=b.creator_id WHERE b.id=? AND c.grp IS ?', Number(betId), grpOf(u));
+}
 function newSession(userId) {
   const token = crypto.randomBytes(24).toString('hex');
   run('INSERT INTO sessions VALUES (?,?,?)', token, userId, now());
@@ -251,7 +264,7 @@ const routes = {
     if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
     if (q1('SELECT 1 FROM users WHERE name=?', name)) fail(409, '이미 있는 닉네임이에요.');
     const salt = crypto.randomBytes(8).toString('hex');
-    const r = run('INSERT INTO users(name,salt,hash,points,created_at) VALUES (?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now());
+    const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp) VALUES (?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), groupKey(pin));
     return { token: newSession(Number(r.lastInsertRowid)) };
   },
   'POST /api/login': (req, body) => {
@@ -259,6 +272,7 @@ const routes = {
     throttle(name + '|' + req.socket.remoteAddress);
     const u = q1('SELECT * FROM users WHERE name=?', name);
     if (!u || !u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '닉네임 또는 PIN이 틀렸어요.');
+    if (!u.grp) run('UPDATE users SET grp=? WHERE id=?', groupKey(pin), u.id);   // 예전 계정은 처음 로그인할 때 방이 정해짐
     return { token: newSession(u.id) };
   },
   // 닉네임이 있으면 로그인, 없으면 (확인 후) 가입 — 버튼 하나로 처리
@@ -304,7 +318,7 @@ const routes = {
     if (!u) fail(401, '로그인이 필요해요.');
     const sp = new URL(req.url, 'http://x').searchParams;
     const betId = Number(sp.get('bet')) || 0, after = Number(sp.get('after')) || 0;
-    if (!q1('SELECT 1 FROM bets WHERE id=?', betId)) fail(404, '도박이 없어요.');
+    if (!visibleBet(betId, u)) fail(404, '도박이 없어요.');
     const cols = 'm.id, m.text, m.created_at, m.user_id, u.name, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge';
     const rows = after
       ? q(`SELECT ${cols} FROM messages m JOIN users u ON u.id=m.user_id WHERE m.bet_id=? AND m.id>? ORDER BY m.id LIMIT 100`, betId, after)
@@ -314,7 +328,7 @@ const routes = {
   'POST /api/chat': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
     const betId = Number(body.bet_id) || 0;
-    if (!q1('SELECT 1 FROM bets WHERE id=?', betId)) fail(404, '도박이 없어요.');
+    if (!visibleBet(betId, u)) fail(404, '도박이 없어요.');
     const text = String(body.text || '').trim();
     if (!text || text.length > 200) fail(400, '메시지는 1~200자예요.');
     const last = q1('SELECT created_at FROM messages WHERE user_id=? ORDER BY id DESC LIMIT 1', u.id);
@@ -344,6 +358,8 @@ const routes = {
     if (!RPS_HANDS.includes(hand)) fail(400, '가위·바위·보 중에 골라주세요.');
     return tx(() => {
       const r = q1('SELECT * FROM rps WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      const host = q1('SELECT grp FROM users WHERE id=?', r.host_id);
+      if (!host || (host.grp || null) !== grpOf(u)) fail(404, '방이 없어요.');   // 다른 PIN 방의 가위바위보에는 못 들어옴
       if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
       if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없어요.');
       const f = q1('SELECT points FROM users WHERE id=?', u.id);
@@ -405,7 +421,8 @@ const routes = {
   'GET /api/me': (req, body, u) => me(u || fail(401, '로그인이 필요해요.')),
   'GET /api/bets': (req, body, u) => {
     sweep();
-    return q('SELECT * FROM bets ORDER BY (status IN (\'open\',\'closed\')) DESC, id DESC LIMIT 100').map((b) => betView(b, u));
+    if (!u) return [];
+    return q("SELECT b.* FROM bets b JOIN users c ON c.id=b.creator_id WHERE c.grp IS ? ORDER BY (b.status IN ('open','closed')) DESC, b.id DESC LIMIT 100", grpOf(u)).map((b) => betView(b, u));
   },
   'POST /api/bets': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
@@ -429,7 +446,7 @@ const routes = {
     return tx(() => {
       sweep();
       const opt = q1('SELECT * FROM options WHERE id=?', Number(body.option_id)) || fail(404, '선택지가 없어요.');
-      const bet = q1('SELECT * FROM bets WHERE id=?', opt.bet_id);
+      const bet = visibleBet(opt.bet_id, u) || fail(404, '도박이 없어요.');
       if (bet.status !== 'open') fail(400, '이미 마감된 도박이에요.');
       const fresh = q1('SELECT points FROM users WHERE id=?', u.id);
       if (fresh.points < amount) fail(400, '포인트가 부족해요.');
@@ -462,7 +479,7 @@ const routes = {
   },
   'GET /api/admin/overview': (req) => {
     adminOnly(req); sweep();
-    const users = q('SELECT id,name,points,created_at FROM users ORDER BY points DESC');
+    const users = q('SELECT id,name,points,created_at,substr(grp,1,4) grp FROM users ORDER BY points DESC');
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
     const messages = q('SELECT m.id, m.text, m.created_at, u.name, b.title bet_title FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN bets b ON b.id=m.bet_id ORDER BY m.id DESC LIMIT 40');
@@ -486,7 +503,7 @@ const routes = {
         const pin = String(body.value || '');
         if (!/^\d{4}$/.test(pin)) fail(400, 'PIN은 숫자 4자리예요.');
         const salt = crypto.randomBytes(8).toString('hex');
-        run('UPDATE users SET salt=?, hash=? WHERE id=?', salt, hashPin(pin, salt), u.id);
+        run('UPDATE users SET salt=?, hash=?, grp=? WHERE id=?', salt, hashPin(pin, salt), groupKey(pin), u.id);   // PIN이 바뀌면 방도 바뀜
         run('DELETE FROM sessions WHERE user_id=?', u.id);
       } else if (body.action === 'delete') {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지워요. 그 도박을 먼저 정리해주세요.');
@@ -523,11 +540,11 @@ const routes = {
     run('UPDATE users SET points=points+?', v);
     return { ok: true };
   },
-  'GET /api/ranking': () => q(`
+  'GET /api/ranking': (req, body, u) => !u ? [] : q(`
     SELECT u.name, u.points, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout>0) wins,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout=0) losses
-    FROM users u ORDER BY u.points DESC LIMIT 50`).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
+    FROM users u WHERE u.grp IS ? ORDER BY u.points DESC LIMIT 50`, grpOf(u)).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
@@ -562,4 +579,4 @@ if (require.main === module) server.listen(PORT, () => {
   console.log(`사이트:  http://localhost:${PORT}`);
   console.log(`관리자:  http://localhost:${PORT}/admin#${ADMIN_KEY}   (이 링크는 나만 알고 있기!)`);
 });
-module.exports = { server, ADMIN_KEY, UNDERDOG_BONUS, UNDERDOG_SHARE };
+module.exports = { server, db, ADMIN_KEY, UNDERDOG_BONUS, UNDERDOG_SHARE };

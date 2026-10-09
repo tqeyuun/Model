@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "친구들끼리 사이트 전용 포인트로 즐기는 내기/투표 게임",
-  "scripts": { "start": "node server.js", "test": "node --no-warnings test.js && node --no-warnings test-lucky.js && node --no-warnings test-google.js && node --no-warnings test-shop.js && node --no-warnings test-rps.js && node --no-warnings test-gas.js && node build-gas.js" },
+  "scripts": { "start": "node server.js", "test": "node --no-warnings test.js && node --no-warnings test-lucky.js && node --no-warnings test-google.js && node --no-warnings test-shop.js && node --no-warnings test-rps.js && node --no-warnings test-groups.js && node --no-warnings test-gas.js && node --no-warnings test-gas-groups.js && node build-gas.js" },
   "engines": { "node": ">=22.13" }
 }

@@ -26,7 +26,7 @@ server.listen(0, async () => {
     const sb = (await call('POST', '/api/bets', { title: '상점테스트', options: ['a', 'b'] }, t)).j;
     await call('POST', '/api/chat', { bet_id: sb.id, text: 'hi' }, t);
     assert.equal((await call('GET', `/api/chat?bet=${sb.id}`, null, t)).j[0].title, '도박꾼');
-    assert.equal((await call('GET', '/api/ranking')).j[0].fx, 'glow');
+    assert.equal((await call('GET', '/api/ranking', null, t)).j[0].fx, 'glow');
     // 해제/재장착
     await call('POST', '/api/shop/equip', { item_id: null, slot: 'title' }, t);
     assert.equal((await call('GET', '/api/me', null, t)).j.title, null);
