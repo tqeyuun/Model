@@ -1,0 +1,8 @@
+{
+  "name": "friends-bet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "친구들끼리 사이트 전용 포인트로 즐기는 내기/투표 게임",
+  "scripts": { "start": "node server.js", "test": "node test.js" },
+  "engines": { "node": ">=22.13" }
+}
