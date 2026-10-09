@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>관리자</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
 *{box-sizing:border-box}
-body{margin:0;background:#000;color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif;
+body{margin:0;background:#000;color:var(--ink);font:15px/1.5 'Noto Sans KR',system-ui,-apple-system,'Malgun Gothic',sans-serif;
  background-image:radial-gradient(600px 300px at 90% -5%,rgba(255,45,149,.28),transparent),radial-gradient(500px 300px at 5% 5%,rgba(34,211,238,.18),transparent);background-attachment:fixed}
 main{max-width:860px;margin:0 auto;padding:16px}
 h1{margin:6px 0 12px;font-size:22px;background:linear-gradient(90deg,var(--pink),var(--dog));-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -24,6 +27,10 @@ table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1p
 .acts{display:flex;gap:4px;flex-wrap:wrap}.tag{font-size:11px;padding:1px 8px;border-radius:99px;background:#26243a;color:var(--cyan)}
 .msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--pri),var(--pink));font-weight:700;padding:10px 18px;border-radius:12px;z-index:9}
 .opts button{margin:2px}
+
+/* 글꼴: 본문은 Noto Sans KR, 로고·제목·점수는 Black Han Sans (구글 폰트가 안 불러와져도 기본 글꼴로 보임) */
+:root{--display:'Black Han Sans','Noto Sans KR',system-ui,sans-serif}
+h1,h2{font-family:var(--display);font-weight:400;letter-spacing:.3px}
 </style>
 </head>
 <body>

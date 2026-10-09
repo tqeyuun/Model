@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>도박장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#000;--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
 *{box-sizing:border-box}
-body{margin:0;background:#000;color:var(--ink);font:16px/1.5 system-ui,-apple-system,'Noto Sans KR',sans-serif;min-height:100vh;
+body{margin:0;background:#000;color:var(--ink);font:16px/1.5 'Noto Sans KR',system-ui,-apple-system,'Malgun Gothic',sans-serif;min-height:100vh;
  background-image:radial-gradient(600px 300px at 10% -5%,rgba(168,85,247,.28),transparent),radial-gradient(500px 300px at 95% 5%,rgba(255,45,149,.2),transparent),radial-gradient(500px 400px at 50% 110%,rgba(34,211,238,.14),transparent);background-attachment:fixed}
 main{max-width:640px;margin:0 auto;padding:16px}
 header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
@@ -118,6 +121,12 @@ button.seat.free{border-style:solid;border-color:var(--cyan);color:var(--cyan);c
 .pc.red{color:#d92d3a}.pc.back{background:repeating-linear-gradient(45deg,#3b2a8c,#3b2a8c 6px,#2a1f66 6px,#2a1f66 12px);color:#fff}
 .reels{display:flex;gap:8px;justify-content:center;margin:14px 0}.reel{width:78px;height:78px;display:flex;align-items:center;justify-content:center;font-size:42px;background:#07070c;border:2px solid var(--line);border-radius:14px}
 .limit{background:#07070c;border:1px dashed var(--line);border-radius:12px;padding:8px 12px;font-size:13px;margin:8px 0}
+
+/* 글꼴: 본문은 Noto Sans KR, 로고·제목·점수는 Black Han Sans (구글 폰트가 안 불러와져도 기본 글꼴로 보임) */
+:root{--display:'Black Han Sans','Noto Sans KR',system-ui,sans-serif}
+header b,.card h2,.pts{font-family:var(--display);font-weight:400;letter-spacing:.3px}
+header b{font-size:24px}.card h2{font-size:20px}
+.card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
 </style>
 </head>
 <body>
