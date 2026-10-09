@@ -1,5 +1,5 @@
 /**
- * 친구 내기판 (Google Apps Script 웹 앱 버전)
+ * 도박장 (Google Apps Script 웹 앱 버전)
  * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·내기·채팅·상점)를 저장합니다.
  * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 포인트(실제 돈과 무관).
  * - 처음 한 번 showAdminLink()를 실행하면 시트의 '관리자' 탭에 관리자 링크가 생깁니다.
@@ -23,7 +23,7 @@ function doGet(e) {
   var adminParam = e && e.parameter && e.parameter.admin;
   var t = HtmlService.createTemplateFromFile(adminParam !== undefined ? 'admin' : 'index');
   t.adminKey = JSON.stringify(String(adminParam || '')).replace(/</g, '\\u003c');
-  return t.evaluate().setTitle(adminParam !== undefined ? '관리자' : '친구 내기판')
+  return t.evaluate().setTitle(adminParam !== undefined ? '관리자' : '도박장')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
@@ -144,7 +144,6 @@ var SHOP = [];
 [['c_pink', '네온 핑크', 200, '#ff4fa3'], ['c_cyan', '네온 시안', 200, '#22d3ee'], ['c_mint', '민트', 200, '#34f5a0'], ['c_gold', '골드', 400, '#ffc83d'], ['c_violet', '바이올렛', 300, '#b57bff']]
   .forEach(function (a) { SHOP.push({ id: a[0], slot: 'color', name: a[1], price: a[2], value: a[3] }); });
 SHOP.push({ id: 'f_glow', slot: 'fx', name: '네온 글로우', price: 600, value: 'glow' },
-  { id: 'f_rainbow', slot: 'fx', name: '무지개 글자', price: 1200, value: 'rainbow' },
   { id: 'f_fire', slot: 'fx', name: '불타는 글자', price: 1800, value: 'fire' });
 [['b_dice', '주사위', 150, '🎲'], ['b_clover', '네잎클로버', 300, '🍀'], ['b_fire', '불꽃', 300, '🔥'], ['b_gem', '다이아', 1200, '💎'], ['b_crown', '왕관', 2000, '👑']]
   .forEach(function (a) { SHOP.push({ id: a[0], slot: 'badge', name: a[1], price: a[2], value: a[3] }); });

@@ -68,7 +68,6 @@ const SHOP = [
   ...[['c_pink', '네온 핑크', 200, '#ff4fa3'], ['c_cyan', '네온 시안', 200, '#22d3ee'], ['c_mint', '민트', 200, '#34f5a0'], ['c_gold', '골드', 400, '#ffc83d'], ['c_violet', '바이올렛', 300, '#b57bff']]
     .map(([id, name, price, value]) => ({ id, slot: 'color', name, price, value })),
   { id: 'f_glow', slot: 'fx', name: '네온 글로우', price: 600, value: 'glow' },
-  { id: 'f_rainbow', slot: 'fx', name: '무지개 글자', price: 1200, value: 'rainbow' },
   { id: 'f_fire', slot: 'fx', name: '불타는 글자', price: 1800, value: 'fire' },
   ...[['b_dice', '주사위', 150, '🎲'], ['b_clover', '네잎클로버', 300, '🍀'], ['b_fire', '불꽃', 300, '🔥'], ['b_gem', '다이아', 1200, '💎'], ['b_crown', '왕관', 2000, '👑']]
     .map(([id, name, price, value]) => ({ id, slot: 'badge', name, price, value })),
