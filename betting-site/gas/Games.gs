@@ -9,6 +9,36 @@ var GAMES = (function () {
   var G = {};
   function rint(n, rnd) { return Math.floor((rnd || Math.random)() * n); }
 
+  /* ================= 혼자 하는 게임(블랙잭·슬롯) 하루 제한 ================= */
+  // 한도는 여기서만 바꾸면 돼요. 0 이면 그 제한은 꺼짐.
+  G.SOLO = {
+    DAILY_NET_CAP: 1000,   // 하루에 벌 수 있는 순이익(딴 돈 - 잃은 돈) 상한. 닿으면 그날은 더 못 함
+    DAILY_PLAYS: 0,        // 하루에 할 수 있는 판 수 (블랙잭 한 판, 슬롯 한 번이 각각 1회). 0 이면 무제한
+    TZ_OFFSET_H: 9,        // 하루의 기준 시간대: 한국 시간(자정에 초기화)
+  };
+  /** 오늘(한국 시간 기준)이 시작된 시각(ms) */
+  G.dayStart = function (nowMs) { var off = G.SOLO.TZ_OFFSET_H * 3600e3; return Math.floor((nowMs + off) / 864e5) * 864e5 - off; };
+  /** 오늘의 순이익/판 수로 지금 제한 상태 계산 */
+  G.soloLimits = function (netToday, playsToday) {
+    var c = G.SOLO, blocked = null;
+    if (c.DAILY_NET_CAP > 0 && netToday >= c.DAILY_NET_CAP) blocked = 'net';
+    else if (c.DAILY_PLAYS > 0 && playsToday >= c.DAILY_PLAYS) blocked = 'plays';
+    return {
+      net_cap: c.DAILY_NET_CAP, plays_cap: c.DAILY_PLAYS, net_today: netToday, plays_today: playsToday,
+      remaining: c.DAILY_NET_CAP > 0 ? Math.max(0, c.DAILY_NET_CAP - netToday) : null,
+      plays_left: c.DAILY_PLAYS > 0 ? Math.max(0, c.DAILY_PLAYS - playsToday) : null, blocked: blocked,
+    };
+  };
+  /** 이번 판의 순이익(net)이 양수일 때, 오늘 한도 안에서 실제로 받을 수 있는 순이익 */
+  G.soloClampWin = function (net, netToday) {
+    var cap = G.SOLO.DAILY_NET_CAP;
+    return cap > 0 && net > 0 ? Math.min(net, Math.max(0, cap - netToday)) : net;
+  };
+  G.soloBlockedMessage = function (l) {
+    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '점까지 벌 수 있는데 한도에 도달했어요! 내일(한국 시간 자정 이후) 다시 해요.'
+      : '하루에 ' + l.plays_cap + '번까지만 할 수 있어요. 내일(한국 시간 자정 이후) 다시 해요.';
+  };
+
   /* ================= 🤫 최저 유일 숫자 ================= */
   G.LUN = { MIN: 1, MAX: 10, MIN_PLAYERS: 3, MAX_PLAYERS: 6 };
   /** nums: 낸 숫자들(참가 순서). 다른 사람과 겹치지 않은 숫자 중 가장 작은 걸 낸 사람의 index. 없으면 -1 */
@@ -139,7 +169,7 @@ var GAMES = (function () {
       dealer: playing ? [G.bjCard(s.dealer[0]), null] : s.dealer.map(G.bjCard),
       dv: playing ? G.bjValue([s.dealer[0]]) : G.bjValue(s.dealer),
       can_double: G.bjCanDouble(s),
-      wagered: wager(s), payout: s.payout, net: s.status === 'done' ? s.payout - wager(s) : null,
+      wagered: wager(s), payout: s.payout, net: s.status === 'done' ? s.payout - wager(s) : null, capped: !!s.capped,
     };
   };
 

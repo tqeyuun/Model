@@ -122,4 +122,29 @@ const rtp = G.slotRtp(); assert.ok(rtp > 0.90 && rtp < 0.94, '이론 환수율 '
 { const rng = seeded(99); let bet = 0, back = 0; const N = 400000;
   for (let i = 0; i < N; i++) { bet += 100; back += G.slotPayout(100, G.slotSpin(rng).mult); }
   assert.ok(Math.abs(back / bet - rtp) < 0.03, `시뮬레이션 환수율 ${(back / bet).toFixed(3)} vs 이론 ${rtp.toFixed(3)}`); }
+/* ----- 혼자 하는 게임 하루 제한 ----- */
+{
+  const cap0 = G.SOLO.DAILY_NET_CAP, plays0 = G.SOLO.DAILY_PLAYS;
+  try {
+    G.SOLO.DAILY_NET_CAP = 1000; G.SOLO.DAILY_PLAYS = 0;
+    assert.equal(G.soloClampWin(300, 0), 300, '한도 안이면 그대로');
+    assert.equal(G.soloClampWin(300, 800), 200, '남은 한도(200)까지만');
+    assert.equal(G.soloClampWin(300, 1000), 0, '이미 한도면 순이익 0');
+    assert.equal(G.soloClampWin(300, 1500), 0);
+    assert.equal(G.soloClampWin(-50, 1000), -50, '잃는 건 한도와 무관');
+    assert.equal(G.soloClampWin(0, 0), 0);
+    assert.equal(G.soloClampWin(1990, -500), 1500, '오늘 500 잃은 상태면 1500까지 받을 수 있고, 그러면 하루 최종 순이익이 딱 한도(1000)');
+    let l = G.soloLimits(400, 12); assert.equal(l.blocked, null); assert.equal(l.remaining, 600); assert.equal(l.plays_left, null);
+    assert.equal(G.soloLimits(1000, 12).blocked, 'net'); assert.equal(G.soloLimits(-200, 12).remaining, 1200);
+    G.SOLO.DAILY_PLAYS = 3;
+    assert.equal(G.soloLimits(0, 2).blocked, null); assert.equal(G.soloLimits(0, 3).blocked, 'plays'); assert.equal(G.soloLimits(0, 1).plays_left, 2);
+    G.SOLO.DAILY_NET_CAP = 0;
+    assert.equal(G.soloClampWin(99999, 99999), 99999, '0 이면 한도 꺼짐'); assert.equal(G.soloLimits(99999, 0).blocked, null); assert.equal(G.soloLimits(0, 0).remaining, null);
+    assert.ok(G.soloBlockedMessage({ blocked: 'plays', plays_cap: 3 }).includes('3번'));
+  } finally { G.SOLO.DAILY_NET_CAP = cap0; G.SOLO.DAILY_PLAYS = plays0; }
+  // 하루의 시작은 한국 시간 자정 (= UTC 15:00)
+  assert.equal(G.dayStart(Date.UTC(2026, 9, 9, 15, 0, 0)), Date.UTC(2026, 9, 9, 15, 0, 0));
+  assert.equal(G.dayStart(Date.UTC(2026, 9, 9, 14, 59, 59)), Date.UTC(2026, 9, 8, 15, 0, 0));
+  assert.equal(G.dayStart(Date.UTC(2026, 9, 9, 3, 0, 0)), Date.UTC(2026, 9, 8, 15, 0, 0), '한국 시간 정오는 전날 15:00 UTC 기준의 같은 날');
+}
 console.log('게임 규칙 테스트 통과 (슬롯 이론 환수율 ' + (rtp * 100).toFixed(1) + '%)');

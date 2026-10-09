@@ -13,6 +13,7 @@ const rankIdx = { A: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, J
 const rig = (order) => { const seen = {}; const codes = order.map((r) => { const k = (seen[r] = seen[r] || 0); seen[r]++; return rankIdx[r] + 13 * k; });
   return [...codes, ...Array.from({ length: 52 }, (_, i) => i).filter((c) => !codes.includes(c))]; };
 sb.CFG.LUCKY_CHANCE = 0;
+G.SOLO.DAILY_NET_CAP = 0;   // 기존 게임 검증은 하루 한도 없이 (한도는 맨 아래에서 따로 검증)
 
 const [a, b, c, d] = ['에이', '비이', '씨이', '디이'].map((n) => mk(n));
 const x = mk('엑스', '9999');
@@ -143,4 +144,36 @@ assert.equal(sr.payout, 7); assert.equal(pts(b), s0 - 8);
 G.slotSpin = origSpin;
 assert.equal(ok(call(b, 'GET', '/api/slots')).recent.length, 3); assert.equal(ok(call(b, 'GET', '/api/slots')).triple.length, 6);
 err(call('', 'GET', '/api/slots'), 401);
+/* ===== 혼자 하는 게임 하루 제한 ===== */
+{
+  const realNow = Date.now; let shift = 0; Date.now = () => realNow() + shift;
+  try {
+    G.SOLO.DAILY_NET_CAP = 300; G.SOLO.DAILY_PLAYS = 0;
+    const w = mk('한도', '1111'), lim = () => ok(call(w, 'GET', '/api/slots')).limits;
+    assert.equal(lim().remaining, 300); assert.equal(lim().blocked, null);
+    G.slotSpin = () => ({ reels: [5, 5, 5], mult: 200 });
+    const r1 = ok(call(w, 'POST', '/api/slots/spin', { bet: 10 }));
+    assert.equal(r1.capped, true); assert.equal(r1.net, 300); assert.equal(r1.payout, 310);
+    assert.equal(pts(w), 1000 - 10 + 310); assert.equal(r1.limits.blocked, 'net');
+    const blocked = err(call(w, 'POST', '/api/slots/spin', { bet: 10 }), 400); assert.ok(/한도/.test(blocked.error));
+    err(call(w, 'POST', '/api/blackjack/start', { bet: 10 }), 400);
+    assert.equal(pts(w), 1300);
+    G.slotSpin = origSpin;
+    shift += 24 * 3600e3;
+    assert.equal(lim().blocked, null); assert.equal(lim().net_today, 0);
+    G.slotSpin = () => ({ reels: [1, 2, 3], mult: 0 }); ok(call(w, 'POST', '/api/slots/spin', { bet: 100 })); G.slotSpin = origSpin;
+    assert.equal(lim().remaining, 400);
+    G.SOLO.DAILY_NET_CAP = 50; shift += 24 * 3600e3;
+    const p1 = pts(w); G.bjNewDeck = () => rig(['A', '9', 'K', '7']);
+    const bjr = ok(call(w, 'POST', '/api/blackjack/start', { bet: 100 })); G.bjNewDeck = origDeck;
+    assert.equal(bjr.game.outcome, 'blackjack'); assert.equal(bjr.game.capped, true); assert.equal(bjr.game.net, 50); assert.equal(pts(w), p1 + 50); assert.equal(bjr.limits.blocked, 'net');
+    G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 2; shift += 24 * 3600e3;
+    G.slotSpin = () => ({ reels: [1, 2, 3], mult: 0 });
+    ok(call(w, 'POST', '/api/slots/spin', { bet: 10 })); assert.equal(lim().plays_left, 1);
+    ok(call(w, 'POST', '/api/slots/spin', { bet: 10 }));
+    const over = err(call(w, 'POST', '/api/slots/spin', { bet: 10 }), 400); assert.ok(/2번/.test(over.error));
+    assert.equal(lim().blocked, 'plays');
+    shift += 24 * 3600e3; ok(call(w, 'POST', '/api/slots/spin', { bet: 10 }));
+  } finally { Date.now = realNow; G.slotSpin = origSpin; G.bjNewDeck = origDeck; G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0; }
+}
 console.log('GAS 새 게임 테스트 통과');

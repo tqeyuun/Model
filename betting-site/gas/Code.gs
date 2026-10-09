@@ -394,8 +394,26 @@ function checkBet(raw, min, max) {
   if (bet !== Math.floor(bet) || bet < min || bet > max) fail(400, '건 돈은 ' + min + '~' + max + '점이에요.');
   return bet;
 }
+/** 오늘(한국 시간) 혼자 하는 게임(블랙잭+슬롯)에서 번 순이익과 한 판 수 */
+function soloToday(uid) {
+  var ds = GAMES.dayStart(now()), net = 0, plays = 0;
+  tbl('slots').all().forEach(function (r) { if (r.user_id === uid && r.created_at >= ds) { net += r.payout - r.bet; plays++; } });
+  tbl('bj').all().forEach(function (r) {
+    if (r.user_id !== uid) return;
+    if (r.created_at >= ds) plays++;
+    if (r.status === 'done' && r.finished_at >= ds) { var st = JSON.parse(r.state); net += r.payout - st.bet * (st.doubled ? 2 : 1); }
+  });
+  return { net: net, plays: plays };
+}
+function soloLimits(uid) { var t = soloToday(uid); return GAMES.soloLimits(t.net, t.plays); }
+/** 새 판을 시작하기 전에: 오늘 한도에 닿았으면 막음 */
+function soloGuard(uid) { var l = soloLimits(uid); if (l.blocked) fail(400, GAMES.soloBlockedMessage(l)); }
 function bjActive(uid) { return tbl('bj').find(function (r) { return r.user_id === uid && r.status === 'playing'; }); }
 function bjSave(row, st) {
+  if (st.status === 'done') {   // 오늘 한도를 넘게 따면 한도까지만 지급
+    var w = st.bet * (st.doubled ? 2 : 1), net = st.payout - w;
+    if (net > 0) { var allowed = GAMES.soloClampWin(net, soloToday(row.user_id).net); if (allowed < net) { st.payout = w + allowed; st.capped = true; } }
+  }
   row.state = JSON.stringify(st); row.status = st.status; row.outcome = st.outcome || ''; row.payout = st.payout;
   row.finished_at = st.status === 'done' ? now() : '';
   tbl('bj').save(row);
@@ -410,13 +428,13 @@ function bjView(u) {
   });
   var g = null;
   if (row) { g = GAMES.bjView(JSON.parse(row.state)); g.id = row.id; }
-  return { game: g, recent: recent, rules: GAMES.BJ };
+  return { game: g, recent: recent, rules: GAMES.BJ, limits: soloLimits(u.id) };
 }
 function slotView(u) {
   var recent = tbl('slots').where(function (r) { return r.user_id === u.id; }).slice(-8).reverse().map(function (r) {
     return { bet: r.bet, reels: JSON.parse(r.reels).map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), net: r.payout - r.bet };
   });
-  return { recent: recent, symbols: GAMES.SLOT.SYMBOLS, triple: GAMES.SLOT.TRIPLE, cherry2: GAMES.SLOT.CHERRY2, cherry1: GAMES.SLOT.CHERRY1, min: GAMES.SLOT.MIN_BET, max: GAMES.SLOT.MAX_BET };
+  return { recent: recent, symbols: GAMES.SLOT.SYMBOLS, triple: GAMES.SLOT.TRIPLE, cherry2: GAMES.SLOT.CHERRY2, cherry1: GAMES.SLOT.CHERRY1, min: GAMES.SLOT.MIN_BET, max: GAMES.SLOT.MAX_BET, limits: soloLimits(u.id) };
 }
 
 /* ================= API 경로 ================= */
@@ -663,6 +681,7 @@ var ROUTES = {
     needLogin(u);
     var bet = checkBet(body.bet, GAMES.BJ.MIN_BET, GAMES.BJ.MAX_BET);
     if (bjActive(u.id)) fail(400, '진행 중인 판이 있어요. 먼저 끝내주세요.');
+    soloGuard(u.id);
     if (u.points < bet) fail(400, '포인트가 부족해요.');
     addPoints(u.id, -bet);
     var st = GAMES.bjStart(bet);
@@ -677,10 +696,12 @@ var ROUTES = {
     needLogin(u);
     var bet = checkBet(body.bet, GAMES.SLOT.MIN_BET, GAMES.SLOT.MAX_BET);
     if (u.points < bet) fail(400, '포인트가 부족해요.');
-    var sp = GAMES.slotSpin(), payout = GAMES.slotPayout(bet, sp.mult);
+    soloGuard(u.id);
+    var sp = GAMES.slotSpin(), payout = GAMES.slotPayout(bet, sp.mult), capped = false;
+    if (payout - bet > 0) { var allowed = GAMES.soloClampWin(payout - bet, soloToday(u.id).net); if (allowed < payout - bet) { payout = bet + allowed; capped = true; } }   // 오늘 한도까지만 지급
     addPoints(u.id, payout - bet);
     tbl('slots').insert({ user_id: u.id, bet: bet, reels: JSON.stringify(sp.reels), payout: payout, created_at: now() });
-    return { reels: sp.reels.map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), mult: sp.mult, bet: bet, payout: payout, net: payout - bet, points: userById(u.id).points };
+    return { reels: sp.reels.map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), mult: sp.mult, bet: bet, payout: payout, net: payout - bet, capped: capped, points: userById(u.id).points, limits: soloLimits(u.id) };
   },
 
   'GET /api/shop': function (body, u) {

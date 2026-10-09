@@ -117,6 +117,7 @@ button.seat.free{border-style:solid;border-color:var(--cyan);color:var(--cyan);c
 .pc{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:60px;margin:3px;border-radius:8px;background:#f5f5fa;color:#111;font-weight:800;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .pc.red{color:#d92d3a}.pc.back{background:repeating-linear-gradient(45deg,#3b2a8c,#3b2a8c 6px,#2a1f66 6px,#2a1f66 12px);color:#fff}
 .reels{display:flex;gap:8px;justify-content:center;margin:14px 0}.reel{width:78px;height:78px;display:flex;align-items:center;justify-content:center;font-size:42px;background:#07070c;border:2px solid var(--line);border-radius:14px}
+.limit{background:#07070c;border:1px dashed var(--line);border-radius:12px;padding:8px 12px;font-size:13px;margin:8px 0}
 </style>
 </head>
 <body>
@@ -526,6 +527,16 @@ const createLad = guard(async () => {
   createSeat = null; listMode = 'lad'; tab = 'bets'; toast('방을 열었어요! 사람들을 기다려요'); await refresh(); await loadGame();
 });
 
+/* ---- 혼자 하는 게임 하루 한도 안내 ---- */
+function soloBar(l) {
+  if (!l || (!(l.net_cap > 0) && !(l.plays_cap > 0))) return '';
+  const parts = [];
+  if (l.net_cap > 0) parts.push(`오늘 번 점수 <b class="${netCls(l.net_today)}">${netText(l.net_today)}</b> / 하루 최대 +${l.net_cap}점 <span class="mute">(남은 한도 ${l.remaining}점)</span>`);
+  if (l.plays_cap > 0) parts.push(`오늘 한 판 ${l.plays_today} / ${l.plays_cap}번`);
+  const warn = l.blocked === 'net' ? '오늘 번 점수가 한도에 도달했어요! 내일 한국 시간 자정 이후에 다시 할 수 있어요.' : l.blocked === 'plays' ? '오늘 할 수 있는 횟수를 다 썼어요. 내일 다시 해요.' : '';
+  return `<div class="limit">${parts.join('<br>')}${warn ? `<div class="lose" style="margin-top:4px">${warn}</div>` : ''}<div class="mute">블랙잭과 슬롯을 합쳐서 계산하고, 매일 한국 시간 자정에 초기화돼요.</div></div>`;
+}
+
 /* ---- 🃏 블랙잭 ---- */
 const BJ_RULES = `<details %OPEN% class="rules"><summary><b>🃏 블랙잭 하는 법</b></summary>
   <p><b>목표</b>: 카드 숫자의 합을 <b>21에 최대한 가깝게</b> 만들어서 딜러(컴퓨터)를 이기는 게임이에요. <b>21을 넘으면(버스트) 바로 져요.</b></p>
@@ -557,20 +568,20 @@ function bjTable() {
     const [msg, cls] = g.status === 'done' ? BJ_MSG[g.outcome] : ['', ''];
     table = `<div class="mute">딜러 ${g.status === 'done' ? g.dv.total : g.dv.total + ' + ?'}${g.status === 'done' && g.dv.total > 21 ? ' (버스트)' : ''}</div><div class="hand-row">${g.dealer.map(cardHtml).join('')}</div>
       <div class="mute" style="margin-top:8px">나 ${g.pv.total}${g.pv.soft && g.pv.total <= 21 ? ' (A를 11로 계산 중)' : ''} · 건 돈 ${g.wagered}점${g.doubled ? ' (더블다운)' : ''}</div><div class="hand-row">${g.player.map(cardHtml).join('')}</div>
-      ${g.status === 'done' ? `<p class="${cls}" style="font-size:18px;margin:10px 0 4px">${msg} <b>${netText(g.net)}</b></p>` : ''}`;
+      ${g.status === 'done' ? `<p class="${cls}" style="font-size:18px;margin:10px 0 4px">${msg} <b>${netText(g.net)}</b></p>${g.capped ? '<div class="mute">⚠️ 오늘 한도에 도달해서 당첨금이 일부만 지급됐어요.</div>' : ''}` : ''}`;
   }
   const actions = active
     ? `<div class="betrow"><button class="pri" onclick="bjAct('hit')">✋ 히트</button><button class="pri" onclick="bjAct('stand')">🛑 스탠드</button>${g.can_double ? `<button onclick="bjAct('double')">✌️ 더블다운 (+${g.bet}점)</button>` : ''}</div>`
-    : `<div class="betrow" style="margin-top:10px"><input id="bjbet" type="number" min="${bj.rules.MIN_BET}" max="${bj.rules.MAX_BET}" step="10" value="${last}"><button class="pri" onclick="bjStart()">${g ? '새 판 시작' : '시작'}</button></div><div class="mute">건 돈 ${bj.rules.MIN_BET}~${bj.rules.MAX_BET}점</div>`;
+    : `<div class="betrow" style="margin-top:10px"><input id="bjbet" type="number" min="${bj.rules.MIN_BET}" max="${bj.rules.MAX_BET}" step="10" value="${last}"><button class="pri" onclick="bjStart()" ${bj.limits && bj.limits.blocked ? 'disabled' : ''}>${g ? '새 판 시작' : '시작'}</button></div><div class="mute">건 돈 ${bj.rules.MIN_BET}~${bj.rules.MAX_BET}점</div>`;
   const rec = bj.recent.length ? bj.recent.map((r) => `<div class="rec"><span>${OUT_TXT[r.outcome]}</span><span class="mute">${r.wagered}점 걸고</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없어요.</p>';
-  return `<div class="card"><h2>🃏 블랙잭</h2>${table || '<div class="mute">딜러와 21에 가까운 쪽이 이기는 카드 게임이에요. 처음이면 아래 설명을 먼저 읽어보세요!</div>'}${actions}</div><div class="card">${BJ_RULES.replace('%OPEN%', bj.recent.length ? '' : 'open')}</div><div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
+  return `<div class="card"><h2>🃏 블랙잭</h2>${soloBar(bj.limits)}${table || '<div class="mute">딜러와 21에 가까운 쪽이 이기는 카드 게임이에요. 처음이면 아래 설명을 먼저 읽어보세요!</div>'}${actions}</div><div class="card">${BJ_RULES.replace('%OPEN%', bj.recent.length ? '' : 'open')}</div><div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
 }
 const bjStart = guard(async () => { bj = await api('POST', '/api/blackjack/start', { bet: Number($('#bjbet').value) }); bjAfter(); });
 const bjAct = guard(async (act) => {
   if (act === 'double' && !confirm('건 돈을 2배로 올리고 카드 한 장만 받고 끝내요. 할까요?')) return;
   bj = await api('POST', '/api/blackjack/' + act, {}); bjAfter();
 });
-async function bjAfter() { if (bj.game && bj.game.status === 'done') { const [m] = BJ_MSG[bj.game.outcome]; toast(`${m} ${netText(bj.game.net)}`); } render(); await refresh(); }
+async function bjAfter() { if (bj.game && bj.game.status === 'done') { const [m] = BJ_MSG[bj.game.outcome]; toast(`${m} ${netText(bj.game.net)}${bj.game.capped ? ' (오늘 한도까지만 지급)' : ''}`); } render(); await refresh(); }
 
 /* ---- 🎰 슬롯머신 ---- */
 function slotTable() {
@@ -578,9 +589,9 @@ function slotTable() {
   const d = slotData, pay = d.symbols.map((s, i) => `<div class="row"><span style="font-size:20px">${s}${s}${s}</span><b class="pts">×${d.triple[i]}</b></div>`).join('');
   const rec = d.recent.length ? d.recent.map((r) => `<div class="rec"><span>${r.reels.join(' ')}</span><span class="mute">${r.bet}점</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없어요.</p>';
   return `<div class="card"><h2>🎰 슬롯머신</h2><div class="mute">버튼을 누르면 릴 3개가 돌아가요. 건 돈 ${d.min}~${d.max}점.</div>
-    <div class="reels">${slotUi.reels.map((s) => `<div class="reel">${s}</div>`).join('')}</div>
+    ${soloBar(d.limits)}<div class="reels">${slotUi.reels.map((s) => `<div class="reel">${s}</div>`).join('')}</div>
     ${slotUi.msg ? `<p class="${slotUi.cls}" style="text-align:center;font-size:18px;margin:4px 0 10px">${slotUi.msg}</p>` : ''}
-    <div class="betrow"><input id="sbet" type="number" min="${d.min}" max="${d.max}" step="10" value="${slotUi.bet || 50}"><button class="pri" onclick="spinSlots()" ${slotUi.busy ? 'disabled' : ''}>🎰 돌리기</button></div></div>
+    <div class="betrow"><input id="sbet" type="number" min="${d.min}" max="${d.max}" step="10" value="${slotUi.bet || 50}"><button class="pri" onclick="spinSlots()" ${slotUi.busy || (d.limits && d.limits.blocked) ? 'disabled' : ''}>🎰 돌리기</button></div></div>
     <div class="card"><h2>배당표 <span class="mute">(건 돈의 몇 배를 돌려받는지)</span></h2>${pay}
     <div class="row"><span style="font-size:20px">🍒🍒 <span class="mute" style="font-size:13px">(🍒 정확히 2개)</span></span><b class="pts">×${d.cherry2}</b></div>
     <div class="row"><span style="font-size:20px">🍒 <span class="mute" style="font-size:13px">(🍒 정확히 1개)</span></span><b class="pts">×${d.cherry1}</b></div>
@@ -595,7 +606,7 @@ const spinSlots = guard(async () => {
   try {
     const [r] = await Promise.all([api('POST', '/api/slots/spin', { bet }), new Promise((res) => setTimeout(res, 800))]);
     slotUi.reels = r.reels;
-    slotUi.msg = r.mult > 0 ? `당첨! ×${r.mult} ${netText(r.net)}` : `아쉬워요 ${netText(r.net)}`; slotUi.cls = r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute';
+    slotUi.msg = (r.mult > 0 ? `당첨! ×${r.mult} ${netText(r.net)}` : `아쉬워요 ${netText(r.net)}`) + (r.capped ? ' · 오늘 한도까지만 지급' : ''); slotUi.cls = r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute';
   } finally { clearInterval(t); slotUi.busy = false; }
   await refresh(); try { slotData = await api('GET', '/api/slots'); } catch (e) { /* 무시 */ } render();
 });

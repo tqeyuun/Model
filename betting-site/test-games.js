@@ -3,6 +3,7 @@ process.env.DB_FILE = ':memory:';
 const assert = require('node:assert');
 const G = require('./games-core');           // 서버와 같은 모듈 → 카드/난수를 고정해서 정산을 정확히 검증
 const { server, db } = require('./server');
+G.SOLO.DAILY_NET_CAP = 0;   // 기존 게임 검증은 하루 한도 없이 (한도는 맨 아래에서 따로 검증)
 const rankIdx = { A: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9, J: 10, Q: 11, K: 12 };
 const rig = (order) => { const first = order.map((r) => rankIdx[r]); const used = {}; first.forEach((c) => { used[c] = (used[c] || 0) + 1; });
   // 같은 숫자 카드를 여러 장 쓰려면 다른 무늬 코드로 대체
@@ -174,6 +175,51 @@ server.listen(0, async () => {
     assert.equal((await call('GET', '/api/slots', null, b)).j.recent.length, 3);
     assert.equal((await call('GET', '/api/slots', null, b)).j.triple.length, 6);
     assert.equal((await call('GET', '/api/slots', null)).s, 401);
+
+    /* ================= 혼자 하는 게임 하루 제한 ================= */
+    const realNow = Date.now; let shift = 0; Date.now = () => realNow() + shift;       // 날짜를 건너뛰어서 자정 초기화 검증
+    try {
+      G.SOLO.DAILY_NET_CAP = 300; G.SOLO.DAILY_PLAYS = 0;
+      const w = await mk('한도', '1111');
+      const lim = async () => (await call('GET', '/api/slots', null, w)).j.limits;
+      assert.equal((await lim()).remaining, 300); assert.equal((await lim()).blocked, null);
+      G.slotSpin = () => ({ reels: [5, 5, 5], mult: 200 });                             // 원래는 +1990
+      let r1 = (await call('POST', '/api/slots/spin', { bet: 10 }, w)).j;
+      assert.equal(r1.capped, true); assert.equal(r1.net, 300, '한도(300)까지만 지급'); assert.equal(r1.payout, 310);
+      assert.equal(await pts(w), 1000 - 10 + 310);
+      assert.equal(r1.limits.blocked, 'net'); assert.equal(r1.limits.net_today, 300);
+      const blocked = await call('POST', '/api/slots/spin', { bet: 10 }, w);
+      assert.equal(blocked.s, 400); assert.ok(/한도/.test(blocked.j.error), blocked.j.error);
+      assert.equal((await call('POST', '/api/blackjack/start', { bet: 10 }, w)).s, 400, '블랙잭도 같은 한도를 같이 씀');
+      assert.equal(await pts(w), 1300, '막힌 요청에서는 포인트가 안 빠짐');
+      G.slotSpin = origSpin;
+      // 자정이 지나면 초기화
+      shift += 24 * 3600e3;
+      assert.equal((await lim()).blocked, null); assert.equal((await lim()).net_today, 0);
+      // 잃으면 한도 여유가 늘어남: -100 → 이날은 400까지 벌 수 있음
+      G.slotSpin = () => ({ reels: [1, 2, 3], mult: 0 });
+      await call('POST', '/api/slots/spin', { bet: 100 }, w);
+      assert.equal((await lim()).remaining, 400);
+      G.slotSpin = origSpin;
+      // 블랙잭: 블랙잭(원래 +150)이 남은 한도 안으로 잘림
+      G.SOLO.DAILY_NET_CAP = 50; shift += 24 * 3600e3;
+      const p1 = await pts(w);
+      G.bjNewDeck = () => rig(['A', '9', 'K', '7']);
+      const bjr = (await call('POST', '/api/blackjack/start', { bet: 100 }, w)).j;
+      G.bjNewDeck = origDeck;
+      assert.equal(bjr.game.outcome, 'blackjack'); assert.equal(bjr.game.capped, true); assert.equal(bjr.game.net, 50); assert.equal(await pts(w), p1 + 50);
+      assert.equal(bjr.limits.blocked, 'net');
+      // 횟수 제한: 하루 2번
+      G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 2; shift += 24 * 3600e3;
+      G.slotSpin = () => ({ reels: [1, 2, 3], mult: 0 });
+      assert.equal((await call('POST', '/api/slots/spin', { bet: 10 }, w)).s, 200);
+      assert.equal((await lim()).plays_left, 1);
+      assert.equal((await call('POST', '/api/slots/spin', { bet: 10 }, w)).s, 200);
+      const over = await call('POST', '/api/slots/spin', { bet: 10 }, w);
+      assert.equal(over.s, 400); assert.ok(/2번/.test(over.j.error), over.j.error);
+      assert.equal((await lim()).blocked, 'plays');
+      shift += 24 * 3600e3; assert.equal((await call('POST', '/api/slots/spin', { bet: 10 }, w)).s, 200, '다음 날에는 다시 가능');
+    } finally { Date.now = realNow; G.slotSpin = origSpin; G.bjNewDeck = origDeck; G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0; }
 
     console.log('새 게임 서버 테스트 통과');
   } catch (e) { console.error(e); process.exitCode = 1; }

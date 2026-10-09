@@ -233,8 +233,26 @@ function ladderView(u) {
 }
 
 // ---------- 🃏 블랙잭 / 🎰 슬롯머신 (서버 딜러와 하는 혼자 게임) ----------
+// 오늘(한국 시간) 혼자 하는 게임(블랙잭+슬롯)에서 번 순이익과 한 판 수
+function soloToday(uid) {
+  const ds = G.dayStart(now());
+  let net = 0;
+  for (const r of q('SELECT bet, payout FROM slots WHERE user_id=? AND created_at>=?', uid, ds)) net += r.payout - r.bet;
+  for (const r of q("SELECT state, payout FROM bj WHERE user_id=? AND status='done' AND finished_at>=?", uid, ds)) { const st = JSON.parse(r.state); net += r.payout - st.bet * (st.doubled ? 2 : 1); }
+  const plays = q('SELECT COUNT(*) n FROM slots WHERE user_id=? AND created_at>=?', uid, ds)[0].n + q('SELECT COUNT(*) n FROM bj WHERE user_id=? AND created_at>=?', uid, ds)[0].n;
+  return { net, plays };
+}
+const soloLimits = (uid) => { const t = soloToday(uid); return G.soloLimits(t.net, t.plays); };
+function soloGuard(uid) {   // 새 판을 시작하기 전에: 오늘 한도에 닿았으면 막음
+  const l = soloLimits(uid);
+  if (l.blocked) fail(400, G.soloBlockedMessage(l));
+}
 const bjActive = (uid) => q1("SELECT * FROM bj WHERE user_id=? AND status='playing'", uid);
 function bjSave(row, st) {
+  if (st.status === 'done') {   // 오늘 한도를 넘게 따면 한도까지만 지급
+    const w = st.bet * (st.doubled ? 2 : 1), net = st.payout - w;
+    if (net > 0) { const allowed = G.soloClampWin(net, soloToday(row.user_id).net); if (allowed < net) { st.payout = w + allowed; st.capped = true; } }
+  }
   run('UPDATE bj SET state=?, status=?, outcome=?, payout=?, finished_at=? WHERE id=?', JSON.stringify(st), st.status, st.outcome, st.payout, st.status === 'done' ? now() : null, row.id);
   if (st.status === 'done') pay(row.user_id, st.payout);
 }
@@ -244,11 +262,11 @@ function bjView(u) {
     const st = JSON.parse(r.state), w = st.bet * (st.doubled ? 2 : 1);
     return { outcome: r.outcome, wagered: w, net: r.payout - w };
   });
-  return { game: row ? { id: row.id, ...G.bjView(JSON.parse(row.state)) } : null, recent, rules: G.BJ };
+  return { game: row ? { id: row.id, ...G.bjView(JSON.parse(row.state)) } : null, recent, rules: G.BJ, limits: soloLimits(u.id) };
 }
 function slotView(u) {
   const recent = q('SELECT bet, reels, payout FROM slots WHERE user_id=? ORDER BY id DESC LIMIT 8', u.id).map((r) => ({ bet: r.bet, reels: JSON.parse(r.reels).map((i) => G.SLOT.SYMBOLS[i]), net: r.payout - r.bet }));
-  return { recent, symbols: G.SLOT.SYMBOLS, triple: G.SLOT.TRIPLE, cherry2: G.SLOT.CHERRY2, cherry1: G.SLOT.CHERRY1, min: G.SLOT.MIN_BET, max: G.SLOT.MAX_BET };
+  return { recent, symbols: G.SLOT.SYMBOLS, triple: G.SLOT.TRIPLE, cherry2: G.SLOT.CHERRY2, cherry1: G.SLOT.CHERRY1, min: G.SLOT.MIN_BET, max: G.SLOT.MAX_BET, limits: soloLimits(u.id) };
 }
 function checkBet(raw, min, max) {
   const bet = Number(raw);
@@ -598,6 +616,7 @@ const routes = {
     const bet = checkBet(body.bet, G.BJ.MIN_BET, G.BJ.MAX_BET);
     return tx(() => {
       if (bjActive(u.id)) fail(400, '진행 중인 판이 있어요. 먼저 끝내주세요.');
+      soloGuard(u.id);
       if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족해요.');
       pay(u.id, -bet);
       const st = G.bjStart(bet);
@@ -629,10 +648,13 @@ const routes = {
     const bet = checkBet(body.bet, G.SLOT.MIN_BET, G.SLOT.MAX_BET);
     return tx(() => {
       if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족해요.');
-      const sp = G.slotSpin(), payout = G.slotPayout(bet, sp.mult);
+      soloGuard(u.id);
+      const sp = G.slotSpin();
+      let payout = G.slotPayout(bet, sp.mult), capped = false;
+      if (payout - bet > 0) { const allowed = G.soloClampWin(payout - bet, soloToday(u.id).net); if (allowed < payout - bet) { payout = bet + allowed; capped = true; } }   // 오늘 한도까지만 지급
       pay(u.id, payout - bet);
       run('INSERT INTO slots(user_id,bet,reels,payout,created_at) VALUES (?,?,?,?,?)', u.id, bet, JSON.stringify(sp.reels), payout, now());
-      return { reels: sp.reels.map((i) => G.SLOT.SYMBOLS[i]), mult: sp.mult, bet, payout, net: payout - bet, points: q1('SELECT points FROM users WHERE id=?', u.id).points };
+      return { reels: sp.reels.map((i) => G.SLOT.SYMBOLS[i]), mult: sp.mult, bet, payout, net: payout - bet, capped, points: q1('SELECT points FROM users WHERE id=?', u.id).points, limits: soloLimits(u.id) };
     });
   },
 
