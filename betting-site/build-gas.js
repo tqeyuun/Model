@@ -39,8 +39,8 @@ let token = LS.get('token'), user = null, tab = 'bets', bets = [], ranking = [],
 `);
 s = cut(s, "async function api(", "function confetti(", runner("token || ''", "''", "if (j.code === 401 && token) logout();"));
 s = rep(s, "let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;", "let chatMsgs = [], lastChatId = 0;");
-s = rep(s, "[user, bets, ranking] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking')]);",
-           "({ me: user, bets, ranking } = await api('GET', '/api/state'));");
+s = rep(s, "[user, bets, ranking, rps] = await Promise.all([api('GET', '/api/me'), api('GET', '/api/bets'), api('GET', '/api/ranking'), api('GET', '/api/rps')]);",
+           "({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));");
 s = rep(s, "  if (!token) initGoogle();\n", "");
 s = cut(s, "function authView() {", "const auth = guard(", `function authView() {
   return \`<div class="card"><h2>들어가기</h2><p class="mute">닉네임 + 숫자 4자리 PIN으로 들어와요. 처음 쓰는 닉네임이면 새 계정이 만들어지고 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>

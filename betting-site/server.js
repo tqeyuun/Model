@@ -10,6 +10,10 @@ const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.db');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const TOKENINFO_URL = process.env.GOOGLE_TOKENINFO_URL || 'https://oauth2.googleapis.com/tokeninfo';
+const RPS_HANDS = ['rock', 'paper', 'scissors'];           // 바위 보 가위
+const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
+const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
 const START_POINTS = 1000;
 const MIN_BET = 10;
 const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
@@ -31,6 +35,10 @@ CREATE TABLE IF NOT EXISTS bets (
   winner INTEGER, closes_at INTEGER, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, label TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS rps (
+  id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, host_hand TEXT NOT NULL,
+  guest_id INTEGER, guest_hand TEXT, status TEXT NOT NULL DEFAULT 'waiting',  -- waiting | done | cancelled
+  result TEXT, created_at INTEGER NOT NULL, played_at INTEGER);  -- result: host | guest | draw
 CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wagers (
   id INTEGER PRIMARY KEY, bet_id INTEGER NOT NULL, option_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
@@ -114,6 +122,34 @@ function refund(w) {
 
 // 마감 시간이 지난 open 내기는 closed 로 전환
 function sweep() { run("UPDATE bets SET status='closed' WHERE status='open' AND closes_at IS NOT NULL AND closes_at<=?", now()); }
+
+// ---------- 가위바위보 ----------
+function rpsSweep() {
+  const old = q("SELECT * FROM rps WHERE status='waiting' AND created_at<?", now() - RPS_EXPIRE_MS);
+  if (!old.length) return;
+  tx(() => { for (const r of old) { run('UPDATE users SET points=points+? WHERE id=?', r.stake, r.host_id); run("UPDATE rps SET status='cancelled' WHERE id=?", r.id); } });
+}
+function rpsPlayer(id) {
+  const u = q1('SELECT name,eq_title,eq_color,eq_fx,eq_badge FROM users WHERE id=?', id);
+  return u ? { name: u.name, ...deco(u) } : { name: '(탈퇴)' };
+}
+const rpsNet = (r, myId) => {
+  if (r.host_id !== myId && r.guest_id !== myId) return null;
+  if (r.result === 'draw') return 0;
+  return (r.result === 'host') === (r.host_id === myId) ? r.stake : -r.stake;
+};
+function rpsView(u) {
+  rpsSweep();
+  const rooms = q("SELECT * FROM rps WHERE status='waiting' ORDER BY id DESC LIMIT 30").map((r) => ({
+    id: r.id, stake: r.stake, created_at: r.created_at, host: rpsPlayer(r.host_id), mine: r.host_id === u.id,
+    my_hand: r.host_id === u.id ? r.host_hand : null,   // 방장의 손은 본인에게만 보임
+  }));
+  const recent = q("SELECT * FROM rps WHERE status='done' ORDER BY id DESC LIMIT 15").map((r) => ({
+    id: r.id, stake: r.stake, host: rpsPlayer(r.host_id), guest: rpsPlayer(r.guest_id), host_hand: r.host_hand, guest_hand: r.guest_hand,
+    result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id),
+  }));
+  return { rooms, recent };
+}
 
 // ---------- 직렬화 ----------
 function betView(b, me) {
@@ -279,6 +315,52 @@ const routes = {
     run('DELETE FROM messages WHERE id < (SELECT MAX(id) FROM messages) - 1000');
     return { ok: true };
   },
+  'GET /api/rps': (req, body, u) => { if (!u) fail(401, '로그인이 필요해요.'); return rpsView(u); },
+  'POST /api/rps/create': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const hand = String(body.hand), stake = Number(body.stake);
+    if (!RPS_HANDS.includes(hand)) fail(400, '가위·바위·보 중에 골라주세요.');
+    if (!Number.isInteger(stake) || stake < MIN_BET) fail(400, `판돈은 ${MIN_BET}점 이상이에요.`);
+    return tx(() => {
+      const f = q1('SELECT points FROM users WHERE id=?', u.id);
+      if (f.points < stake) fail(400, '포인트가 부족해요.');
+      if (q1("SELECT COUNT(*) n FROM rps WHERE host_id=? AND status='waiting'", u.id).n >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지예요.`);
+      run('UPDATE users SET points=points-? WHERE id=?', stake, u.id);   // 판돈은 방을 여는 순간 맡겨짐
+      const id = Number(run('INSERT INTO rps(host_id,stake,host_hand,created_at) VALUES (?,?,?,?)', u.id, stake, hand, now()).lastInsertRowid);
+      return { ok: true, id };
+    });
+  },
+  'POST /api/rps/join': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    const hand = String(body.hand);
+    if (!RPS_HANDS.includes(hand)) fail(400, '가위·바위·보 중에 골라주세요.');
+    return tx(() => {
+      const r = q1('SELECT * FROM rps WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없어요.');
+      const f = q1('SELECT points FROM users WHERE id=?', u.id);
+      if (f.points < r.stake) fail(400, '포인트가 부족해요.');
+      const result = r.host_hand === hand ? 'draw' : RPS_BEATS[r.host_hand] === hand ? 'host' : 'guest';
+      // 방장은 판돈을 이미 냈고, 도전자는 지금 낸다. 이긴 쪽이 2배, 비기면 각자 환불.
+      if (result === 'draw') { run('UPDATE users SET points=points+? WHERE id=?', r.stake, r.host_id); }
+      else if (result === 'host') { run('UPDATE users SET points=points+? WHERE id=?', r.stake * 2, r.host_id); run('UPDATE users SET points=points-? WHERE id=?', r.stake, u.id); }
+      else { run('UPDATE users SET points=points+? WHERE id=?', r.stake, u.id); }
+      run("UPDATE rps SET guest_id=?, guest_hand=?, status='done', result=?, played_at=? WHERE id=?", u.id, hand, result, now(), r.id);
+      return { ok: true, id: r.id, host_hand: r.host_hand, guest_hand: hand, stake: r.stake, host: rpsPlayer(r.host_id),
+        outcome: result === 'draw' ? 'draw' : result === 'guest' ? 'win' : 'lose', net: result === 'draw' ? 0 : result === 'guest' ? r.stake : -r.stake };
+    });
+  },
+  'POST /api/rps/cancel': (req, body, u) => {
+    if (!u) fail(401, '로그인이 필요해요.');
+    return tx(() => {
+      const r = q1('SELECT * FROM rps WHERE id=?', Number(body.room_id)) || fail(404, '방이 없어요.');
+      if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+      if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+      run('UPDATE users SET points=points+? WHERE id=?', r.stake, u.id);
+      run("UPDATE rps SET status='cancelled' WHERE id=?", r.id);
+      return { ok: true };
+    });
+  },
   'GET /api/shop': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요해요.');
     const owned = new Set(q('SELECT item_id FROM user_items WHERE user_id=?', u.id).map((r) => r.item_id));
@@ -397,6 +479,7 @@ const routes = {
         run('DELETE FROM sessions WHERE user_id=?', u.id);
       } else if (body.action === 'delete') {
         if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
+        run("UPDATE rps SET status='cancelled' WHERE host_id=? AND status='waiting'", u.id);
         run('DELETE FROM sessions WHERE user_id=?', u.id);
         run('DELETE FROM messages WHERE user_id=?', u.id);
         run('DELETE FROM user_items WHERE user_id=?', u.id);

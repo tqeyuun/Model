@@ -84,6 +84,16 @@ button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
 .item{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
 .item.eq{border-color:var(--win);box-shadow:0 0 14px rgba(52,245,160,.35)}.item .pv{min-height:26px}
 .item button{width:100%}
+
+.tabs.mode{margin:4px 0 8px}.tabs.mode button{font-size:14px;padding:9px 6px}
+.tabs.mode button.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5);color:#fff}
+.room{background:#07070c;border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.room.mine{border-color:var(--dog);background:rgba(255,184,0,.06)}
+.hands{display:flex;gap:8px;margin-top:8px}
+.hand{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:700;padding:10px 4px;border-width:2px}
+.hand span{font-size:30px;line-height:1.1}
+.hands.pick{margin:12px 0}.hand.sel{border-color:var(--win);background:rgba(52,245,160,.12);box-shadow:0 0 16px rgba(52,245,160,.45)}
+.rec{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.rec.me{background:rgba(168,85,247,.08)}
 </style>
 </head>
 <body>
@@ -120,6 +130,7 @@ const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toas
 function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; LS.del('token'); render(); }
 
 let chatMsgs = [], lastChatId = 0;
+let rps = { rooms: [], recent: [] }, listMode = 'bets', createMode = 'bet', createHand = null;
 
 // 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
 function nm(o, force = {}) {
@@ -134,7 +145,8 @@ function renderHeader() {
 async function refresh() {
   if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
   try {
-    ({ me: user, bets, ranking } = await api('GET', '/api/state'));
+    ({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));
+    notifyRps();
     const seen = JSON.parse(LS.get('luckySeen') || '[]');
     const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
     if (fresh.length) { LS.set('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); confetti(70); }
@@ -146,9 +158,9 @@ async function refresh() {
 function render() {
   renderHeader();
   $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','내기'],['new','새 내기'],['chat','💬 채팅'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    <div class="tabs">${[['bets','내기'],['new','만들기'],['chat','💬 채팅'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없네요. <button class="pri" onclick="aid()">구제금 100점 받기 (하루 1번)</button></div>` : ''}
-    ${tab === 'bets' ? bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>' : tab === 'new' ? newView() : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
+    ${tab === 'bets' ? modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : bets.map(betView).join('') || '<p class="mute">아직 내기가 없어요. 하나 열어보세요!</p>') : tab === 'new' ? modeToggle(createMode, 'setCreateMode') + (createMode === 'rps' ? rpsCreateView() : newView()) : tab === 'chat' ? chatView() : tab === 'shop' ? shopView() : rankView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); };
@@ -250,6 +262,72 @@ const create = guard(async () => {
   await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
   tab = 'bets'; toast('내기가 열렸어요!'); confetti(24); await refresh();
 });
+/* ---------- 가위바위보 ---------- */
+const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { rock: '바위', paper: '보', scissors: '가위' };
+const setListMode = (m) => { listMode = m; render(); };
+const setCreateMode = (m) => { createMode = m; render(); };
+function modeToggle(mode, fn) {
+  const items = fn === 'setListMode' ? [['bets', '🎲 내기'], ['rps', '✊ 가위바위보']] : [['bet', '🎲 내기 만들기'], ['rps', '✊ 가위바위보 방']];
+  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+}
+const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
+function rpsLobby() {
+  const rooms = rps.rooms.map((r) => r.mine
+    ? `<div class="room mine"><div class="row"><span>${nm(r.host)} <span class="tag s">내 방 · 대기 중</span></span><b class="pts">${r.stake.toLocaleString()}점</b></div>
+        <div class="mute">내가 낸 패: ${HAND[r.my_hand]} ${HAND_NAME[r.my_hand]} (상대에겐 안 보여요)</div>
+        <button onclick="cancelRps(${r.id})">방 닫고 판돈 돌려받기</button></div>`
+    : `<div class="room"><div class="row"><span>${nm(r.host)}</span><b class="pts">${r.stake.toLocaleString()}점</b></div>
+        <div class="mute">하나 내면 바로 결판! 이기면 +${r.stake}, 지면 -${r.stake}, 비기면 그대로</div>
+        <div class="hands">${handBtns(r.id)}</div></div>`).join('');
+  const rec = rps.recent.map((r) => {
+    const w = r.result === 'draw' ? '무승부' : esc(r.result === 'host' ? r.host.name : r.guest.name) + ' 승';
+    const mine = r.mine ? `<b class="${r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute'}">${r.net > 0 ? '+' : ''}${r.net}점</b>` : '';
+    return `<div class="rec ${r.mine ? 'me' : ''}"><span>${esc(r.host.name)} ${HAND[r.host_hand]} vs ${HAND[r.guest_hand]} ${esc(r.guest.name)}</span><span class="mute">${w} · ${r.stake}점</span>${mine}</div>`;
+  }).join('');
+  return `<div class="card"><h2>✊ 가위바위보</h2><div class="mute">한 명이 방을 열고 패를 정해 두면, 다른 사람이 들어와 하나 내는 순간 결판나요. 판돈은 방을 열 때 맡겨져요.</div></div>
+    ${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없어요. 만들기 탭에서 방을 열어보세요!</p>'}
+    <div class="card"><h2>최근 결과</h2>${rec || '<p class="mute">아직 결과가 없어요.</p>'}</div>`;
+}
+function rpsCreateView() {
+  return `<div class="card"><h2>가위바위보 방 만들기</h2>
+    <div class="mute">패를 먼저 골라 두고 기다리면, 다른 사람이 들어와 하나 내는 순간 결판나요. 내 패는 결과가 나올 때까지 아무에게도 안 보여요.</div>
+    <div class="hands pick">${['scissors', 'rock', 'paper'].map((h) => `<button class="hand ${createHand === h ? 'sel' : ''}" onclick="pickHand('${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('')}</div>
+    <input id="rs" type="number" min="10" step="10" placeholder="판돈 (10점 이상)">
+    <p class="mute">이기면 판돈의 2배를 받고, 지면 판돈을 잃고, 비기면 돌려받아요. 12시간 동안 아무도 안 오면 자동으로 닫히고 돌려받아요.</p>
+    <button class="pri" style="width:100%" onclick="createRps()">방 열기</button></div>`;
+}
+const pickHand = (h) => { const v = $('#rs') && $('#rs').value; createHand = h; render(); if (v && $('#rs')) $('#rs').value = v; };
+const createRps = guard(async () => {
+  if (!createHand) throw new Error('먼저 가위·바위·보 중에 하나를 골라주세요.');
+  const stake = Number($('#rs').value);
+  await api('POST', '/api/rps/create', { hand: createHand, stake });
+  createHand = null; listMode = 'rps'; tab = 'bets'; toast('방을 열었어요! 상대를 기다려요 ✊'); confetti(12); await refresh();
+});
+const joinRps = guard(async (roomId, hand) => {
+  const room = rps.rooms.find((r) => r.id === roomId);
+  if (!confirm(`${room.stake}점 걸고 ${HAND[hand]} ${HAND_NAME[hand]}를 낼까요?\n(이기면 +${room.stake}, 지면 -${room.stake}, 비기면 그대로)`)) return;
+  const r = await api('POST', '/api/rps/join', { room_id: roomId, hand });
+  markRpsSeen(r.id);
+  const head = `${HAND[hand]} vs ${HAND[r.host_hand]}`;
+  if (r.outcome === 'win') { toast(`${head}  이겼어요! +${r.net}점 🎉`); confetti(60); }
+  else if (r.outcome === 'lose') toast(`${head}  졌어요… ${r.net}점`);
+  else toast(`${head}  비겼어요! 판돈은 그대로`);
+  await refresh();
+});
+const cancelRps = guard(async (id) => { await api('POST', '/api/rps/cancel', { room_id: id }); toast('방을 닫고 판돈을 돌려받았어요'); await refresh(); });
+function markRpsSeen(id) { try { const a = JSON.parse(LS.get('rpsSeen') || '[]'); if (!a.includes(id)) LS.set('rpsSeen', JSON.stringify(a.concat(id))); } catch { /* 무시 */ } }
+function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으면 알려줌
+  const mine = rps.recent.filter((r) => r.mine);
+  const raw = LS.get('rpsSeen');
+  if (raw === null) { LS.set('rpsSeen', JSON.stringify(mine.map((r) => r.id))); return; }   // 첫 접속엔 알림 폭탄 방지
+  const seen = JSON.parse(raw), fresh = mine.filter((r) => !seen.includes(r.id));
+  if (!fresh.length) return;
+  LS.set('rpsSeen', JSON.stringify(seen.concat(fresh.map((r) => r.id))));
+  const f = fresh[0], other = f.host.name === user.name ? f.guest.name : f.host.name;
+  toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼어요! +' + f.net + '점' : f.net < 0 ? '졌어요 ' + f.net + '점' : '비겼어요'}`);
+  if (fresh.some((r) => r.net > 0)) confetti(50);
+}
+
 let shop = [];
 const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); if (tab === 'shop') render(); });
 const SLOTS = [['title', '호칭', '이름 앞에 붙는 칭호'], ['color', '닉네임 색', '글자 색'], ['fx', '닉네임 효과', '효과가 있으면 색보다 우선'], ['badge', '배지', '이름 앞 이모지']];

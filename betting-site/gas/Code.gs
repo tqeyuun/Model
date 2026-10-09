@@ -4,6 +4,7 @@
  * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 포인트(실제 돈과 무관).
  * - 처음 한 번 showAdminLink()를 실행하면 시트의 '관리자' 탭에 관리자 링크가 생깁니다.
  */
+var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
 var CFG = { START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
@@ -13,7 +14,8 @@ var SHEETS = {
   options: ['id', 'bet_id', 'label'],
   wagers: ['id', 'bet_id', 'option_id', 'user_id', 'amount', 'payout', 'lucky', 'created_at'],
   messages: ['id', 'user_id', 'text', 'created_at'],
-  items: ['user_id', 'item_id']
+  items: ['user_id', 'item_id'],
+  rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at']
 };
 
 /* ================= 웹 앱 진입점 ================= */
@@ -252,9 +254,48 @@ function betsList(u) {
   return betViews(bets, u);
 }
 
+/* ================= 가위바위보 ================= */
+function withLock(fn) {
+  if (HOLDING) return fn();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+/** 12시간 동안 아무도 안 온 방은 닫고 판돈 환불 */
+function rpsSweep() {
+  var old = function () { return tbl('rps').where(function (r) { return r.status === 'waiting' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  if (!old().length) return;
+  withLock(function () {
+    TBL.rps = null; TBL.users = null;
+    old().forEach(function (r) { addPoints(r.host_id, r.stake); r.status = 'cancelled'; tbl('rps').save(r); });
+  });
+}
+function rpsPlayer(id) {
+  var u = userById(id), o = { name: u ? u.name : '(탈퇴)' };
+  if (u) { var d = deco(u); for (var k in d) o[k] = d[k]; }
+  return o;
+}
+function rpsNet(r, myId) {
+  if (r.host_id !== myId && r.guest_id !== myId) return null;
+  if (r.result === 'draw') return 0;
+  return (r.result === 'host') === (r.host_id === myId) ? r.stake : -r.stake;
+}
+function rpsView(u) {
+  rpsSweep();
+  var all = tbl('rps').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting'; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    return { id: r.id, stake: r.stake, created_at: r.created_at, host: rpsPlayer(r.host_id), mine: r.host_id === u.id,
+      my_hand: r.host_id === u.id ? r.host_hand : null }; // 방장의 손은 본인에게만 보임
+  });
+  var recent = all.filter(function (r) { return r.status === 'done'; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 15).map(function (r) {
+    return { id: r.id, stake: r.stake, host: rpsPlayer(r.host_id), guest: rpsPlayer(r.guest_id), host_hand: r.host_hand, guest_hand: r.guest_hand,
+      result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id) };
+  });
+  return { rooms: rooms, recent: recent };
+}
+
 /* ================= API 경로 ================= */
 var ROUTES = {
-  'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView() : [] }; },
+  'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView() : [], rps: u ? rpsView(u) : null }; },
 
   'POST /api/signup': function (body, u, ctx) {
     var name = checkName(body.name), pin = String(body.pin || '');
@@ -352,6 +393,47 @@ var ROUTES = {
     return { ok: true };
   },
 
+  'GET /api/rps': function (body, u) { needLogin(u); return rpsView(u); },
+  'POST /api/rps/create': function (body, u) {
+    needLogin(u);
+    var hand = String(body.hand), stake = Number(body.stake);
+    if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주세요.');
+    if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '점 이상이에요.');
+    if (u.points < stake) fail(400, '포인트가 부족해요.');
+    if (tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지예요.');
+    u.points -= stake; tbl('users').save(u);   // 판돈은 방을 여는 순간 맡겨짐
+    var r = tbl('rps').insert({ host_id: u.id, stake: stake, host_hand: hand, guest_id: '', guest_hand: '', status: 'waiting', result: '', created_at: now(), played_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/rps/join': function (body, u) {
+    needLogin(u);
+    var hand = String(body.hand);
+    if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주세요.');
+    var rid = Number(body.room_id);
+    var r = tbl('rps').find(function (x) { return x.id === rid; }) || fail(404, '방이 없어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없어요.');
+    if (u.points < r.stake) fail(400, '포인트가 부족해요.');
+    var result = r.host_hand === hand ? 'draw' : RPS.BEATS[r.host_hand] === hand ? 'host' : 'guest';
+    // 방장은 판돈을 이미 냈고, 도전자는 지금 낸다. 이긴 쪽이 2배, 비기면 각자 환불.
+    if (result === 'draw') addPoints(r.host_id, r.stake);
+    else if (result === 'host') { addPoints(r.host_id, r.stake * 2); u.points -= r.stake; tbl('users').save(u); }
+    else { u.points += r.stake; tbl('users').save(u); }
+    r.guest_id = u.id; r.guest_hand = hand; r.status = 'done'; r.result = result; r.played_at = now(); tbl('rps').save(r);
+    return { ok: true, id: r.id, host_hand: r.host_hand, guest_hand: hand, stake: r.stake, host: rpsPlayer(r.host_id),
+      outcome: result === 'draw' ? 'draw' : result === 'guest' ? 'win' : 'lose', net: result === 'draw' ? 0 : result === 'guest' ? r.stake : -r.stake };
+  },
+  'POST /api/rps/cancel': function (body, u) {
+    needLogin(u);
+    var rid = Number(body.room_id);
+    var r = tbl('rps').find(function (x) { return x.id === rid; }) || fail(404, '방이 없어요.');
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있어요.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방이에요.');
+    u.points += r.stake; tbl('users').save(u);
+    r.status = 'cancelled'; tbl('rps').save(r);
+    return { ok: true };
+  },
+
   'GET /api/shop': function (body, u) {
     needLogin(u);
     var owned = {}; tbl('items').where(function (r) { return r.user_id === u.id; }).forEach(function (r) { owned[r.item_id] = 1; });
@@ -411,6 +493,7 @@ var ROUTES = {
     } else if (body.action === 'delete') {
       var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
       if (tbl('wagers').find(function (w) { return w.user_id === t.id && active[w.bet_id]; })) fail(400, '진행 중인 내기에 건 돈이 있어서 못 지워요. 그 내기를 먼저 정리해주세요.');
+      tbl('rps').where(function (r) { return r.host_id === t.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
       tbl('messages').removeWhere(function (m) { return m.user_id === t.id; });
       tbl('items').removeWhere(function (r) { return r.user_id === t.id; });

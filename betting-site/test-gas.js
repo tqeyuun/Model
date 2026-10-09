@@ -153,6 +153,44 @@ err(call('', 'POST', '/api/enter', { name: '신입', pin: '0000' }), 401);      
 err(call('', 'POST', '/api/enter', { name: '새로운', pin: '12' }), 400);              // PIN 형식
 err(call('', 'POST', '/api/enter', { name: '', pin: '1234' }), 400);                  // 빈 닉네임
 
+// 가위바위보
+const [ra, rb, rc] = ['ra', 'rb', 'rc'].map(signup);
+const rpsGet = (t) => ok(call(t, 'GET', '/api/rps'));
+err(call(ra, 'POST', '/api/rps/create', { hand: 'lizard', stake: 100 }), 400);
+err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 5 }), 400);
+err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 99999 }), 400);
+const room1 = ok(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 100 }));
+assert.equal(pts(ra), 900);
+assert.ok(!JSON.stringify(rpsGet(rb)).includes('rock'), '대기 중 방장의 손 노출 금지');
+assert.ok(!JSON.stringify(state(rb)).includes('"rock"'), '/api/state 에도 노출 금지');
+assert.equal(rpsGet(ra).rooms[0].my_hand, 'rock');
+err(call(ra, 'POST', '/api/rps/join', { room_id: room1.id, hand: 'paper' }), 400);       // 본인 방
+const jr = ok(call(rb, 'POST', '/api/rps/join', { room_id: room1.id, hand: 'paper' }));   // 보 > 바위
+assert.equal(jr.outcome, 'win'); assert.equal(jr.net, 100);
+assert.equal(pts(ra), 900); assert.equal(pts(rb), 1100);
+err(call(rc, 'POST', '/api/rps/join', { room_id: room1.id, hand: 'paper' }), 400);       // 끝난 방
+const room2 = ok(call(ra, 'POST', '/api/rps/create', { hand: 'scissors', stake: 200 }));
+assert.equal(ok(call(rb, 'POST', '/api/rps/join', { room_id: room2.id, hand: 'paper' })).outcome, 'lose');
+assert.equal(pts(ra), 900 - 200 + 400); assert.equal(pts(rb), 900);
+const room3 = ok(call(ra, 'POST', '/api/rps/create', { hand: 'paper', stake: 50 }));
+const ra0 = pts(ra);
+assert.equal(ok(call(rc, 'POST', '/api/rps/join', { room_id: room3.id, hand: 'paper' })).outcome, 'draw');
+assert.equal(pts(ra), ra0 + 50); assert.equal(pts(rc), 1000);
+assert.deepEqual(rpsGet(ra).recent.map((r) => r.net).sort(), [-100, 0, 200].sort());
+const room4 = ok(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 300 }));
+const rbefore = pts(ra);
+err(call(rb, 'POST', '/api/rps/cancel', { room_id: room4.id }), 403);
+ok(call(ra, 'POST', '/api/rps/cancel', { room_id: room4.id }));
+assert.equal(pts(ra), rbefore + 300);
+for (let i = 0; i < 3; i++) ok(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 10 }));
+err(call(ra, 'POST', '/api/rps/create', { hand: 'rock', stake: 10 }), 400);               // 동시 3개 제한
+// 12시간 지난 방은 자동으로 닫히고 환불 (락 재진입 없이)
+const rOld = ok(call(rc, 'POST', '/api/rps/create', { hand: 'rock', stake: 100 }));
+const rc0 = pts(rc);
+vm.runInContext(`var o = tbl('rps').find(function(r){return r.id===${rOld.id}}); o.created_at = Date.now() - 13*3600e3; tbl('rps').save(o);`, sb);
+assert.equal(rpsGet(rb).rooms.some((r) => r.id === rOld.id), false);
+assert.equal(pts(rc), rc0 + 100);
+
 // 관리자 링크 생성 + 페이지 서빙
 vm.runInContext('showAdminLink()', sb);
 assert.ok(sheets['관리자'].data[1][0].includes('?admin=' + K));
