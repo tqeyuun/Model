@@ -16,6 +16,7 @@ const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
 const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
 let APPROVAL = process.env.APPROVAL !== '0';   // 가입 승인제: 방에 새로 들어온 계정은 방장(또는 관리자)이 승인해야 시작 (방을 만든 첫 계정은 자동 승인)
+let RENAME_OPEN = process.env.RENAME_OPEN === '1';   // 닉네임 변경 (나중에 상점 상품으로 넣을 예정이라 지금은 닫아 둠)
 let DEVICE_LIMIT = true;   // 한 기기에서는 방마다 계정을 하나만 만들 수 있음 (기기 번호는 브라우저가 보내 줌)
 let SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
@@ -338,6 +339,7 @@ const SETTING_SPECS = [
   { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => ROOM_STAKE_MAX, set: (v) => { ROOM_STAKE_MAX = v; } },
   { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: () => DEVICE_LIMIT, set: (v) => { DEVICE_LIMIT = v; } },
   { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: () => APPROVAL, set: (v) => { APPROVAL = v; } },
+  { key: 'rename_open', label: '닉네임 변경 열기', hint: '꺼져 있으면 유저가 닉네임을 못 바꿉니다 (상점에 넣기 전까지 닫아 둠). 관리자 화면에서는 항상 바꿀 수 있습니다', type: 'bool', get: () => RENAME_OPEN, set: (v) => { RENAME_OPEN = v; } },
   { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => GIFT_MAX, set: (v) => { GIFT_MAX = v; } },
   { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: () => Math.round(LUCKY_CHANCE * 100), set: (v) => { LUCKY_CHANCE = v / 100; } },
   { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: () => SHOP_OPEN, set: (v) => { SHOP_OPEN = v; } },
@@ -435,7 +437,7 @@ const isPending = (u) => !!u && u.approved === 0;
 const ownerIdOf = (grp) => q1('SELECT id FROM users WHERE grp IS ? AND approved=1 ORDER BY id LIMIT 1', grp)?.id;   // 방장 = 방에서 가장 먼저 승인된 계정
 const pendingListFor = (u) => (!isPending(u) && ownerIdOf(grpOf(u)) === u.id ? q('SELECT id, name FROM users WHERE grp IS ? AND approved=0 ORDER BY id', grpOf(u)) : []);
 const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ? AND approved=1', grpOf(u)).n, room: roomCodeOf(u),
-  pending: isPending(u), pending_list: pendingListFor(u), is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id, ...deco(u) };
+  pending: isPending(u), pending_list: pendingListFor(u), can_rename: RENAME_OPEN, is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id, ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
@@ -611,6 +613,7 @@ const routes = {
   },
   'POST /api/nickname': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요합니다.');
+    if (!RENAME_OPEN) fail(403, '닉네임 변경은 아직 준비 중입니다. (나중에 상점에서 제공 예정)');
     const name = checkName(body.name);
     const other = q1('SELECT id FROM users WHERE name=? AND grp IS ?', name, grpOf(u));
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임입니다.');

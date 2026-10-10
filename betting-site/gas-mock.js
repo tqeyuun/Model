@@ -51,6 +51,7 @@ function makeSandbox() {
   // 실제 앱스 스크립트는 파일을 읽는 순서가 보장되지 않아서, 일부러 Code.gs 를 먼저 실행해 봄 (Games.gs 를 최상단에서 참조하면 여기서 터짐)
   vm.runInContext(fs.readFileSync(__dirname + '/gas/Code.gs', 'utf8'), sb);
   vm.runInContext(fs.readFileSync(__dirname + '/gas/Games.gs', 'utf8'), sb);   // 게임 규칙 (Node 서버와 같은 games-core.js)
+  if (process.env.RENAME_OPEN !== '0') vm.runInContext('CFG.RENAME_OPEN = true;', sb);   // 기존 테스트는 닉네임 변경이 열린 상태로
   if (process.env.APPROVAL !== '1') vm.runInContext('CFG.APPROVAL = false;', sb);   // 승인제는 전용 테스트(APPROVAL=1)에서만 켬
   return { sb, sheets, cache, props };
 }

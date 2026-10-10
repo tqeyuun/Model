@@ -183,7 +183,7 @@ function nm(o, force = {}) {
   return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
 }
 function renderHeader() {
-  $('#who').innerHTML = user ? `${nm(user)} <button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button> · <span class="pts">${user.points.toLocaleString()}🪙</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
+  $('#who').innerHTML = user ? `${nm(user)} ${user.can_rename ? '<button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button>' : ''} · <span class="pts">${user.points.toLocaleString()}🪙</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> <button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>` : '';
 }
 let refreshP = null;
 function refresh() {   // 이미 진행 중이면 끝난 뒤 한 번 더 (동작 직후 호출이 옛 데이터로 끝나지 않게). 요청이 쌓이지는 않음

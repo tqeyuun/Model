@@ -5,7 +5,7 @@
  * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
-var CFG = { APPROVAL: true, /* 가입 승인제 */ DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
+var CFG = { RENAME_OPEN: false, /* 닉네임 변경: 나중에 상점 상품으로 넣을 예정이라 지금은 닫아 둠 */ APPROVAL: true, /* 가입 승인제 */ DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
   users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp', 'dev', 'approved'],
@@ -251,7 +251,7 @@ function pendingListFor(u) {
 }
 function meView(u) {
   var o = { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
-    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u), is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id };
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u), can_rename: !!CFG.RENAME_OPEN, is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id };
   var d = deco(u); for (var k in d) o[k] = d[k];
   return o;
 }
@@ -363,6 +363,7 @@ function settingSpecs() {
     { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
     { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
     { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: function () { return !!CFG.APPROVAL; }, set: function (v) { CFG.APPROVAL = !!v; } },
+    { key: 'rename_open', label: '닉네임 변경 열기', hint: '꺼져 있으면 유저가 닉네임을 못 바꿉니다 (상점에 넣기 전까지 닫아 둠). 관리자 화면에서는 항상 바꿀 수 있습니다', type: 'bool', get: function () { return !!CFG.RENAME_OPEN; }, set: function (v) { CFG.RENAME_OPEN = !!v; } },
     { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
     { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
     { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
@@ -725,7 +726,7 @@ var ROUTES = {
     return { token: addAccount(grp, name, pin, devOf(body)) };
   },
   'POST /api/nickname': function (body, u) {
-    needLogin(u); var name = checkName(body.name);
+    needLogin(u); if (!CFG.RENAME_OPEN) fail(403, '닉네임 변경은 아직 준비 중입니다. (나중에 상점에서 제공 예정)'); var name = checkName(body.name);
     var other = tbl('users').find(function (x) { return x.name === name && grpOf(x) === grpOf(u); });
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임입니다.');
     u.name = name; tbl('users').save(u); return { ok: true };
