@@ -195,6 +195,9 @@ async function refreshBody() {
   try {
     ({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));
     notifyRps();
+    const np = (user && user.pending_list ? user.pending_list.length : 0);
+    if (np > lastPending) toast('가입 승인 요청이 있습니다.');
+    lastPending = np;
     await gamesTick();
     const seen = JSON.parse(LS.get('luckySeen') || '[]');
     const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
@@ -206,14 +209,24 @@ async function refreshBody() {
 
 function render() {
   renderHeader();
-  $('#app').innerHTML = !token ? authView() : `
-    <div class="tabs">${[['bets','도박장'],['new','만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+  $('#app').innerHTML = !token ? authView() : user && user.pending ? pendingView() : `
+    ${approveCard()}<div class="tabs">${[['bets','도박장'],['new','만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
     ${bodyView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); loadGame(); };
 
+const pendingView = () => `<div class="card" style="text-align:center"><h2>⏳ 승인 대기 중</h2><div style="font-size:44px;margin:10px 0">🔒</div>
+  <p>방장의 승인을 기다리고 있습니다.</p><p class="mute">승인되면 1000🪙이 지급되고 모든 기능을 사용할 수 있습니다. 이 화면은 자동으로 갱신됩니다.</p></div>`;
+const approveCard = () => (user && user.pending_list && user.pending_list.length
+  ? `<div class="card"><h2>🙋 가입 승인 요청</h2>${user.pending_list.map((p) => `<div class="row" style="margin:6px 0"><b>${esc(p.name)}</b><span><button class="pri" onclick="approve(${p.id}, true)">승인</button> <button class="danger" onclick="approve(${p.id}, false)">거절</button></span></div>`).join('')}
+    <p class="mute">모르는 닉네임은 거절하십시오. 거절하면 그 계정은 삭제됩니다.</p></div>` : '');
+const approve = guard(async (id, accept) => {
+  if (!accept && !confirm('거절하면 이 계정이 삭제됩니다. 거절합니까?')) return;
+  await api('POST', '/api/approve', { user_id: id, accept }); toast(accept ? '승인했습니다.' : '거절했습니다.'); await refresh();
+});
+let lastPending = 0;
 let authMode = 'join';
 const setAuthMode = (m) => { authMode = m; rerenderKeep(); };
 const loginForm = () => `
@@ -222,7 +235,7 @@ const loginForm = () => `
   <input id="n" placeholder="닉네임" maxlength="12" autocomplete="username">
   <input id="p" placeholder="내 PIN (나만 아는 것, 4~16자)" type="password" maxlength="16" autocomplete="current-password" onkeydown="if(event.key==='Enter')auth()">
   <button class="pri" style="width:100%;margin-top:6px" onclick="auth()">${authMode === 'create' ? '방 만들고 시작하기' : '시작하기'}</button>
-  <p class="mute"><b>방 코드</b>는 상대와 같은 걸 써서 같은 방에 들어갑니다. <b>PIN</b>은 본인만 아는 로그인 비밀번호입니다. 닉네임은 방마다 따로 정하며, 한 기기에서는 방마다 계정을 하나만 만들 수 있습니다.</p>`;
+  <p class="mute"><b>방 코드</b>는 상대와 같은 걸 써서 같은 방에 들어갑니다. <b>PIN</b>은 본인만 아는 로그인 비밀번호입니다. 닉네임은 방마다 따로 정하며, 한 기기에서는 방마다 계정을 하나만 만들 수 있습니다. 방에 새로 들어오는 계정은 방장의 승인을 받아야 시작할 수 있습니다.</p>`;
 function authView() {
   return `<div class="card"><h2>들어가기</h2><p class="mute">친구들과 같은 <b>방 코드</b>로 같은 방에 모여서 도박·가위바위보·게임·채팅을 해요. 처음 들어오면 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>${loginForm()}</div>`;
 }
@@ -230,7 +243,7 @@ const auth = guard(async () => {
   const body = { room: $('#r').value, name: $('#n').value, pin: $('#p').value, mode: authMode, dev: DEV };
   let r = await api('POST', '/api/enter', body);
   if (r.new_user) {   // 이 방에 없는 닉네임이면 새 계정 — 오타일 수 있어서 한 번 확인
-    if (!confirm(`방 "${body.room.trim()}"에 '${body.name.trim()}' 닉네임으로 새로 들어가시겠습니까? (1000🪙 지급)\n\n(이미 계정이 있다면 닉네임이나 PIN을 잘못 입력한 걸 수 있습니다.)`)) return;
+    if (!confirm(`방 "${body.room.trim()}"에 '${body.name.trim()}' 닉네임으로 새로 들어가시겠습니까? (방장 승인 후 1000🪙 지급)\n\n(이미 계정이 있다면 닉네임이나 PIN을 잘못 입력한 걸 수 있습니다.)`)) return;
     r = await api('POST', '/api/enter', { ...body, create: true });
   }
   token = r.token; LS.set('token', token); render(); await refresh();

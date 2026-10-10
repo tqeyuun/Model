@@ -5,10 +5,10 @@
  * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
-var CFG = { DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
+var CFG = { APPROVAL: true, /* 가입 승인제 */ DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
-  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp', 'dev'],
+  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp', 'dev', 'approved'],
   sessions: ['token', 'user_id', 'created_at'],
   bets: ['id', 'title', 'creator_id', 'status', 'winner', 'closes_at', 'created_at'],
   options: ['id', 'bet_id', 'label'],
@@ -65,6 +65,7 @@ function handle(token, adminKey, method, url, body) {
     var ctx = { token: String(token || ''), adminKey: String(adminKey || ''), qs: qs };
     ctx.user = authUser(ctx.token);
     if (ctx.token && !ctx.user) fail(401, '다시 로그인하십시오.');
+    if (isPending(ctx.user) && method + ' ' + path !== 'GET /api/state') fail(403, '방장의 승인을 기다리는 중입니다.');   // 승인 전에는 내 정보만 볼 수 있음
     return JSON.stringify({ data: fn(body || {}, ctx.user, ctx) });
   } catch (e) {
     if (e && e.http) return JSON.stringify({ error: e.message, code: e.http });
@@ -152,7 +153,8 @@ function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
   checkDevice(grp, dev);
   var salt = Utilities.getUuid().slice(0, 8);
-  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: grp, dev: dev || '' });
+  var ok = !tbl('users').find(function (x) { return grpOf(x) === grp; }) || !CFG.APPROVAL;   // 방의 첫 계정(방장)은 자동 승인. 승인 전에는 칩도 없음
+  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: ok ? CFG.START_POINTS : 0, last_aid: 0, created_at: now(), grp: grp, dev: dev || '', approved: ok ? 1 : 0 });
   return newSession(nu.id);
 }
 function sameRoom(userId, me) { var o = userById(userId); return !!o && grpOf(o) === grpOf(me); }
@@ -241,9 +243,15 @@ function deco(r) {
   function v(k) { var i = SHOP_BY_ID[r[k]]; return i ? i.value : null; }
   return { title: v('eq_title'), color: v('eq_color'), fx: v('eq_fx'), badge: v('eq_badge') };
 }
+function isPending(u) { return !!u && u.approved === 0; }
+function ownerIdOf(grp) { var l = tbl('users').all().filter(function (x) { return grpOf(x) === grp && x.approved !== 0; }).sort(function (a, b) { return a.id - b.id; }); return l.length ? l[0].id : null; }   // 방장 = 방에서 가장 먼저 승인된 계정
+function pendingListFor(u) {
+  if (isPending(u) || ownerIdOf(grpOf(u)) !== u.id) return [];
+  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved === 0; }).sort(function (a, b) { return a.id - b.id; }).map(function (x) { return { id: x.id, name: x.name }; });
+}
 function meView(u) {
-  var o = { id: u.id, name: u.name, points: u.points, can_aid: u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
-    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u); }).length, room: roomCodeOf(u) };
+  var o = { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u) };
   var d = deco(u); for (var k in d) o[k] = d[k];
   return o;
 }
@@ -329,7 +337,7 @@ function betById(id) { return tbl('bets').find(function (b) { return b.id === Nu
 
 function rankingView(me) {
   var wagers = tbl('wagers').all(), bets = {}; tbl('bets').all().forEach(function (b) { bets[b.id] = b.status; });
-  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(me); }).sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
+  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(me) && x.approved !== 0; }).sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
     var mine = wagers.filter(function (w) { return w.user_id === u.id && bets[w.bet_id] === 'resolved'; });
     var o = { name: u.name, points: u.points, wins: mine.filter(function (w) { return w.payout > 0; }).length, losses: mine.filter(function (w) { return w.payout === 0; }).length };
     var d = deco(u); for (var k in d) o[k] = d[k];
@@ -354,6 +362,7 @@ function settingSpecs() {
     { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '점', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
     { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
     { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
+    { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: function () { return !!CFG.APPROVAL; }, set: function (v) { CFG.APPROVAL = !!v; } },
     { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
     { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
     { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
@@ -633,7 +642,20 @@ function slotView(u) {
 
 /* ================= API 경로 ================= */
 var ROUTES = {
-  'GET /api/state': function (body, u) { sweep(); return { me: u ? meView(u) : null, bets: u ? betsList(u) : [], ranking: u ? rankingView(u) : [], rps: u ? rpsView(u) : null }; },
+  'GET /api/state': function (body, u) { sweep(); var ok = u && !isPending(u); return { me: u ? meView(u) : null, bets: ok ? betsList(u) : [], ranking: ok ? rankingView(u) : [], rps: ok ? rpsView(u) : (u ? { rooms: [], recent: [] } : null) }; },
+  'POST /api/approve': function (body, u) {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
+    needLogin(u);
+    var t = userById(Number(body.user_id));
+    if (!t || t.approved !== 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '대기 중인 가입 요청이 없습니다.');
+    if (body.accept) { t.approved = 1; t.points = CFG.START_POINTS; tbl('users').save(t); }
+    else {
+      var keys = tbl('sessions').where(function (s) { return s.user_id === t.id; }).map(function (s) { return 's_' + s.token; });
+      if (keys.length) CacheService.getScriptCache().removeAll(keys);
+      tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
+      tbl('users').remove(t);
+    }
+    return { ok: true };
+  },
 
   // (테스트/내부용) 방 코드를 안 주면 PIN을 방 코드로 씀. 방이 없으면 만들고 계정을 만듦
   'POST /api/signup': function (body) {
@@ -1019,7 +1041,7 @@ var ROUTES = {
   /* ---- 관리자 ---- */
   'GET /api/admin/overview': function (body, u, ctx) {
     adminOnly(ctx); sweep();
-    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, grp: roomCodeOf(x) }; });
+    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, approved: x.approved === 0 ? 0 : 1, grp: roomCodeOf(x) }; });
     var wag = tbl('wagers').all(), names = {}; tbl('users').all().forEach(function (x) { names[x.id] = x.name; });
     var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
     var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
@@ -1063,6 +1085,9 @@ var ROUTES = {
       var g2 = ensureRoom(String(body.value || '').trim());
       if (tbl('users').find(function (x) { return grpOf(x) === g2 && x.name === t.name && x.id !== t.id; })) fail(409, '그 방에 같은 닉네임이 이미 있습니다.');
       t.grp = g2; tbl('users').save(t);
+    } else if (body.action === 'approve') {      // 가입 승인 (칩 지급)
+      if (t.approved !== 0) fail(400, '이미 승인된 계정입니다.');
+      t.approved = 1; t.points = CFG.START_POINTS; tbl('users').save(t);
     } else if (body.action === 'clear_device') {   // 기기 묶음 해제 (그 기기에서 새 계정을 만들 수 있게)
       t.dev = ''; tbl('users').save(t);
     } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)

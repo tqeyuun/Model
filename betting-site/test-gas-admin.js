@@ -40,7 +40,7 @@ const [b1, b2] = [mk('비원', '2222'), mk('비투', '2222')];
 
 /* ---- 설정 ---- */
 let ov = ok(A('GET', '/api/admin/overview'));
-assert.deepEqual(ov.settings.map((x) => x.key), ['solo_net_cap', 'solo_plays', 'bj_max_bet', 'slot_max_bet', 'room_stake_max', 'device_limit', 'gift_max', 'lucky_percent', 'shop_open']);
+assert.deepEqual(ov.settings.map((x) => x.key), ['solo_net_cap', 'solo_plays', 'bj_max_bet', 'slot_max_bet', 'room_stake_max', 'device_limit', 'approval_required', 'gift_max', 'lucky_percent', 'shop_open']);
 const def = Object.fromEntries(ov.settings.map((x) => [x.key, x.default]));
 assert.equal(def.solo_net_cap, 500); assert.equal(def.solo_plays, 30); assert.equal(def.shop_open, false); assert.equal(def.room_stake_max, 1000);
 for (const bad of [{ solo_net_cap: -1 }, { solo_net_cap: 1.5 }, { solo_net_cap: '100' }, { bj_max_bet: 5 }, { lucky_percent: 101 }, { shop_open: 1 }, { nope: 1 }, { room_stake_max: 9 }])

@@ -15,6 +15,7 @@ const RPS_HANDS = ['rock', 'paper', 'scissors'];           // 바위 보 가위
 const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
 const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
+let APPROVAL = process.env.APPROVAL !== '0';   // 가입 승인제: 방에 새로 들어온 계정은 방장(또는 관리자)이 승인해야 시작 (방을 만든 첫 계정은 자동 승인)
 let DEVICE_LIMIT = true;   // 한 기기에서는 방마다 계정을 하나만 만들 수 있음 (기기 번호는 브라우저가 보내 줌)
 let SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
@@ -75,6 +76,7 @@ try { db.exec('ALTER TABLE messages ADD COLUMN bet_id INTEGER NOT NULL DEFAULT 0
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN grp TEXT'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN dev TEXT'); } catch { /* 이미 있음 */ }
+try { db.exec('ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1'); } catch { /* 이미 있음 */ }   // 0 = 방장 승인 대기
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_room_name ON users(grp, name)');   // 닉네임은 방 안에서만 겹치지 않으면 됨
 for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
 db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
@@ -335,6 +337,7 @@ const SETTING_SPECS = [
   { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: `최소 ${G.SLOT.MIN_BET}🪙`, type: 'int', min: G.SLOT.MIN_BET, max: 1000000, get: () => G.SLOT.MAX_BET, set: (v) => { G.SLOT.MAX_BET = v; } },
   { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => ROOM_STAKE_MAX, set: (v) => { ROOM_STAKE_MAX = v; } },
   { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: () => DEVICE_LIMIT, set: (v) => { DEVICE_LIMIT = v; } },
+  { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: () => APPROVAL, set: (v) => { APPROVAL = v; } },
   { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => GIFT_MAX, set: (v) => { GIFT_MAX = v; } },
   { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: () => Math.round(LUCKY_CHANCE * 100), set: (v) => { LUCKY_CHANCE = v / 100; } },
   { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: () => SHOP_OPEN, set: (v) => { SHOP_OPEN = v; } },
@@ -428,7 +431,11 @@ function betView(b, me) {
     chat_count: q1('SELECT COUNT(*) n FROM messages WHERE bet_id=?', b.id).n,
   };
 }
-const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ?', grpOf(u)).n, room: roomCodeOf(u), ...deco(u) };
+const isPending = (u) => !!u && u.approved === 0;
+const ownerIdOf = (grp) => q1('SELECT id FROM users WHERE grp IS ? AND approved=1 ORDER BY id LIMIT 1', grp)?.id;   // 방장 = 방에서 가장 먼저 승인된 계정
+const pendingListFor = (u) => (!isPending(u) && ownerIdOf(grpOf(u)) === u.id ? q('SELECT id, name FROM users WHERE grp IS ? AND approved=0 ORDER BY id', grpOf(u)) : []);
+const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ? AND approved=1', grpOf(u)).n, room: roomCodeOf(u),
+  pending: isPending(u), pending_list: pendingListFor(u), ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
@@ -458,7 +465,8 @@ function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
   checkDevice(grp, dev);
   const salt = crypto.randomBytes(8).toString('hex');
-  const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp,dev) VALUES (?,?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), grp, dev || null);
+  const ok = !q1('SELECT 1 FROM users WHERE grp IS ?', grp) || !APPROVAL ? 1 : 0;   // 방의 첫 계정(방장)은 자동 승인. 승인 전에는 칩도 없음
+  const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp,dev,approved) VALUES (?,?,?,?,?,?,?,?)', name, salt, hashPin(pin, salt), ok ? START_POINTS : 0, now(), grp, dev || null, ok);
   return newSession(Number(r.lastInsertRowid));
 }
 // 같은 방의 도박만 볼 수 있음 (도박을 연 사람의 방 기준). 아니면 null.
@@ -939,6 +947,16 @@ const routes = {
     run(`UPDATE users SET ${SLOT_COL[item.slot]}=? WHERE id=?`, item.id, u.id);
     return { ok: true };
   },
+  'POST /api/approve': (req, body, u) => {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
+    if (!u) fail(401, '로그인이 필요합니다.');
+    return tx(() => {
+      const t = q1('SELECT * FROM users WHERE id=?', Number(body.user_id));
+      if (!t || t.approved !== 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '대기 중인 가입 요청이 없습니다.');
+      if (body.accept) run('UPDATE users SET approved=1, points=? WHERE id=?', START_POINTS, t.id);
+      else { run('DELETE FROM sessions WHERE user_id=?', t.id); run('DELETE FROM users WHERE id=?', t.id); }
+      return { ok: true };
+    });
+  },
   'GET /api/me': (req, body, u) => me(u || fail(401, '로그인이 필요합니다.')),
   'GET /api/bets': (req, body, u) => {
     sweep();
@@ -1001,7 +1019,7 @@ const routes = {
   },
   'GET /api/admin/overview': (req) => {
     adminOnly(req); sweep();
-    const users = q('SELECT u.id, u.name, u.points, u.created_at, r.code grp FROM users u LEFT JOIN rooms r ON r.grp=u.grp ORDER BY u.points DESC');
+    const users = q('SELECT u.id, u.name, u.points, u.created_at, u.approved, r.code grp FROM users u LEFT JOIN rooms r ON r.grp=u.grp ORDER BY u.points DESC');
     const bets = q('SELECT * FROM bets ORDER BY id DESC LIMIT 200').map((b) => betView(b, null));
     const wagers = q('SELECT COUNT(*) n, COALESCE(SUM(amount),0) s, COALESCE(SUM(lucky),0) l FROM wagers')[0];
     const messages = q('SELECT m.id, m.text, m.created_at, u.name, b.title bet_title FROM messages m JOIN users u ON u.id=m.user_id LEFT JOIN bets b ON b.id=m.bet_id ORDER BY m.id DESC LIMIT 40');
@@ -1039,6 +1057,9 @@ const routes = {
         const name = checkName(body.value);
         if (q1('SELECT 1 FROM users WHERE name=? AND id<>? AND grp IS ?', name, u.id, u.grp)) fail(409, '이미 있는 닉네임입니다.');
         run('UPDATE users SET name=? WHERE id=?', name, u.id);
+      } else if (body.action === 'approve') {      // 가입 승인 (칩 지급)
+        if (u.approved !== 0) fail(400, '이미 승인된 계정입니다.');
+        run('UPDATE users SET approved=1, points=? WHERE id=?', START_POINTS, u.id);
       } else if (body.action === 'clear_device') {   // 기기 묶음 해제 (그 기기에서 새 계정을 만들 수 있게)
         run('UPDATE users SET dev=NULL WHERE id=?', u.id);
       } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
@@ -1091,10 +1112,11 @@ const routes = {
     SELECT u.name, u.points, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout>0) wins,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout=0) losses
-    FROM users u WHERE u.grp IS ? ORDER BY u.points DESC LIMIT 50`, grpOf(u)).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
+    FROM users u WHERE u.grp IS ? AND u.approved=1 ORDER BY u.points DESC LIMIT 50`, grpOf(u)).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+const PENDING_EMPTY = { 'GET /api/bets': [], 'GET /api/ranking': [], 'GET /api/rps': { rooms: [], recent: [] } };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); };
@@ -1106,7 +1128,12 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const body = raw ? JSON.parse(raw) : {};
-        send(200, await handler(req, body, authUser(req)));
+        const au = authUser(req), key = `${req.method} ${url.pathname}`;
+        if (isPending(au) && key !== 'GET /api/me') {   // 승인 전에는 내 정보만 볼 수 있음 (목록은 빈 값)
+          if (key in PENDING_EMPTY) return send(200, PENDING_EMPTY[key]);
+          fail(403, '방장의 승인을 기다리는 중입니다.');
+        }
+        send(200, await handler(req, body, au));
       } catch (e) {
         if (e instanceof HttpError) send(e.code, { error: e.message });
         else if (e instanceof SyntaxError) send(400, { error: '잘못된 요청입니다.' });
