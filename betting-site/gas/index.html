@@ -229,7 +229,7 @@ const approve = guard(async (id, accept) => {
 });
 const kick = guard(async (id) => {
   const r = ranking.find((x) => x.id === id);
-  if (!confirm(`'${r ? r.name : '이 멤버'}' 계정을 추방합니까?\n계정과 칩이 삭제되고, 그 기기는 24시간 동안 이 방에 들어올 수 없습니다.`)) return;
+  if (!confirm(`'${r ? r.name : '이 멤버'}' 계정을 추방합니까?\n계정과 칩이 삭제되고, 이 닉네임은 이 방에서 다시 쓸 수 없습니다.`)) return;
   await api('POST', '/api/kick', { user_id: id }); toast('추방했습니다.'); await refresh();
 });
 let lastPending = 0;

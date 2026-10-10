@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS lun_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NU
 CREATE TABLE IF NOT EXISTS lad (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, slots INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'waiting', win_end INTEGER, rungs TEXT, winner_id INTEGER, created_at INTEGER NOT NULL, played_at INTEGER);
 CREATE TABLE IF NOT EXISTS lad_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL, user_id INTEGER NOT NULL, slot INTEGER NOT NULL, joined_at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS bans (id INTEGER PRIMARY KEY, grp TEXT, dev TEXT NOT NULL, at INTEGER NOT NULL);   -- 추방된 기기 (일정 시간 동안 그 방에 못 들어옴)
+CREATE TABLE IF NOT EXISTS ban_names (id INTEGER PRIMARY KEY, grp TEXT, name TEXT NOT NULL, at INTEGER NOT NULL);   -- 추방된 닉네임 (그 방에서는 다시 못 씀)
 CREATE TABLE IF NOT EXISTS drops (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, total INTEGER NOT NULL, cnt INTEGER NOT NULL, left_amt INTEGER NOT NULL, left_cnt INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);      -- open | done | expired | cancelled
 CREATE TABLE IF NOT EXISTS drop_c (id INTEGER PRIMARY KEY, drop_id INTEGER NOT NULL, user_id INTEGER NOT NULL, amount INTEGER NOT NULL, at INTEGER NOT NULL);
@@ -459,13 +459,13 @@ function ensureRoom(code) {                       // 방이 없으면 만들고 
 }
 const userInRoom = (grp, name) => q1('SELECT * FROM users WHERE grp=? AND name=?', grp, name);
 const devOf = (body) => { const d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; };
-const BAN_MS = 24 * 3600e3;
+const checkBanned = (grp, name) => { if (q1('SELECT 1 FROM ban_names WHERE grp IS ? AND name=?', grp, name)) fail(403, '이 방에서 추방된 닉네임은 사용할 수 없습니다.'); };
 function checkDevice(grp, dev) {
-  if (dev && q1('SELECT 1 FROM bans WHERE grp IS ? AND dev=? AND at>?', grp, dev, now() - BAN_MS)) fail(403, '이 방에서 추방되어 한동안 다시 들어올 수 없습니다.');
   if (DEVICE_LIMIT && dev && q1('SELECT 1 FROM users WHERE grp IS ? AND dev=?', grp, dev)) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
 }
 function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+  checkBanned(grp, name);
   checkDevice(grp, dev);
   const salt = crypto.randomBytes(8).toString('hex');
   const ok = !q1('SELECT 1 FROM users WHERE grp IS ?', grp) || !APPROVAL ? 1 : 0;   // 방의 첫 계정(방장)은 자동 승인. 승인 전에는 칩도 없음
@@ -589,6 +589,7 @@ const routes = {
     }
     checkName(name);
     if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+    checkBanned(grp, name);
     checkDevice(grp, devOf(body));   // 확인 창을 띄우기 전에 알려 줌
     if (!body.create) return { new_user: true };
     return { token: addAccount(grp, name, pin, devOf(body)) };
@@ -615,6 +616,7 @@ const routes = {
   'POST /api/nickname': (req, body, u) => {
     if (!u) fail(401, '로그인이 필요합니다.');
     const name = checkName(body.name);
+    checkBanned(grpOf(u), name);
     const other = q1('SELECT id FROM users WHERE name=? AND grp IS ?', name, grpOf(u));
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임입니다.');
     run('UPDATE users SET name=? WHERE id=?', name, u.id);
@@ -968,7 +970,7 @@ const routes = {
       if (!t || t.approved === 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '추방할 수 있는 멤버가 아닙니다.');
       if (t.id === u.id) fail(400, '자신은 추방할 수 없습니다.');
       removeUser(t);
-      if (t.dev) run('INSERT INTO bans(grp,dev,at) VALUES (?,?,?)', t.grp, t.dev, now());
+      run('INSERT INTO ban_names(grp,name,at) VALUES (?,?,?)', t.grp, t.name, now());
       return { ok: true };
     });
   },
