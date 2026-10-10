@@ -130,6 +130,10 @@ header b{font-size:24px}.card h2{font-size:20px}
 .lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살습니다 */
 .card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
 .members{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.member{padding:4px 10px;border-radius:99px;background:#1b1b2b;border:1px solid var(--line);font-size:14px}.member.me{border-color:var(--cyan)}
+/* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
+.chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
+  background:radial-gradient(circle,#ff2d95 0 30%,#fff 31% 38%,#ff2d95 39% 47%,transparent 48%),repeating-conic-gradient(#fff 0 16deg,#b3125f 16deg 45deg);
+  border:.07em solid #fff;box-shadow:0 0 .5em rgba(255,45,149,.75),inset 0 0 .15em rgba(0,0,0,.45)}
 </style>
 </head>
 <body>
@@ -735,6 +739,21 @@ function rankView() {
 (async () => {
   try { cfg = await (await fetch('/api/config')).json(); } catch {}
   render(); refresh(); setInterval(refresh, 5000);
+})();
+
+// 글자 🪙 → 게임칩 (화면에 새로 들어오는 글자마다 바꿈)
+(function () {
+  const walk = (root) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName)) hits.push(n);
+    for (const n of hits) {
+      const parts = n.nodeValue.split('🪙'), f = document.createDocumentFragment();
+      parts.forEach((t, i) => { if (i) { const c = document.createElement('i'); c.className = 'chip'; f.append(c); } if (t) f.append(t); });
+      n.replaceWith(f);
+    }
+  };
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>
 </body>

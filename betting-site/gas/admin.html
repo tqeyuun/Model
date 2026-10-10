@@ -34,6 +34,10 @@ table{width:100%;border-collapse:collapse}td,th{padding:7px 4px;border-bottom:1p
 :root{--display:'Black Han Sans','Noto Sans KR',system-ui,sans-serif}
 h1,h2{font-family:var(--display);font-weight:400;letter-spacing:.3px}
 h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
+/* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
+.chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
+  background:radial-gradient(circle,#ff2d95 0 30%,#fff 31% 38%,#ff2d95 39% 47%,transparent 48%),repeating-conic-gradient(#fff 0 16deg,#b3125f 16deg 45deg);
+  border:.07em solid #fff;box-shadow:0 0 .5em rgba(255,45,149,.75),inset 0 0 .15em rgba(0,0,0,.45)}
 </style>
 </head>
 <body>
@@ -132,6 +136,21 @@ function render() {
     <div class="acts" style="margin-top:4px">${b.status === 'open' ? `<button onclick="betAct(${b.id},'close')">마감</button>` : ''}${b.status === 'open' || b.status === 'closed' ? `<button onclick="betAct(${b.id},'cancel')">취소(환불)</button>` : ''}<button class="danger" onclick="betAct(${b.id},'delete')">삭제</button></div></div>`).join('') || '<p class="mute">도박이 없습니다.</p>'}</div>`;
 }
 load(); setInterval(() => { if (document.activeElement?.tagName !== 'INPUT') load(); }, 8000);
+
+// 글자 🪙 → 게임칩 (화면에 새로 들어오는 글자마다 바꿈)
+(function () {
+  const walk = (root) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName)) hits.push(n);
+    for (const n of hits) {
+      const parts = n.nodeValue.split('🪙'), f = document.createDocumentFragment();
+      parts.forEach((t, i) => { if (i) { const c = document.createElement('i'); c.className = 'chip'; f.append(c); } if (t) f.append(t); });
+      n.replaceWith(f);
+    }
+  };
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
+})();
 </script>
 </body>
 </html>

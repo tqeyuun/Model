@@ -1,5 +1,5 @@
 #!/bin/bash
-# Oracle Cloud (Ubuntu) 서버에서 한 번만 실행:  bash deploy/oracle-setup.sh
+# Oracle Cloud / Google Cloud (Ubuntu) 서버에서 한 번만 실행:  bash deploy/server-setup.sh
 # 하는 일: Node 22 설치 → 80번 포트 열기 → 재부팅해도 자동으로 켜지는 서비스 등록
 set -e
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,10 +11,10 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
 fi
 node -v
 
-# 오라클 우분투는 방화벽(iptables)이 80번을 막고 있어서 허용 규칙을 맨 위에 추가
-if ! sudo iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null; then
+# 오라클 우분투는 방화벽(iptables)이 80번을 막고 있어서 허용 규칙을 맨 위에 추가 (막는 규칙이 없는 서버는 건너뜀)
+if sudo iptables -S INPUT 2>/dev/null | grep -q REJECT && ! sudo iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null; then
   sudo iptables -I INPUT 1 -p tcp --dport 80 -j ACCEPT
-  sudo apt-get install -y iptables-persistent >/dev/null 2>&1 || true
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent >/dev/null 2>&1 || true
   sudo netfilter-persistent save 2>/dev/null || sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
 fi
 
