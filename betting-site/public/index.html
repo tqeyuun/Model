@@ -130,6 +130,7 @@ header b{font-size:24px}.card h2{font-size:20px}
 .lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살습니다 */
 .card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
 .member .kick{padding:0 6px;margin-left:4px;font-size:12px;line-height:18px;border-radius:9px;color:#ff6b8a;border-color:#ff6b8a66}
+.sec{margin:16px 4px 6px;font-size:16px}
 .members{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.member{padding:4px 10px;border-radius:99px;background:#1b1b2b;border:1px solid var(--line);font-size:14px}.member.me{border-color:var(--cyan)}
 /* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
 .chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
@@ -163,7 +164,7 @@ function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; ga
 
 let cfg = {}, pending = null, chatMsgs = [], lastChatId = 0;
 let chatBet = null;
-let rps = { rooms: [], recent: [] }, listMode = 'bets', createMode = 'bet', createHand = null;
+let rps = { rooms: [], recent: [] }, listMode = 'all', createMode = 'bet', createHand = null;
 
 // 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
 function nm(o, force = {}) {
@@ -373,21 +374,30 @@ const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { r
 const setListMode = (m) => { listMode = m; render(); loadGame(); };
 const setCreateMode = (m) => { createMode = m; render(); };
 function modeToggle(mode, fn) {
-  const items = fn === 'setListMode' ? [['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기']]
+  const items = fn === 'setListMode' ? [['all', '📋 전체'], ['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기']]
     : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
     : fn === 'setGiftMode' ? [['drop', '💸 돈뿌리기'], ['beg', '🙏 구걸하기']]
     : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
   return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
-function rpsLobby() {
-  const rooms = rps.rooms.map((r) => r.mine
+function allView() {   // 도박장 기본 화면: 열려 있는 방을 종류별로 한꺼번에
+  const bs = bets.filter((b) => !isDone(b)).map(betView).join(''), r = rpsRooms(), l = lunRooms(), d = ladRooms();
+  const sec = (title, n, html) => (html ? `<h2 class="sec">${title} <span class="mute">${n}</span></h2>${html}` : '');
+  return sec('🎲 도박', bets.filter((b) => !isDone(b)).length, bs) + sec('✊ 가위바위보', rps.rooms.length, r) + sec('🤫 최저 유일 숫자', lun.rooms.length, l) + sec('🪜 사다리타기', lad.rooms.length, d)
+    || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>';
+}
+function rpsRooms() {
+  return rps.rooms.map((r) => r.mine
     ? `<div class="room mine"><div class="row"><span>${nm(r.host)} <span class="tag s">내 방 · 대기 중</span></span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
         <div class="mute">내가 낸 패: ${HAND[r.my_hand]} ${HAND_NAME[r.my_hand]} (상대에겐 보이지 않습니다)</div>
         <button onclick="cancelRps(${r.id})">방 닫고 판돈 돌려받기</button></div>`
     : `<div class="room"><div class="row"><span>${nm(r.host)}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
         <div class="mute">하나 내면 바로 결판! 이기면 +${r.stake}, 지면 -${r.stake}, 비기면 그대로</div>
         <div class="hands">${handBtns(r.id)}</div></div>`).join('');
+}
+function rpsLobby() {
+  const rooms = rpsRooms();
   const rec = rps.recent.map((r) => {
     const w = r.result === 'draw' ? '무승부' : esc(r.result === 'host' ? r.host.name : r.guest.name) + ' 승';
     const mine = r.mine ? `<b class="${r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute'}">${r.net > 0 ? '+' : ''}${r.net}🪙</b>` : '';
@@ -433,7 +443,7 @@ function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으�
   if (!fresh.length) return;
   localStorage.setItem('rpsSeen', JSON.stringify(seen.concat(fresh.map((r) => r.id))));
   const f = fresh[0], other = f.host.name === user.name ? f.guest.name : f.host.name;
-  toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼습니다! +' + f.net + '점' : f.net < 0 ? '졌습니다 ' + f.net + '점' : '비겼습니다'}`);
+  toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼습니다! +' + f.net + '🪙' : f.net < 0 ? '졌습니다 ' + f.net + '🪙' : '비겼습니다'}`);
 }
 
 /* ---------- 새 게임: 최저 유일 숫자 · 사다리타기 · 블랙잭 · 슬롯머신 ---------- */
@@ -466,6 +476,7 @@ async function loadGame() {
     if (view === 'lun') await fetchLun();
     else if (view === 'lad') await fetchLad();
     else if (view === 'drop' || view === 'beg') { const d = await api('GET', '/api/gifts'); if (curView() !== view) return; gift = d; }
+    else if (view === 'all') await Promise.all([fetchLun(), fetchLad()]);
     else if (view === 'bj') { const d = await api('GET', '/api/blackjack'); if (curView() !== 'bj') return; bj = d; }
     else if (view === 'slots') { const d = await api('GET', '/api/slots'); if (curView() !== 'slots') return; slotData = d; }
     else return;
@@ -476,8 +487,8 @@ async function gamesTick() {
   const view = curView();
   if (!gamesInit) { gamesInit = true; try { await Promise.all([fetchLun(), fetchLad()]); } catch (e) { /* 무시 */ } }
   else {
-    if (watch.lun && view !== 'lun') { try { await fetchLun(); } catch (e) { /* 무시 */ } }
-    if (watch.lad && view !== 'lad') { try { await fetchLad(); } catch (e) { /* 무시 */ } }
+    if (watch.lun && view !== 'lun' && view !== 'all') { try { await fetchLun(); } catch (e) { /* 무시 */ } }
+    if (watch.lad && view !== 'lad' && view !== 'all') { try { await fetchLad(); } catch (e) { /* 무시 */ } }
   }
   await loadGame();
 }
@@ -488,8 +499,8 @@ const LUN_RULES = `<details %OPEN% class="rules"><summary><b>🤫 최저 유일 
   <p>같은 숫자를 낸 사람이 둘 이상이면 그 숫자는 <b>무효</b>입니다. 남은 숫자 중 <b>가장 작은 숫자</b>를 낸 사람이 <b>판돈 전부</b>를 가져갑니다.</p>
   <p class="mute">예) A 1, B 1, C 3, D 7 → 1은 겹쳐서 무효 → 안 겹친 3·7 중 작은 3을 낸 <b>C 승</b></p>
   <p class="mute">작은 숫자가 유리하지만 다들 그렇게 생각하니까 겹치기 쉽습니다. 상대의 속마음을 읽어보십시오. 전부 겹치면 승자가 없고 판돈은 돌려받습니다.</p></details>`;
-function lunLobby() {
-  const rooms = lun.rooms.map((r) => {
+function lunRooms() {
+  return lun.rooms.map((r) => {
     const seats = `<div class="seats">${Array.from({ length: r.cap }, (_, i) => `<span class="seat ${r.players[i] ? 'on' : ''}">${r.players[i] ? esc(r.players[i].name) : '빈자리'}</span>`).join('')}</div>`;
     const body = r.joined
       ? `<div class="mute">내가 낸 숫자: <b style="color:var(--cyan)">${r.my_num}</b> (다른 사람에겐 보이지 않습니다)</div>` + (r.mine ? `<div class="betrow"><button class="pri" onclick="startLun(${r.id})" ${r.count < LUN_MIN ? 'disabled' : ''}>지금 시작 (${r.count}명으로)</button><button onclick="cancelLun(${r.id})">방 닫고 환불</button></div>` : '')
@@ -497,8 +508,11 @@ function lunLobby() {
     return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
       <div class="mute">${r.count}/${r.cap}명 · 다 모이면 바로 결과가 나옵니다</div>${seats}${body}</div>`;
   }).join('');
+}
+function lunLobby() {
+  const rooms = lunRooms();
   const rec = lun.recent.map((r) => `<div class="rec ${r.mine ? 'me' : ''}"><div>${r.players.map((p) => `<span class="pn ${p.unique ? 'uq' : ''} ${r.winner && p.name === r.winner.name ? 'win' : ''}">${esc(p.name)} ${p.num}</span>`).join('')}</div>
-    <span class="mute">${r.winner ? '🏆 ' + esc(r.winner.name) + ' 승 · 판돈 ' + (r.stake * r.players.length) + '점' : '겹쳐서 승자 없음 · 환불'}</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>`).join('');
+    <span class="mute">${r.winner ? '🏆 ' + esc(r.winner.name) + ' 승 · 판돈 ' + (r.stake * r.players.length) + '🪙' : '겹쳐서 승자 없음 · 환불'}</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>`).join('');
   return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>'}
     <div class="card"><h2>최근 결과</h2><div class="mute">파란 테두리 = 안 겹친 숫자, 초록 = 승자</div>${rec || '<p class="mute">아직 결과가 없습니다.</p>'}</div>`;
 }
@@ -550,15 +564,18 @@ function ladderSvg(r) {
   for (let i = 0; i < N; i++) g += `<text x="${x(i)}" y="${bot + 22}" text-anchor="middle" font-size="${i === r.win_end ? 18 : 12}" fill="${i === r.win_end ? '#ffb800' : '#8d8aa8'}">${i === r.win_end ? '🏆' : '꽝'}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W + 40}px;display:block;margin:6px auto">${g}</svg>`;
 }
-function ladLobby() {
-  const rooms = lad.rooms.map((r) => {
+function ladRooms() {
+  return lad.rooms.map((r) => {
     const taken = r.seats.filter(Boolean).length;
     const seats = `<div class="seats">${r.seats.map((s, i) => s ? `<span class="seat on ${s.mine ? 'mine' : ''}">${i + 1}번 ${esc(s.name)}</span>`
       : r.joined ? `<span class="seat">${i + 1}번 빈자리</span>` : `<button class="seat free" onclick="joinLad(${r.id},${i})">${i + 1}번 앉기</button>`).join('')}</div>`;
     return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
-      <div class="mute">${taken}/${r.slots}명 · 자리가 다 차면 바로 사다리를 탑니다 ${r.joined ? '' : '· 앉으면 ' + r.stake + '점이 빠져나갑니다'}</div>${seats}
+      <div class="mute">${taken}/${r.slots}명 · 자리가 다 차면 바로 사다리를 탑니다 ${r.joined ? '' : '· 앉으면 ' + r.stake + '🪙이 빠져나갑니다'}</div>${seats}
       ${r.mine ? `<button onclick="cancelLad(${r.id})">방 닫고 환불</button>` : ''}</div>`;
   }).join('');
+}
+function ladLobby() {
+  const rooms = ladRooms();
   const rec = lad.recent.map((r) => `<div class="card sub ${r.mine ? 'me' : ''}"><div class="row"><span class="mute">🏆 ${esc(r.winner.name)} 당첨 · 판돈 ${r.stake * r.slots}🪙</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>${ladderSvg(r)}</div>`).join('');
   return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>'}
     <h2 style="margin:16px 4px 0">최근 결과</h2>${rec || '<p class="mute">아직 결과가 없습니다.</p>'}`;
@@ -724,7 +741,7 @@ const cancelBeg = guard(async (id) => { await api('POST', '/api/beg/cancel', { i
 
 /* ---- 화면 조립 ---- */
 function bodyView() {
-  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
+  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
   if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView }[createMode] || newView)();
   if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
   if (tab === 'gift') return modeToggle(giftMode, 'setGiftMode') + (giftMode === 'beg' ? begView() : dropView());

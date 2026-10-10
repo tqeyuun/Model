@@ -358,13 +358,13 @@ function settingSpecs() {
   return [
     { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 🪙 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.SOLO.DAILY_NET_CAP; }, set: function (v) { GAMES.SOLO.DAILY_NET_CAP = v; } },
     { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: function () { return GAMES.SOLO.DAILY_PLAYS; }, set: function (v) { GAMES.SOLO.DAILY_PLAYS = v; } },
-    { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '점', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
-    { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '점', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
-    { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
+    { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '🪙', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
+    { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '🪙', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
+    { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '🪙', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
     { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
     { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: function () { return !!CFG.APPROVAL; }, set: function (v) { CFG.APPROVAL = !!v; } },
     { key: 'rename_open', label: '닉네임 변경 열기', hint: '꺼져 있으면 유저가 닉네임을 못 바꿉니다 (상점에 넣기 전까지 닫아 둠). 관리자 화면에서는 항상 바꿀 수 있습니다', type: 'bool', get: function () { return !!CFG.RENAME_OPEN; }, set: function (v) { CFG.RENAME_OPEN = !!v; } },
-    { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
+    { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '🪙', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
     { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
     { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
   ];
@@ -480,7 +480,7 @@ var ROOM_STAKE_MAX = 1000;
 function playerView(id) { return rpsPlayer(id); }
 function checkStake(raw) {
   var stake = Number(raw);
-  if (stake !== Math.floor(stake) || stake < CFG.MIN_BET || stake > ROOM_STAKE_MAX) fail(400, '판돈은 ' + CFG.MIN_BET + '~' + ROOM_STAKE_MAX + '점입니다.');
+  if (stake !== Math.floor(stake) || stake < CFG.MIN_BET || stake > ROOM_STAKE_MAX) fail(400, '판돈은 ' + CFG.MIN_BET + '~' + ROOM_STAKE_MAX + '🪙입니다.');
   return stake;
 }
 var DUP_MS = 5000;   // 같은 사람이 같은 조건의 방/도박을 이 시간 안에 또 만들면 연타로 보고 거절
@@ -595,7 +595,7 @@ function ladderView(u) {
 /* ================= 🃏 블랙잭 / 🎰 슬롯머신 (서버 딜러와 하는 혼자 게임) ================= */
 function checkBet(raw, min, max) {
   var bet = Number(raw);
-  if (bet !== Math.floor(bet) || bet < min || bet > max) fail(400, '건 돈은 ' + min + '~' + max + '점입니다.');
+  if (bet !== Math.floor(bet) || bet < min || bet > max) fail(400, '건 돈은 ' + min + '~' + max + '🪙입니다.');
   return bet;
 }
 /** 오늘(한국 시간) 혼자 하는 게임(블랙잭+슬롯)에서 번 순이익과 한 판 수 */
@@ -748,7 +748,7 @@ var ROUTES = {
   'POST /api/wager': function (body, u) {
     needLogin(u); sweep(); TBL.bets = null; // 마감 처리 후 최신 상태로
     var amount = Number(body.amount);
-    if (amount !== Math.floor(amount) || !(amount >= CFG.MIN_BET)) fail(400, '최소 ' + CFG.MIN_BET + '점부터 걸 수 있습니다.');
+    if (amount !== Math.floor(amount) || !(amount >= CFG.MIN_BET)) fail(400, '최소 ' + CFG.MIN_BET + '🪙부터 걸 수 있습니다.');
     var oid = Number(body.option_id);
     var opt = tbl('options').find(function (o) { return o.id === oid; }) || fail(404, '선택지가 없습니다.');
     var bet = betById(opt.bet_id);
@@ -805,7 +805,7 @@ var ROUTES = {
     needLogin(u);
     var hand = String(body.hand), stake = Number(body.stake);
     if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주십시오.');
-    if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '점 이상입니다.');
+    if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '🪙 이상입니다.');
     if (u.points < stake) fail(400, '칩이 부족합니다.');
     if (isDup('rps', function (r) { return r.host_id === u.id && r.stake === stake && r.status === 'waiting'; })) fail(409, '연타');
     if (tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
