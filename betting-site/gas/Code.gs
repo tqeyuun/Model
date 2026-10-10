@@ -5,10 +5,10 @@
  * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
-var CFG = { SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
+var CFG = { DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
 
 var SHEETS = {
-  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp'],
+  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp', 'dev'],
   sessions: ['token', 'user_id', 'created_at'],
   bets: ['id', 'title', 'creator_id', 'status', 'winner', 'closes_at', 'created_at'],
   options: ['id', 'bet_id', 'label'],
@@ -144,10 +144,15 @@ function ensureRoom(code) {
   return g;
 }
 function userInRoom(grp, name) { return tbl('users').find(function (x) { return grpOf(x) === grp && x.name === name; }); }
-function addAccount(grp, name, pin) {
+function devOf(body) { var d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; }
+function checkDevice(grp, dev) {
+  if (CFG.DEVICE_LIMIT && dev && tbl('users').find(function (x) { return grpOf(x) === grp && x.dev === dev; })) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
+}
+function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+  checkDevice(grp, dev);
   var salt = Utilities.getUuid().slice(0, 8);
-  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: grp });
+  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: CFG.START_POINTS, last_aid: 0, created_at: now(), grp: grp, dev: dev || '' });
   return newSession(nu.id);
 }
 function sameRoom(userId, me) { var o = userById(userId); return !!o && grpOf(o) === grpOf(me); }
@@ -348,6 +353,7 @@ function settingSpecs() {
     { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '점', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
     { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '점', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
     { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
+    { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
     { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '점', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
     { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
     { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
@@ -656,7 +662,7 @@ var ROUTES = {
       checkName(name);
       if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');   // 방을 만들기 전에 값부터 검사
       ensureRoom(code);
-      return { token: addAccount(grp, name, pin), created_room: true };
+      return { token: addAccount(grp, name, pin, devOf(body)), created_room: true };
     }
     if (!room) fail(404, '없는 방 코드입니다. 방을 새로 만들려면 "방 만들기"를 눌러주십시오.');
     var u = userInRoom(grp, name);
@@ -664,12 +670,14 @@ var ROUTES = {
       throttle('login|' + code + '|' + name, 10);
       if (hashPin(pin, u.salt) !== u.hash) fail(401, '이 방에 이미 있는 닉네임입니다. 내 계정이면 PIN이 다릅니다(다시 확인해 주십시오). 처음이라면 다른 닉네임을 써주십시오.');
       CacheService.getScriptCache().remove('login|' + code + '|' + name);
+      if (devOf(body) && !u.dev) { u.dev = devOf(body); tbl('users').save(u); }   // 예전 계정도 처음 로그인한 기기에 묶음
       return { token: newSession(u.id) };
     }
     checkName(name);
     if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+    checkDevice(grp, devOf(body));   // 확인 창을 띄우기 전에 알려 줌
     if (!body.create) return { new_user: true };
-    return { token: addAccount(grp, name, pin) };
+    return { token: addAccount(grp, name, pin, devOf(body)) };
   },
   'POST /api/nickname': function (body, u) {
     needLogin(u); var name = checkName(body.name);
@@ -1055,6 +1063,8 @@ var ROUTES = {
       var g2 = ensureRoom(String(body.value || '').trim());
       if (tbl('users').find(function (x) { return grpOf(x) === g2 && x.name === t.name && x.id !== t.id; })) fail(409, '그 방에 같은 닉네임이 이미 있습니다.');
       t.grp = g2; tbl('users').save(t);
+    } else if (body.action === 'clear_device') {   // 기기 묶음 해제 (그 기기에서 새 계정을 만들 수 있게)
+      t.dev = ''; tbl('users').save(t);
     } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
       var pin = String(body.value || '');
       if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');

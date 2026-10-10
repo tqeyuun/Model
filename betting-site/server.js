@@ -15,6 +15,7 @@ const RPS_HANDS = ['rock', 'paper', 'scissors'];           // 바위 보 가위
 const RPS_BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const RPS_EXPIRE_MS = 12 * 3600e3;                           // 12시간 동안 아무도 안 오면 방이 닫히고 판돈 환불
 const RPS_MAX_OPEN = 3;                                      // 한 사람이 동시에 열 수 있는 방 수
+let DEVICE_LIMIT = true;   // 한 기기에서는 방마다 계정을 하나만 만들 수 있음 (기기 번호는 브라우저가 보내 줌)
 let SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
 const MIN_BET = 10;
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS wagers (
 try { db.exec('ALTER TABLE messages ADD COLUMN bet_id INTEGER NOT NULL DEFAULT 0'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT'); } catch { /* 이미 있음 */ }
 try { db.exec('ALTER TABLE users ADD COLUMN grp TEXT'); } catch { /* 이미 있음 */ }
+try { db.exec('ALTER TABLE users ADD COLUMN dev TEXT'); } catch { /* 이미 있음 */ }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_room_name ON users(grp, name)');   // 닉네임은 방 안에서만 겹치지 않으면 됨
 for (const c of ['eq_title', 'eq_color', 'eq_fx', 'eq_badge']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${c} TEXT`); } catch { /* 이미 있음 */ } }
 db.exec('CREATE TABLE IF NOT EXISTS user_items (user_id INTEGER NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY(user_id, item_id))');
@@ -332,6 +334,7 @@ const SETTING_SPECS = [
   { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: `최소 ${G.BJ.MIN_BET}🪙`, type: 'int', min: G.BJ.MIN_BET, max: 1000000, get: () => G.BJ.MAX_BET, set: (v) => { G.BJ.MAX_BET = v; } },
   { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: `최소 ${G.SLOT.MIN_BET}🪙`, type: 'int', min: G.SLOT.MIN_BET, max: 1000000, get: () => G.SLOT.MAX_BET, set: (v) => { G.SLOT.MAX_BET = v; } },
   { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => ROOM_STAKE_MAX, set: (v) => { ROOM_STAKE_MAX = v; } },
+  { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: () => DEVICE_LIMIT, set: (v) => { DEVICE_LIMIT = v; } },
   { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: `최소 ${MIN_BET}🪙`, type: 'int', min: MIN_BET, max: 1000000, get: () => GIFT_MAX, set: (v) => { GIFT_MAX = v; } },
   { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: () => Math.round(LUCKY_CHANCE * 100), set: (v) => { LUCKY_CHANCE = v / 100; } },
   { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: () => SHOP_OPEN, set: (v) => { SHOP_OPEN = v; } },
@@ -447,10 +450,15 @@ function ensureRoom(code) {                       // 방이 없으면 만들고 
   return g;
 }
 const userInRoom = (grp, name) => q1('SELECT * FROM users WHERE grp=? AND name=?', grp, name);
-function addAccount(grp, name, pin) {
+const devOf = (body) => { const d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; };
+function checkDevice(grp, dev) {
+  if (DEVICE_LIMIT && dev && q1('SELECT 1 FROM users WHERE grp IS ? AND dev=?', grp, dev)) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
+}
+function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+  checkDevice(grp, dev);
   const salt = crypto.randomBytes(8).toString('hex');
-  const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp) VALUES (?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), grp);
+  const r = run('INSERT INTO users(name,salt,hash,points,created_at,grp,dev) VALUES (?,?,?,?,?,?,?)', name, salt, hashPin(pin, salt), START_POINTS, now(), grp, dev || null);
   return newSession(Number(r.lastInsertRowid));
 }
 // 같은 방의 도박만 볼 수 있음 (도박을 연 사람의 방 기준). 아니면 null.
@@ -546,7 +554,7 @@ const routes = {
       checkName(name);
       if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');   // 방을 만들기 전에 값부터 검사
       ensureRoom(code);
-      return { token: addAccount(grp, name, pin), created_room: true };
+      return { token: addAccount(grp, name, pin, devOf(body)), created_room: true };
     }
     if (!room) fail(404, '없는 방 코드입니다. 방을 새로 만들려면 "방 만들기"를 눌러주십시오.');
     const u = userInRoom(grp, name);
@@ -554,12 +562,14 @@ const routes = {
       throttle(code + '|' + name + '|' + req.socket.remoteAddress);
       if (!u.hash || hashPin(pin, u.salt) !== u.hash) fail(401, '이 방에 이미 있는 닉네임입니다. 내 계정이면 PIN이 다릅니다(다시 확인해 주십시오). 처음이라면 다른 닉네임을 써주십시오.');
       attempts.delete(code + '|' + name + '|' + req.socket.remoteAddress);
+      if (devOf(body) && !u.dev) run('UPDATE users SET dev=? WHERE id=?', devOf(body), u.id);   // 예전 계정도 처음 로그인한 기기에 묶음
       return { token: newSession(u.id) };
     }
     checkName(name);
     if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+    checkDevice(grp, devOf(body));   // 확인 창을 띄우기 전에 알려 줌
     if (!body.create) return { new_user: true };
-    return { token: addAccount(grp, name, pin) };
+    return { token: addAccount(grp, name, pin, devOf(body)) };
   },
   'GET /api/config': () => ({ google_client_id: GOOGLE_CLIENT_ID || null }),
   'POST /api/google': async (req, body) => {
@@ -1029,6 +1039,8 @@ const routes = {
         const name = checkName(body.value);
         if (q1('SELECT 1 FROM users WHERE name=? AND id<>? AND grp IS ?', name, u.id, u.grp)) fail(409, '이미 있는 닉네임입니다.');
         run('UPDATE users SET name=? WHERE id=?', name, u.id);
+      } else if (body.action === 'clear_device') {   // 기기 묶음 해제 (그 기기에서 새 계정을 만들 수 있게)
+        run('UPDATE users SET dev=NULL WHERE id=?', u.id);
       } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
         const pin = String(body.value || '');
         if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
