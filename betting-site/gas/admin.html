@@ -68,7 +68,7 @@ const userAct = guard(async (user_id, action, value) => {
   if (action === 'delete' && !confirm('이 유저를 삭제합니까?')) return;
   await api('POST', '/api/admin/user', { user_id, action, value }); toast('완료'); await load();
 });
-const askPoints = (id, action) => { const v = prompt(action === 'set_points' ? '새 포인트?' : '더할 포인트? (빼려면 -100)'); if (v !== null && v !== '') userAct(id, action, Number(v)); };
+const askPoints = (id, action) => { const v = prompt(action === 'set_points' ? '새 칩?' : '더할 칩? (빼려면 -100)'); if (v !== null && v !== '') userAct(id, action, Number(v)); };
 const askName = (id) => { const v = prompt('새 닉네임?'); if (v) userAct(id, 'rename', v); };
 const askPin = (id) => { const v = prompt('새 PIN (공백 없이 4~16자). 방은 그대로입니다.'); if (v) userAct(id, 'reset_pin', v); };
 const askRoom = (id) => { const v = prompt('옮길 방 코드 (글자/숫자 4~12자). 없는 코드면 방이 새로 만들어집니다.'); if (v) userAct(id, 'move_room', v); };
@@ -98,7 +98,7 @@ const closeRoom = guard(async (kind, id) => {
 });
 const delGroup = guard(async (i) => {
   const g = data.groups[i];
-  const t = prompt(`⚠️ 방 "${g.label}"(${g.members.join(', ') || '비어 있음'})을 통째로 지웁니다.\n그 방의 계정·포인트·도박·채팅·게임 기록이 전부 사라지고 되돌릴 수 없습니다.\n\n정말 지우려면 "삭제"라고 입력하십시오.`);
+  const t = prompt(`⚠️ 방 "${g.label}"(${g.members.join(', ') || '비어 있음'})을 통째로 지웁니다.\n그 방의 계정·칩·도박·채팅·게임 기록이 전부 사라지고 되돌릴 수 없습니다.\n\n정말 지우려면 "삭제"라고 입력하십시오.`);
   if (t !== '삭제') return;
   const r = await api('POST', '/api/admin/group', { grp: g.id }); toast(`방을 지웠습니다 (계정 ${r.deleted_users}개)`); await load();
 });
@@ -113,15 +113,15 @@ function render() {
   const S = { open: '진행', closed: '마감', resolved: '확정', cancelled: '취소' };
   $('#app').innerHTML = `<h1>🛠 관리자 콘솔</h1>
   <div class="stats">
-    <div class="stat">유저<b>${st.users}</b></div><div class="stat">유통 포인트<b>${st.points.toLocaleString()}</b></div>
-    <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}</b></div>
+    <div class="stat">유저<b>${st.users}</b></div><div class="stat">유통 🪙<b>${st.points.toLocaleString()}</b></div>
+    <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}🪙</b></div>
     <div class="stat">🍀 럭키 당첨<b>${st.lucky}</b></div></div>
   <div class="card"><h2>⚙️ 설정 <span class="mute">(저장하면 바로 적용됩니다)</span></h2>
     ${data.settings.map((sp) => `<div class="set"><div><b>${esc(sp.label)}</b><div class="mute">${esc(sp.hint || '')} · 기본값 ${sp.type === 'bool' ? (sp.default ? '켜짐' : '꺼짐') : sp.default}</div></div>
       <div class="acts">${sp.type === 'bool' ? `<label class="sw"><input id="st_${sp.key}" type="checkbox" ${sp.value ? 'checked' : ''}> ${'켜기'}</label>` : `<input id="st_${sp.key}" type="number" min="${sp.min}" max="${sp.max}" value="${sp.value}">`}
       ${sp.value !== sp.default ? `<button onclick="resetSetting('${sp.key}')" title="기본값으로">↺</button>` : ''}</div></div>`).join('')}
     <div class="acts" style="margin-top:10px"><button class="pri" onclick="saveSettings()">저장</button><button onclick="resetAllSettings()">전부 기본값으로</button></div></div>
-  <div class="card"><h2>🚪 방 <span class="mute">(방 코드가 같은 사람들끼리)</span></h2>${data.groups.map((g, i) => `<div class="item2"><div><span class="tag">방 ${esc(g.label)}</span> <b>${g.count}명</b> <span class="mute">· 포인트 합 ${g.points.toLocaleString()} · 도박 ${g.bets}개 · 열린 게임 방 ${g.rooms}개</span>
+  <div class="card"><h2>🚪 방 <span class="mute">(방 코드가 같은 사람들끼리)</span></h2>${data.groups.map((g, i) => `<div class="item2"><div><span class="tag">방 ${esc(g.label)}</span> <b>${g.count}명</b> <span class="mute">· 칩 합 ${g.points.toLocaleString()} · 도박 ${g.bets}개 · 열린 게임 방 ${g.rooms}개</span>
       <div class="mute">${g.members.map(esc).join(', ')}</div></div><button class="danger" onclick="delGroup(${i})">방 삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>
   <div class="card"><h2>🎮 열려 있는 게임 방 <span class="mute">(참가자를 기다리는 중 · 낸 패/숫자는 보이지 않습니다)</span></h2>${data.rooms.map((r) => `<div class="item2"><div><span class="tag">${{ rps: '✊ 가위바위보', lun: '🤫 최저 유일 숫자', lad: '🪜 사다리' }[r.kind]}</span> <b>${esc(r.host)}</b> <span class="mute">· 판돈 ${r.stake}🪙 · ${r.players.length}/${r.cap}명 · 방 ${esc(r.grp || '없음')} · ${new Date(r.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
       <div class="mute">${r.players.map(esc).join(', ')}</div></div><button class="danger" onclick="closeRoom('${r.kind}',${r.id})">닫기(환불)</button></div>`).join('') || '<p class="mute">열려 있는 게임 방이 없습니다.</p>'}</div>

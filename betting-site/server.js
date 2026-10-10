@@ -1,4 +1,4 @@
-// 상대끼리 쓰는 포인트 도박 사이트. 외부 패키지 없음 (Node 22+).
+// 상대끼리 쓰는 칩 도박 사이트. 외부 패키지 없음 (Node 22+).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,7 +18,7 @@ const RPS_MAX_OPEN = 3;                                      // 한 사람이 �
 let SHOP_OPEN = process.env.SHOP_OPEN === '1';        // 상점 열기/닫기 (닫혀 있으면 구매·장착 불가). 열려면 SHOP_OPEN=1
 const START_POINTS = 1000;
 const MIN_BET = 10;
-const DAILY_AID = 100;          // 파산 구제금(포인트가 MIN_BET 미만일 때, 하루 1회)
+const DAILY_AID = 100;          // 파산 구제금(칩이 MIN_BET 미만일 때, 하루 1회)
 const UNDERDOG_SHARE = 0.30;    // 이긴 쪽 판돈 비중이 이 값 미만이면 역배
 const UNDERDOG_BONUS = 0.20;    // 역배 적중 시 총 판돈의 20%를 보너스로 추가 지급
 let LUCKY_CHANCE = Number(process.env.LUCKY_CHANCE ?? 0.07); // 이긴 사람마다 7% 확률로 럭키 보너스
@@ -327,7 +327,7 @@ function checkBet(raw, min, max) {
 // ---------- 관리자: 설정(화면에서 바로 조절) ----------
 // 저장된 값은 settings 표의 cfg_* 로 남고, 서버가 켜질 때/바꿀 때 아래 변수들에 반영됩니다.
 const SETTING_SPECS = [
-  { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 점수 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: () => G.SOLO.DAILY_NET_CAP, set: (v) => { G.SOLO.DAILY_NET_CAP = v; } },
+  { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 🪙 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: () => G.SOLO.DAILY_NET_CAP, set: (v) => { G.SOLO.DAILY_NET_CAP = v; } },
   { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: () => G.SOLO.DAILY_PLAYS, set: (v) => { G.SOLO.DAILY_PLAYS = v; } },
   { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: `최소 ${G.BJ.MIN_BET}🪙`, type: 'int', min: G.BJ.MIN_BET, max: 1000000, get: () => G.BJ.MAX_BET, set: (v) => { G.BJ.MAX_BET = v; } },
   { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: `최소 ${G.SLOT.MIN_BET}🪙`, type: 'int', min: G.SLOT.MIN_BET, max: 1000000, get: () => G.SLOT.MAX_BET, set: (v) => { G.SLOT.MAX_BET = v; } },
@@ -620,7 +620,7 @@ const routes = {
     if (!Number.isInteger(stake) || stake < MIN_BET) fail(400, `판돈은 ${MIN_BET}🪙 이상입니다.`);
     return tx(() => {
       const f = q1('SELECT points FROM users WHERE id=?', u.id);
-      if (f.points < stake) fail(400, '포인트가 부족합니다.');
+      if (f.points < stake) fail(400, '칩이 부족합니다.');
       if (isDup("SELECT 1 FROM rps WHERE host_id=? AND stake=? AND status='waiting'", u.id, stake)) fail(409, '연타');
       if (q1("SELECT COUNT(*) n FROM rps WHERE host_id=? AND status='waiting'", u.id).n >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지입니다.`);
       run('UPDATE users SET points=points-? WHERE id=?', stake, u.id);   // 판돈은 방을 여는 순간 맡겨짐
@@ -639,7 +639,7 @@ const routes = {
       if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
       if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없습니다.');
       const f = q1('SELECT points FROM users WHERE id=?', u.id);
-      if (f.points < r.stake) fail(400, '포인트가 부족합니다.');
+      if (f.points < r.stake) fail(400, '칩이 부족합니다.');
       const result = r.host_hand === hand ? 'draw' : RPS_BEATS[r.host_hand] === hand ? 'host' : 'guest';
       // 방장은 판돈을 이미 냈고, 도전자는 지금 낸다. 이긴 쪽이 2배, 비기면 각자 환불.
       if (result === 'draw') { run('UPDATE users SET points=points+? WHERE id=?', r.stake, r.host_id); }
@@ -669,7 +669,7 @@ const routes = {
     if (!Number.isInteger(cap) || cap < G.LUN.MIN_PLAYERS || cap > G.LUN.MAX_PLAYERS) fail(400, `인원은 ${G.LUN.MIN_PLAYERS}~${G.LUN.MAX_PLAYERS}명입니다.`);
     if (!Number.isInteger(num) || num < G.LUN.MIN || num > G.LUN.MAX) fail(400, `숫자는 ${G.LUN.MIN}~${G.LUN.MAX} 중에 골라주십시오.`);
     return tx(() => {
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '칩이 부족합니다.');
       if (isDup("SELECT 1 FROM lun WHERE host_id=? AND stake=? AND cap=? AND status='waiting'", u.id, stake, cap)) fail(409, '연타');
       if (openRooms('lun', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지입니다.`);
       pay(u.id, -stake);
@@ -688,7 +688,7 @@ const routes = {
       if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
       if (q1('SELECT 1 FROM lun_p WHERE room_id=? AND user_id=?', r.id, u.id)) fail(400, '이미 들어간 방입니다.');
       if (q1('SELECT COUNT(*) n FROM lun_p WHERE room_id=?', r.id).n >= r.cap) fail(400, '자리가 다 찼습니다.');
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '칩이 부족합니다.');
       pay(u.id, -r.stake);
       run('INSERT INTO lun_p(room_id,user_id,num,joined_at) VALUES (?,?,?,?)', r.id, u.id, num, now());
       const full = q1('SELECT COUNT(*) n FROM lun_p WHERE room_id=?', r.id).n >= r.cap;
@@ -727,7 +727,7 @@ const routes = {
     if (!Number.isInteger(total) || total < MIN_BET || total > GIFT_MAX) fail(400, `뿌릴 금액은 ${MIN_BET}~${GIFT_MAX}🪙입니다.`);
     if (!Number.isInteger(cnt) || cnt < G.DROP.MIN_COUNT || cnt > G.DROP.MAX_COUNT || cnt > total) fail(400, `인원은 ${G.DROP.MIN_COUNT}~${Math.min(G.DROP.MAX_COUNT, total)}명입니다.`);
     return tx(() => {
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < total) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < total) fail(400, '칩이 부족합니다.');
       if (isDup("SELECT 1 FROM drops WHERE host_id=? AND total=? AND cnt=? AND status='open'", u.id, total, cnt)) fail(409, '연타');
       if (q1("SELECT COUNT(*) n FROM drops WHERE host_id=? AND status='open'", u.id).n >= RPS_MAX_OPEN) fail(400, `동시에 뿌릴 수 있는 건 ${RPS_MAX_OPEN}개까지입니다.`);
       pay(u.id, -total);
@@ -782,7 +782,7 @@ const routes = {
       if (b.status !== 'open') fail(400, '이미 끝났습니다.');
       if (b.user_id === u.id) fail(400, '자신에게는 줄 수 없습니다.');
       if (amount > b.want - b.got) fail(400, `필요한 금액은 ${b.want - b.got}🪙 남았습니다.`);
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < amount) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < amount) fail(400, '칩이 부족합니다.');
       pay(u.id, -amount); pay(b.user_id, amount);
       run('INSERT INTO beg_g(beg_id,user_id,amount,at) VALUES (?,?,?,?)', b.id, u.id, amount, now());
       run("UPDATE begs SET got=got+?, status=CASE WHEN got+?>=want THEN 'done' ELSE 'open' END WHERE id=?", amount, amount, b.id);
@@ -808,7 +808,7 @@ const routes = {
     if (!Number.isInteger(slots) || slots < G.LADDER.MIN_SLOTS || slots > G.LADDER.MAX_SLOTS) fail(400, `인원은 ${G.LADDER.MIN_SLOTS}~${G.LADDER.MAX_SLOTS}명입니다.`);
     if (!Number.isInteger(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주십시오.');
     return tx(() => {
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < stake) fail(400, '칩이 부족합니다.');
       if (isDup("SELECT 1 FROM lad WHERE host_id=? AND stake=? AND slots=? AND status='waiting'", u.id, stake, slots)) fail(409, '연타');
       if (openRooms('lad', u.id) >= RPS_MAX_OPEN) fail(400, `동시에 열 수 있는 방은 ${RPS_MAX_OPEN}개까지입니다.`);
       pay(u.id, -stake);
@@ -827,7 +827,7 @@ const routes = {
       if (!Number.isInteger(slot) || slot < 0 || slot >= r.slots) fail(400, '자리를 골라주십시오.');
       if (q1('SELECT 1 FROM lad_p WHERE room_id=? AND user_id=?', r.id, u.id)) fail(400, '이미 들어간 방입니다.');
       if (q1('SELECT 1 FROM lad_p WHERE room_id=? AND slot=?', r.id, slot)) fail(400, '이미 다른 사람이 앉은 자리입니다.');
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < r.stake) fail(400, '칩이 부족합니다.');
       pay(u.id, -r.stake);
       run('INSERT INTO lad_p(room_id,user_id,slot,joined_at) VALUES (?,?,?,?)', r.id, u.id, slot, now());
       const full = q1('SELECT COUNT(*) n FROM lad_p WHERE room_id=?', r.id).n >= r.slots;
@@ -855,7 +855,7 @@ const routes = {
     return tx(() => {
       if (bjActive(u.id)) fail(400, '진행 중인 판이 있습니다. 먼저 끝내주십시오.');
       soloGuard(u.id);
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '칩이 부족합니다.');
       pay(u.id, -bet);
       const st = G.bjStart(bet);
       const id = Number(run("INSERT INTO bj(user_id,bet,state,status,created_at) VALUES (?,?,?,'playing',?)", u.id, bet, JSON.stringify(st), now()).lastInsertRowid);
@@ -870,7 +870,7 @@ const routes = {
       const st = JSON.parse(row.state);
       if (act === 'double') {
         if (!G.bjCanDouble(st)) fail(400, '더블다운은 처음 카드 두 장일 때만 할 수 있습니다.');
-        if (q1('SELECT points FROM users WHERE id=?', u.id).points < st.bet) fail(400, '더블다운할 포인트가 부족합니다.');
+        if (q1('SELECT points FROM users WHERE id=?', u.id).points < st.bet) fail(400, '더블다운할 칩이 부족합니다.');
         pay(u.id, -st.bet);                                  // 추가로 같은 금액을 더 걸습니다
         G.bjDouble(st);
       } else if (act === 'hit') G.bjHit(st); else G.bjStand(st);
@@ -885,7 +885,7 @@ const routes = {
     if (!u) fail(401, '로그인이 필요합니다.');
     const bet = checkBet(body.bet, G.SLOT.MIN_BET, G.SLOT.MAX_BET);
     return tx(() => {
-      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '포인트가 부족합니다.');
+      if (q1('SELECT points FROM users WHERE id=?', u.id).points < bet) fail(400, '칩이 부족합니다.');
       soloGuard(u.id);
       const sp = G.slotSpin();
       let payout = G.slotPayout(bet, sp.mult), capped = false;
@@ -909,7 +909,7 @@ const routes = {
       const item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품입니다.');
       if (q1('SELECT 1 FROM user_items WHERE user_id=? AND item_id=?', u.id, item.id)) fail(400, '이미 가지고 있습니다.');
       const f = q1('SELECT points FROM users WHERE id=?', u.id);
-      if (f.points < item.price) fail(400, '포인트가 부족합니다.');
+      if (f.points < item.price) fail(400, '칩이 부족합니다.');
       run('UPDATE users SET points=points-? WHERE id=?', item.price, u.id);
       run('INSERT INTO user_items VALUES (?,?)', u.id, item.id);
       run(`UPDATE users SET ${SLOT_COL[item.slot]}=? WHERE id=?`, item.id, u.id); // 사면 바로 장착
@@ -961,7 +961,7 @@ const routes = {
       const bet = visibleBet(opt.bet_id, u) || fail(404, '도박이 없습니다.');
       if (bet.status !== 'open') fail(400, '이미 마감된 도박입니다.');
       const fresh = q1('SELECT points FROM users WHERE id=?', u.id);
-      if (fresh.points < amount) fail(400, '포인트가 부족합니다.');
+      if (fresh.points < amount) fail(400, '칩이 부족합니다.');
       // 한 도박에서 두 선택지에 동시에 걸어 헷지하는 건 막음
       const other = q1('SELECT 1 FROM wagers WHERE bet_id=? AND user_id=? AND option_id<>?', bet.id, u.id, opt.id);
       if (other) fail(400, '이 도박에는 이미 다른 선택지에 걸었습니다.');
@@ -983,7 +983,7 @@ const routes = {
     if (!u) fail(401, '로그인이 필요합니다.');
     return tx(() => {
       const f = q1('SELECT * FROM users WHERE id=?', u.id);
-      if (f.points >= MIN_BET) fail(400, '아직 포인트가 남아있습니다.');
+      if (f.points >= MIN_BET) fail(400, '아직 칩이 남아있습니다.');
       if (now() - f.last_aid < 864e5) fail(400, '구제금은 하루 한 번입니다.');
       run('UPDATE users SET points=points+?, last_aid=? WHERE id=?', DAILY_AID, now(), u.id);
       return { ok: true };

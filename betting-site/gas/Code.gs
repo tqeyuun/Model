@@ -1,7 +1,7 @@
 /**
  * 도박장 (Google Apps Script 웹 앱 버전)
  * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·도박·채팅·상점)를 저장합니다.
- * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 포인트(실제 돈과 무관).
+ * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 칩(실제 돈과 무관).
  * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
  */
 var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
@@ -343,7 +343,7 @@ function betsList(u) {
 // 저장된 값은 스크립트 속성 SETTINGS(JSON)에 남고, 요청마다 아래 변수들에 반영됩니다. (Games.gs 보다 먼저 읽혀도 되게 함수 안에서 만들습니다)
 function settingSpecs() {
   return [
-    { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 점수 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.SOLO.DAILY_NET_CAP; }, set: function (v) { GAMES.SOLO.DAILY_NET_CAP = v; } },
+    { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 🪙 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.SOLO.DAILY_NET_CAP; }, set: function (v) { GAMES.SOLO.DAILY_NET_CAP = v; } },
     { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: function () { return GAMES.SOLO.DAILY_PLAYS; }, set: function (v) { GAMES.SOLO.DAILY_PLAYS = v; } },
     { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '점', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
     { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '점', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
@@ -700,7 +700,7 @@ var ROUTES = {
     var bet = betById(opt.bet_id);
     if (!sameRoom(bet.creator_id, u)) fail(404, '도박이 없습니다.');
     if (bet.status !== 'open') fail(400, '이미 마감된 도박입니다.');
-    if (u.points < amount) fail(400, '포인트가 부족합니다.');
+    if (u.points < amount) fail(400, '칩이 부족합니다.');
     if (tbl('wagers').find(function (w) { return w.bet_id === bet.id && w.user_id === u.id && w.option_id !== opt.id; })) fail(400, '이 도박에는 이미 다른 선택지에 걸었습니다.');
     u.points -= amount; tbl('users').save(u);
     tbl('wagers').insert({ bet_id: bet.id, option_id: opt.id, user_id: u.id, amount: amount, payout: '', lucky: 0, created_at: now() });
@@ -713,7 +713,7 @@ var ROUTES = {
   },
   'POST /api/aid': function (body, u) {
     needLogin(u);
-    if (u.points >= CFG.MIN_BET) fail(400, '아직 포인트가 남아있습니다.');
+    if (u.points >= CFG.MIN_BET) fail(400, '아직 칩이 남아있습니다.');
     if (now() - (u.last_aid || 0) < 864e5) fail(400, '구제금은 하루 한 번입니다.');
     u.points += CFG.DAILY_AID; u.last_aid = now(); tbl('users').save(u); return { ok: true };
   },
@@ -752,7 +752,7 @@ var ROUTES = {
     var hand = String(body.hand), stake = Number(body.stake);
     if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주십시오.');
     if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '점 이상입니다.');
-    if (u.points < stake) fail(400, '포인트가 부족합니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
     if (isDup('rps', function (r) { return r.host_id === u.id && r.stake === stake && r.status === 'waiting'; })) fail(409, '연타');
     if (tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
     u.points -= stake; tbl('users').save(u);   // 판돈은 방을 여는 순간 맡겨짐
@@ -768,7 +768,7 @@ var ROUTES = {
     if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');   // 다른 PIN 방의 가위바위보에는 못 들어옴
     if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
     if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없습니다.');
-    if (u.points < r.stake) fail(400, '포인트가 부족합니다.');
+    if (u.points < r.stake) fail(400, '칩이 부족합니다.');
     var result = r.host_hand === hand ? 'draw' : RPS.BEATS[r.host_hand] === hand ? 'host' : 'guest';
     // 방장은 판돈을 이미 냈고, 도전자는 지금 낸다. 이긴 쪽이 2배, 비기면 각자 환불.
     if (result === 'draw') addPoints(r.host_id, r.stake);
@@ -796,7 +796,7 @@ var ROUTES = {
     var stake = checkStake(body.stake), cap = Number(body.cap), num = Number(body.num), L = GAMES.LUN;
     if (cap !== Math.floor(cap) || cap < L.MIN_PLAYERS || cap > L.MAX_PLAYERS) fail(400, '인원은 ' + L.MIN_PLAYERS + '~' + L.MAX_PLAYERS + '명입니다.');
     if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주십시오.');
-    if (u.points < stake) fail(400, '포인트가 부족합니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
     if (isDup('lun', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'waiting'; })) fail(409, '연타');
     if (openRooms('lun', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
     addPoints(u.id, -stake);
@@ -814,7 +814,7 @@ var ROUTES = {
     var ps = lunPlayers(r);
     if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
     if (ps.length >= r.cap) fail(400, '자리가 다 찼습니다.');
-    if (userById(u.id).points < r.stake) fail(400, '포인트가 부족합니다.');
+    if (userById(u.id).points < r.stake) fail(400, '칩이 부족합니다.');
     addPoints(u.id, -r.stake);
     tbl('lunp').insert({ room_id: r.id, user_id: u.id, num: num, joined_at: now() });
     var full = ps.length + 1 >= r.cap;
@@ -848,7 +848,7 @@ var ROUTES = {
     var total = Number(body.total), cnt = Number(body.cnt), D = GAMES.DROP;
     if (total !== Math.floor(total) || total < CFG.MIN_BET || total > GIFT_MAX) fail(400, '뿌릴 금액은 ' + CFG.MIN_BET + '~' + GIFT_MAX + '🪙입니다.');
     if (cnt !== Math.floor(cnt) || cnt < D.MIN_COUNT || cnt > D.MAX_COUNT || cnt > total) fail(400, '인원은 ' + D.MIN_COUNT + '~' + Math.min(D.MAX_COUNT, total) + '명입니다.');
-    if (u.points < total) fail(400, '포인트가 부족합니다.');
+    if (u.points < total) fail(400, '칩이 부족합니다.');
     if (isDup('drops', function (r) { return r.host_id === u.id && r.total === total && r.cnt === cnt && r.status === 'open'; })) fail(409, '연타');
     if (tbl('drops').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 뿌릴 수 있는 건 ' + RPS.MAX_OPEN + '개까지입니다.');
     addPoints(u.id, -total);
@@ -896,7 +896,7 @@ var ROUTES = {
     if (b.status !== 'open') fail(400, '이미 끝났습니다.');
     if (b.user_id === u.id) fail(400, '자신에게는 줄 수 없습니다.');
     if (amount > b.want - b.got) fail(400, '필요한 금액은 ' + (b.want - b.got) + '🪙 남았습니다.');
-    if (u.points < amount) fail(400, '포인트가 부족합니다.');
+    if (u.points < amount) fail(400, '칩이 부족합니다.');
     addPoints(u.id, -amount); addPoints(b.user_id, amount);
     tbl('begg').insert({ beg_id: b.id, user_id: u.id, amount: amount, at: now() });
     b.got += amount; if (b.got >= b.want) b.status = 'done';
@@ -917,7 +917,7 @@ var ROUTES = {
     var stake = checkStake(body.stake), slots = Number(body.slots), slot = Number(body.slot), L = GAMES.LADDER;
     if (slots !== Math.floor(slots) || slots < L.MIN_SLOTS || slots > L.MAX_SLOTS) fail(400, '인원은 ' + L.MIN_SLOTS + '~' + L.MAX_SLOTS + '명입니다.');
     if (slot !== Math.floor(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주십시오.');
-    if (u.points < stake) fail(400, '포인트가 부족합니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
     if (isDup('lad', function (r) { return r.host_id === u.id && r.stake === stake && r.slots === slots && r.status === 'waiting'; })) fail(409, '연타');
     if (openRooms('lad', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
     addPoints(u.id, -stake);
@@ -934,7 +934,7 @@ var ROUTES = {
     var ps = ladPlayers(r);
     if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
     if (ps.some(function (p) { return p.slot === slot; })) fail(400, '이미 다른 사람이 앉은 자리입니다.');
-    if (userById(u.id).points < r.stake) fail(400, '포인트가 부족합니다.');
+    if (userById(u.id).points < r.stake) fail(400, '칩이 부족합니다.');
     addPoints(u.id, -r.stake);
     tbl('ladp').insert({ room_id: r.id, user_id: u.id, slot: slot, joined_at: now() });
     var full = ps.length + 1 >= r.slots;
@@ -958,7 +958,7 @@ var ROUTES = {
     var bet = checkBet(body.bet, GAMES.BJ.MIN_BET, GAMES.BJ.MAX_BET);
     if (bjActive(u.id)) fail(400, '진행 중인 판이 있습니다. 먼저 끝내주십시오.');
     soloGuard(u.id);
-    if (u.points < bet) fail(400, '포인트가 부족합니다.');
+    if (u.points < bet) fail(400, '칩이 부족합니다.');
     addPoints(u.id, -bet);
     var st = GAMES.bjStart(bet);
     var row = tbl('bj').insert({ user_id: u.id, bet: bet, state: JSON.stringify(st), status: 'playing', outcome: '', payout: '', created_at: now(), finished_at: '' });
@@ -971,7 +971,7 @@ var ROUTES = {
   'POST /api/slots/spin': function (body, u) {
     needLogin(u);
     var bet = checkBet(body.bet, GAMES.SLOT.MIN_BET, GAMES.SLOT.MAX_BET);
-    if (u.points < bet) fail(400, '포인트가 부족합니다.');
+    if (u.points < bet) fail(400, '칩이 부족합니다.');
     soloGuard(u.id);
     var sp = GAMES.slotSpin(), payout = GAMES.slotPayout(bet, sp.mult), capped = false;
     if (payout - bet > 0) { var allowed = GAMES.soloClampWin(payout - bet, soloToday(u.id).net); if (allowed < payout - bet) { payout = bet + allowed; capped = true; } }   // 오늘 한도까지만 지급
@@ -991,7 +991,7 @@ var ROUTES = {
     if (!CFG.SHOP_OPEN) fail(403, '상점은 아직 준비 중입니다.');
     var item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품입니다.');
     if (tbl('items').find(function (r) { return r.user_id === u.id && r.item_id === item.id; })) fail(400, '이미 가지고 있습니다.');
-    if (u.points < item.price) fail(400, '포인트가 부족합니다.');
+    if (u.points < item.price) fail(400, '칩이 부족합니다.');
     u.points -= item.price; u[SLOT_COL[item.slot]] = item.id; tbl('users').save(u); // 사면 바로 장착
     tbl('items').insert({ user_id: u.id, item_id: item.id });
     return { ok: true };
@@ -1109,7 +1109,7 @@ var ROUTES = {
     var st = JSON.parse(row.state);
     if (act === 'double') {
       if (!GAMES.bjCanDouble(st)) fail(400, '더블다운은 처음 카드 두 장일 때만 할 수 있습니다.');
-      if (userById(u.id).points < st.bet) fail(400, '더블다운할 포인트가 부족합니다.');
+      if (userById(u.id).points < st.bet) fail(400, '더블다운할 칩이 부족합니다.');
       addPoints(u.id, -st.bet);                                  // 추가로 같은 금액을 더 걸습니다
       GAMES.bjDouble(st);
     } else if (act === 'hit') GAMES.bjHit(st); else GAMES.bjStand(st);

@@ -193,7 +193,7 @@ function render() {
   renderHeader();
   $('#app').innerHTML = !token ? authView() : `
     <div class="tabs">${[['bets','도박장'],['new','만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
-    ${user && user.can_aid ? `<div class="card">💸 포인트가 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
+    ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
     ${bodyView()}`;
   if (!token) initGoogle();
   if (token && tab === 'chat') { renderChat(); pollChat(); }
@@ -212,7 +212,7 @@ const loginForm = () => `
 function authView() {
   if (pending) return `<div class="card"><h2>🎉 구글 인증 완료!</h2><p class="mute">상대에게 보일 닉네임을 정하십시오. (12자 이내, 나중에 ✏️로 바꿀 수 있습니다)</p>
     <input id="gn" placeholder="닉네임" maxlength="12"><button class="pri" style="width:100%" onclick="googleSignup()">시작하기 (1000🪙 지급)</button></div>`;
-  return `<div class="card"><h2>들어가기</h2><p class="mute">구글 계정으로 로그인하면 계정이 저장됩니다. 처음이면 1000🪙 지급! 이기면 낮은 확률로 🍀 럭키 보너스가 발생합니다. (실제 돈과 무관한 사이트 전용 포인트)</p>
+  return `<div class="card"><h2>들어가기</h2><p class="mute">구글 계정으로 로그인하면 계정이 저장됩니다. 처음이면 1000🪙 지급! 이기면 낮은 확률로 🍀 럭키 보너스가 발생합니다. (실제 돈과 무관한 사이트 전용 칩)</p>
   ${cfg.google_client_id ? '<div id="gbtn" style="min-height:44px"></div>' : '<p class="mute">⚠️ 구글 로그인이 아직 설정되지 않았습니다. 아래에서 방 코드로 들어가십시오.</p>'}
   <details ${cfg.google_client_id ? '' : 'open'} style="margin-top:10px"><summary class="mute" style="cursor:pointer">방 코드 + 닉네임 + PIN으로 들어가기</summary>${loginForm()}</details></div>`;
 }
@@ -732,8 +732,8 @@ const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { i
 
 function rankView() {
   return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 내 방 코드 <b style="color:var(--cyan)">${esc(user.room)}</b></span><span class="mute">${user.group_size}명 · 상대에게 이 코드를 알려주십시오</span></div>
-    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}</span>`).join('') || '<span class="mute">아직 나뿐입니다</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>점수</th></tr>${ranking.map((r, i) =>
-    `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}</b></td></tr>`).join('')}</table></div>`;
+    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}</span>`).join('') || '<span class="mute">아직 나뿐입니다</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>🪙</th></tr>${ranking.map((r, i) =>
+    `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}🪙</b></td></tr>`).join('')}</table></div>`;
 }
 
 (async () => {
