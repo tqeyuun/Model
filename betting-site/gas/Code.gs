@@ -21,7 +21,6 @@ var SHEETS = {
   lunp: ['id', 'room_id', 'user_id', 'num', 'joined_at'],
   lad: ['id', 'host_id', 'stake', 'slots', 'status', 'win_end', 'rungs', 'winner_id', 'created_at', 'played_at'],
   ladp: ['id', 'room_id', 'user_id', 'slot', 'joined_at'],
-  banned: ['id', 'grp', 'name', 'at'],   // 추방된 닉네임 (그 방에서는 다시 못 씀)
   bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
   slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
   drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
@@ -147,13 +146,11 @@ function ensureRoom(code) {
 }
 function userInRoom(grp, name) { return tbl('users').find(function (x) { return grpOf(x) === grp && x.name === name; }); }
 function devOf(body) { var d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; }
-function checkBanned(grp, name) { if (tbl('banned').find(function (b) { return String(b.grp) === grp && b.name === name; })) fail(403, '이 방에서 추방된 닉네임은 사용할 수 없습니다.'); }
 function checkDevice(grp, dev) {
   if (CFG.DEVICE_LIMIT && dev && tbl('users').find(function (x) { return grpOf(x) === grp && x.dev === dev; })) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
 }
 function addAccount(grp, name, pin, dev) {
   if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
-  checkBanned(grp, name);
   checkDevice(grp, dev);
   var salt = Utilities.getUuid().slice(0, 8);
   var ok = !tbl('users').find(function (x) { return grpOf(x) === grp; }) || !CFG.APPROVAL;   // 방의 첫 계정(방장)은 자동 승인. 승인 전에는 칩도 없음
@@ -661,13 +658,12 @@ function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). �
 }
 var ROUTES = {
   'GET /api/state': function (body, u) { sweep(); var ok = u && !isPending(u); return { me: u ? meView(u) : null, bets: ok ? betsList(u) : [], ranking: ok ? rankingView(u) : [], rps: ok ? rpsView(u) : (u ? { rooms: [], recent: [] } : null) }; },
-  'POST /api/kick': function (body, u) {   // 방장이 방 멤버를 추방: 계정 삭제 + 그 기기는 일정 시간 재입장 불가
+  'POST /api/kick': function (body, u) {   // 방장이 방 멤버를 추방: 계정 삭제 (다시 들어오는 건 막지 않음)
     needLogin(u);
     var t = userById(Number(body.user_id));
     if (!t || t.approved === 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '추방할 수 있는 멤버가 아닙니다.');
     if (t.id === u.id) fail(400, '자신은 추방할 수 없습니다.');
     removeUser(t);
-    tbl('banned').insert({ grp: grpOf(t), name: t.name, at: now() });
     return { ok: true };
   },
   'POST /api/approve': function (body, u) {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
@@ -724,13 +720,12 @@ var ROUTES = {
     }
     checkName(name);
     if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
-    checkBanned(grp, name);
     checkDevice(grp, devOf(body));   // 확인 창을 띄우기 전에 알려 줌
     if (!body.create) return { new_user: true };
     return { token: addAccount(grp, name, pin, devOf(body)) };
   },
   'POST /api/nickname': function (body, u) {
-    needLogin(u); var name = checkName(body.name); checkBanned(grpOf(u), name);
+    needLogin(u); var name = checkName(body.name);
     var other = tbl('users').find(function (x) { return x.name === name && grpOf(x) === grpOf(u); });
     if (other && other.id !== u.id) fail(409, '이미 있는 닉네임입니다.');
     u.name = name; tbl('users').save(u); return { ok: true };

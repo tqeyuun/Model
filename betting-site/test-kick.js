@@ -33,13 +33,8 @@ server.listen(0, async () => {
     assert.equal((await call('GET', '/api/me', null, C)).s, 401, '추방된 계정은 로그인이 끊김');
     assert.equal(db.prepare('SELECT status FROM drops WHERE id=?').get(drop.id).status, 'cancelled');
     assert.equal((await call('GET', '/api/ranking', null, A)).j.length, 2);
-    // 추방된 닉네임만 그 방에서 못 씀 (기기는 상관없음)
-    assert.equal((await enter('kickroom', '씨이', D3)).s, 403);
-    assert.equal((await call('POST', '/api/enter', { room: 'kickroom', name: '씨이', pin: '1234', dev: 'eeeeeeeeeeee5555' })).s, 403, '확인 단계에서도 거부');
-    assert.equal((await enter('kickroom', '씨이', 'eeeeeeeeeeee5555')).s, 403, '다른 기기도 같은 닉네임은 거부');
-    assert.equal((await call('POST', '/api/nickname', { name: '씨이' }, B)).s, 403, '닉네임 변경으로도 못 씀');
-    assert.equal((await enter('kickroom', '새닉', D3)).s, 200, '같은 기기라도 다른 닉네임은 가능');
-    assert.equal((await enter('kickother', '씨이', 'ffffffffffff6666')).s, 200, '다른 방에서는 같은 닉네임 가능');
+    // 추방은 계정 삭제일 뿐, 다시 들어오는 건 막지 않음
+    assert.equal((await enter('kickroom', '씨이', D3)).s, 200);
     console.log('추방 테스트 통과 (Node)');
   } catch (e) { console.error(e); process.exitCode = 1; }
   server.close();
@@ -65,12 +60,7 @@ server.listen(0, async () => {
     assert.equal(code(g(C, 'GET', '/api/state')), 401);
     vm.runInContext('TBL = {};', sb); assert.equal(vm.runInContext(`tbl('drops').find(function (r) { return r.id === ${drop.id}; }).status`, sb), 'cancelled');
     assert.equal(st(A).ranking.length, 2);
-    assert.equal(code(genter('gkick', '씨이', D3)), 403);
-    assert.equal(code(g('', 'POST', '/api/enter', { room: 'gkick', name: '씨이', pin: '1234', dev: 'eeeeeeeeeeee5555' })), 403);
-    assert.equal(code(genter('gkick', '씨이', 'eeeeeeeeeeee5555')), 403);
-    assert.equal(code(g(B, 'POST', '/api/nickname', { name: '씨이' })), 403);
-    assert.equal(code(genter('gkick', '새닉', D3)), 200);
-    assert.equal(code(genter('gkickother', '씨이', 'ffffffffffff6666')), 200);
+    assert.equal(code(genter('gkick', '씨이', D3)), 200);
     console.log('추방 테스트 통과 (GAS)');
   } catch (e) { console.error(e); process.exitCode = 1; }
 });
