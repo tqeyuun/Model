@@ -18,7 +18,7 @@ const runner = (tokenExpr, adminExpr, on401) => `function api(method, url, body)
         const j = JSON.parse(s);
         if (j.error) { ${on401} const e = new Error(j.error); e.code = j.code; reject(e); } else resolve(j.data);
       })
-      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있어요.')))
+      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있습니다.')))
       .handle(${tokenExpr}, ${adminExpr}, method, url, body || {});
   });
 }
@@ -43,7 +43,7 @@ s = rep(s, "[user, bets, ranking, rps] = await Promise.all([api('GET', '/api/me'
            "({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));");
 s = rep(s, "  if (!token) initGoogle();\n", "");
 s = cut(s, "function authView() {", "const auth = guard(", `function authView() {
-  return \`<div class="card"><h2>들어가기</h2><p class="mute">친구들과 같은 <b>방 코드</b>로 같은 방에 모여서 도박·가위바위보·게임·채팅을 해요. 처음 들어오면 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>\${loginForm()}</div>\`;
+  return \`<div class="card"><h2>들어가기</h2><p class="mute">같은 <b>방 코드</b>를 입력한 사람끼리 같은 방에서 도박·가위바위보·게임·채팅을 합니다. 방장의 승인을 받으면 1000🪙이 지급됩니다. 이기면 낮은 확률로 🍀 럭키 보너스가 발생합니다. (실제 돈과 무관한 사이트 전용 칩)</p>\${loginForm()}</div>\`;
 }
 `);
 s = cut(s, "function initGoogle() {", "const rename = guard(", "");
@@ -56,9 +56,9 @@ fs.writeFileSync(path.join(__dirname, 'gas/index.html'), s);
 
 /* ---------------- admin ---------------- */
 let a = fs.readFileSync(path.join(__dirname, 'public/admin.html'), 'utf8');
-a = cut(a, "// 키는 주소의 # 뒤에", "let data = null;", "// 관리자 키는 주소의 ?admin=... 로 들어오고, 서버가 페이지에 넣어줘요.\nconst key = <?!= adminKey ?>;\n");
+a = cut(a, "// 키는 주소의 # 뒤에", "let data = null;", "// 관리자 키는 주소의 ?admin=... 로 들어오고, 서버가 페이지에 넣어줍니다.\nconst key = <?!= adminKey ?>;\n");
 a = cut(a, "async function api(", "function toast(", runner("''", 'key', ''));
-a = rep(a, "서버를 켤 때 터미널에 나온 관리자 링크로 들어와 주십시오.", "관리자 시트는 다른 사람에게 공유하지 마세요.");
+a = rep(a, "서버를 켤 때 터미널에 나온 관리자 링크로 들어와 주십시오.", "관리자 시트는 다른 사람에게 공유하지 마십시오.");
 for (const bad of ['fetch(', 'location.hash', 'sessionStorage']) if (a.includes(bad)) throw new Error('남은 코드: ' + bad);
 fs.writeFileSync(path.join(__dirname, 'gas/admin.html'), a);
 

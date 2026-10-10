@@ -21,6 +21,7 @@ var SHEETS = {
   lunp: ['id', 'room_id', 'user_id', 'num', 'joined_at'],
   lad: ['id', 'host_id', 'stake', 'slots', 'status', 'win_end', 'rungs', 'winner_id', 'created_at', 'played_at'],
   ladp: ['id', 'room_id', 'user_id', 'slot', 'joined_at'],
+  bans: ['id', 'grp', 'dev', 'at'],
   bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
   slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
   drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
@@ -146,7 +147,9 @@ function ensureRoom(code) {
 }
 function userInRoom(grp, name) { return tbl('users').find(function (x) { return grpOf(x) === grp && x.name === name; }); }
 function devOf(body) { var d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; }
+var BAN_MS = 24 * 3600e3;
 function checkDevice(grp, dev) {
+  if (dev && tbl('bans').find(function (b) { return String(b.grp) === grp && b.dev === dev && b.at > now() - BAN_MS; })) fail(403, '이 방에서 추방되어 한동안 다시 들어올 수 없습니다.');
   if (CFG.DEVICE_LIMIT && dev && tbl('users').find(function (x) { return grpOf(x) === grp && x.dev === dev; })) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
 }
 function addAccount(grp, name, pin, dev) {
@@ -251,7 +254,7 @@ function pendingListFor(u) {
 }
 function meView(u) {
   var o = { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
-    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u) };
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u), is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id };
   var d = deco(u); for (var k in d) o[k] = d[k];
   return o;
 }
@@ -339,7 +342,7 @@ function rankingView(me) {
   var wagers = tbl('wagers').all(), bets = {}; tbl('bets').all().forEach(function (b) { bets[b.id] = b.status; });
   return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(me) && x.approved !== 0; }).sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
     var mine = wagers.filter(function (w) { return w.user_id === u.id && bets[w.bet_id] === 'resolved'; });
-    var o = { name: u.name, points: u.points, wins: mine.filter(function (w) { return w.payout > 0; }).length, losses: mine.filter(function (w) { return w.payout === 0; }).length };
+    var o = { id: u.id, name: u.name, points: u.points, wins: mine.filter(function (w) { return w.payout > 0; }).length, losses: mine.filter(function (w) { return w.payout === 0; }).length };
     var d = deco(u); for (var k in d) o[k] = d[k];
     return o;
   });
@@ -641,8 +644,32 @@ function slotView(u) {
 }
 
 /* ================= API 경로 ================= */
+function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). 진행 중인 도박/게임에 걸려 있으면 거부
+  var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
+  if (tbl('wagers').find(function (w) { return w.user_id === u.id && active[w.bet_id]; })) fail(400, '진행 중인 도박에 건 돈이 있어서 처리할 수 없습니다. 그 도박이 끝난 뒤에 하십시오.');
+  var waitingLun = {}, waitingLad = {};
+  tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
+  tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
+  if (tbl('lunp').find(function (p) { return p.user_id === u.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === u.id && waitingLad[p.room_id]; }) || bjActive(u.id)) fail(400, '진행 중인 게임이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
+  tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
+  tbl('sessions').removeWhere(function (s) { return s.user_id === u.id; });
+  tbl('messages').removeWhere(function (m) { return m.user_id === u.id; });
+  tbl('items').removeWhere(function (r) { return r.user_id === u.id; });
+  tbl('users').remove(u);
+  tbl('drops').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).forEach(function (r) { r.status = 'cancelled'; tbl('drops').save(r); });
+  tbl('begs').where(function (r) { return r.user_id === u.id && r.status === 'open'; }).forEach(function (r) { r.status = 'closed'; tbl('begs').save(r); });
+}
 var ROUTES = {
   'GET /api/state': function (body, u) { sweep(); var ok = u && !isPending(u); return { me: u ? meView(u) : null, bets: ok ? betsList(u) : [], ranking: ok ? rankingView(u) : [], rps: ok ? rpsView(u) : (u ? { rooms: [], recent: [] } : null) }; },
+  'POST /api/kick': function (body, u) {   // 방장이 방 멤버를 추방: 계정 삭제 + 그 기기는 일정 시간 재입장 불가
+    needLogin(u);
+    var t = userById(Number(body.user_id));
+    if (!t || t.approved === 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '추방할 수 있는 멤버가 아닙니다.');
+    if (t.id === u.id) fail(400, '자신은 추방할 수 없습니다.');
+    removeUser(t);
+    if (t.dev) tbl('bans').insert({ grp: grpOf(t), dev: t.dev, at: now() });
+    return { ok: true };
+  },
   'POST /api/approve': function (body, u) {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
     needLogin(u);
     var t = userById(Number(body.user_id));
@@ -1098,17 +1125,7 @@ var ROUTES = {
       if (keys.length) CacheService.getScriptCache().removeAll(keys);
       tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
     } else if (body.action === 'delete') {
-      var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
-      if (tbl('wagers').find(function (w) { return w.user_id === t.id && active[w.bet_id]; })) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지웁니다. 그 도박을 먼저 정리하십시오.');
-      var waitingLun = {}, waitingLad = {};
-      tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
-      tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
-      if (tbl('lunp').find(function (p) { return p.user_id === t.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === t.id && waitingLad[p.room_id]; }) || bjActive(t.id)) fail(400, '진행 중인 게임이 있어서 못 지웁니다. 끝나거나 닫힌 뒤에 지워주십시오.');
-      tbl('rps').where(function (r) { return r.host_id === t.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
-      tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
-      tbl('messages').removeWhere(function (m) { return m.user_id === t.id; });
-      tbl('items').removeWhere(function (r) { return r.user_id === t.id; });
-      tbl('users').remove(t);
+      removeUser(t);
     } else fail(400, '알 수 없는 동작입니다.');
     return { ok: true };
   },

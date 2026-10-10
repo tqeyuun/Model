@@ -45,7 +45,7 @@ h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// 관리자 키는 주소의 ?admin=... 로 들어오고, 서버가 페이지에 넣어줘요.
+// 관리자 키는 주소의 ?admin=... 로 들어오고, 서버가 페이지에 넣어줍니다.
 const key = <?!= adminKey ?>;
 let data = null;
 
@@ -56,13 +56,13 @@ function api(method, url, body) {
         const j = JSON.parse(s);
         if (j.error) {  const e = new Error(j.error); e.code = j.code; reject(e); } else resolve(j.data);
       })
-      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있어요.')))
+      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있습니다.')))
       .handle('', key, method, url, body || {});
   });
 }
 function toast(m) { const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2400); }
 const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };   // 연타 방지
-const load = async () => { try { data = await api('GET', '/api/admin/overview'); render(); } catch (e) { $('#app').innerHTML = `<h1>🔒 관리자</h1><div class="card">${esc(e.message)}<br><span class="mute">관리자 시트는 다른 사람에게 공유하지 마세요.</span></div>`; } };
+const load = async () => { try { data = await api('GET', '/api/admin/overview'); render(); } catch (e) { $('#app').innerHTML = `<h1>🔒 관리자</h1><div class="card">${esc(e.message)}<br><span class="mute">관리자 시트는 다른 사람에게 공유하지 마십시오.</span></div>`; } };
 
 const userAct = guard(async (user_id, action, value) => {
   if (action === 'delete' && !confirm('이 유저를 삭제합니까?')) return;

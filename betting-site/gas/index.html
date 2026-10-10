@@ -129,6 +129,7 @@ header b,.card h2,.pts{font-family:var(--display);font-weight:400;letter-spacing
 header b{font-size:24px}.card h2{font-size:20px}
 .lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살습니다 */
 .card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
+.member .kick{padding:0 6px;margin-left:4px;font-size:12px;line-height:18px;border-radius:9px;color:#ff6b8a;border-color:#ff6b8a66}
 .members{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.member{padding:4px 10px;border-radius:99px;background:#1b1b2b;border:1px solid var(--line);font-size:14px}.member.me{border-color:var(--cyan)}
 /* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
 .chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
@@ -156,7 +157,7 @@ function api(method, url, body) {
         const j = JSON.parse(s);
         if (j.error) { if (j.code === 401 && token) logout(); const e = new Error(j.error); e.code = j.code; reject(e); } else resolve(j.data);
       })
-      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있어요.')))
+      .withFailureHandler((e) => reject(new Error((e && e.message) || '연결에 문제가 있습니다.')))
       .handle(token || '', '', method, url, body || {});
   });
 }
@@ -226,6 +227,11 @@ const approve = guard(async (id, accept) => {
   if (!accept && !confirm('거절하면 이 계정이 삭제됩니다. 거절합니까?')) return;
   await api('POST', '/api/approve', { user_id: id, accept }); toast(accept ? '승인했습니다.' : '거절했습니다.'); await refresh();
 });
+const kick = guard(async (id) => {
+  const r = ranking.find((x) => x.id === id);
+  if (!confirm(`'${r ? r.name : '이 멤버'}' 계정을 추방합니까?\n계정과 칩이 삭제되고, 그 기기는 24시간 동안 이 방에 들어올 수 없습니다.`)) return;
+  await api('POST', '/api/kick', { user_id: id }); toast('추방했습니다.'); await refresh();
+});
 let lastPending = 0;
 let authMode = 'join';
 const setAuthMode = (m) => { authMode = m; rerenderKeep(); };
@@ -237,7 +243,7 @@ const loginForm = () => `
   <button class="pri" style="width:100%;margin-top:6px" onclick="auth()">${authMode === 'create' ? '방 만들고 시작하기' : '시작하기'}</button>
   <p class="mute"><b>방 코드</b>는 상대와 같은 걸 써서 같은 방에 들어갑니다. <b>PIN</b>은 본인만 아는 로그인 비밀번호입니다. 닉네임은 방마다 따로 정하며, 한 기기에서는 방마다 계정을 하나만 만들 수 있습니다. 방에 새로 들어오는 계정은 방장의 승인을 받아야 시작할 수 있습니다.</p>`;
 function authView() {
-  return `<div class="card"><h2>들어가기</h2><p class="mute">친구들과 같은 <b>방 코드</b>로 같은 방에 모여서 도박·가위바위보·게임·채팅을 해요. 처음 들어오면 1000점이 지급돼요! 이기면 낮은 확률로 🍀 럭키 보너스도 터져요. (실제 돈과 무관한 사이트 전용 포인트)</p>${loginForm()}</div>`;
+  return `<div class="card"><h2>들어가기</h2><p class="mute">같은 <b>방 코드</b>를 입력한 사람끼리 같은 방에서 도박·가위바위보·게임·채팅을 합니다. 방장의 승인을 받으면 1000🪙이 지급됩니다. 이기면 낮은 확률로 🍀 럭키 보너스가 발생합니다. (실제 돈과 무관한 사이트 전용 칩)</p>${loginForm()}</div>`;
 }
 const auth = guard(async () => {
   const body = { room: $('#r').value, name: $('#n').value, pin: $('#p').value, mode: authMode, dev: DEV };
@@ -736,7 +742,7 @@ const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { i
 
 function rankView() {
   return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 내 방 코드 <b style="color:var(--cyan)">${esc(user.room)}</b></span><span class="mute">${user.group_size}명 · 상대에게 이 코드를 알려주십시오</span></div>
-    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}</span>`).join('') || '<span class="mute">아직 나뿐입니다</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>🪙</th></tr>${ranking.map((r, i) =>
+    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}${user.is_owner && r.name !== user.name ? ` <button class="kick" title="추방" onclick="kick(${r.id})">✕</button>` : ''}</span>`).join('') || '<span class="mute">아직 나뿐입니다</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>🪙</th></tr>${ranking.map((r, i) =>
     `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}🪙</b></td></tr>`).join('')}</table></div>`;
 }
 

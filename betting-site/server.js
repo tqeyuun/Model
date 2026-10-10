@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS lun_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NU
 CREATE TABLE IF NOT EXISTS lad (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, stake INTEGER NOT NULL, slots INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'waiting', win_end INTEGER, rungs TEXT, winner_id INTEGER, created_at INTEGER NOT NULL, played_at INTEGER);
 CREATE TABLE IF NOT EXISTS lad_p (id INTEGER PRIMARY KEY, room_id INTEGER NOT NULL, user_id INTEGER NOT NULL, slot INTEGER NOT NULL, joined_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS bans (id INTEGER PRIMARY KEY, grp TEXT, dev TEXT NOT NULL, at INTEGER NOT NULL);   -- 추방된 기기 (일정 시간 동안 그 방에 못 들어옴)
 CREATE TABLE IF NOT EXISTS drops (id INTEGER PRIMARY KEY, host_id INTEGER NOT NULL, total INTEGER NOT NULL, cnt INTEGER NOT NULL, left_amt INTEGER NOT NULL, left_cnt INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL);      -- open | done | expired | cancelled
 CREATE TABLE IF NOT EXISTS drop_c (id INTEGER PRIMARY KEY, drop_id INTEGER NOT NULL, user_id INTEGER NOT NULL, amount INTEGER NOT NULL, at INTEGER NOT NULL);
@@ -435,7 +436,7 @@ const isPending = (u) => !!u && u.approved === 0;
 const ownerIdOf = (grp) => q1('SELECT id FROM users WHERE grp IS ? AND approved=1 ORDER BY id LIMIT 1', grp)?.id;   // 방장 = 방에서 가장 먼저 승인된 계정
 const pendingListFor = (u) => (!isPending(u) && ownerIdOf(grpOf(u)) === u.id ? q('SELECT id, name FROM users WHERE grp IS ? AND approved=0 ORDER BY id', grpOf(u)) : []);
 const me = (u) => u && { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < MIN_BET && now() - u.last_aid > 864e5, group_size: q1('SELECT COUNT(*) n FROM users WHERE grp IS ? AND approved=1', grpOf(u)).n, room: roomCodeOf(u),
-  pending: isPending(u), pending_list: pendingListFor(u), ...deco(u) };
+  pending: isPending(u), pending_list: pendingListFor(u), is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id, ...deco(u) };
 
 // ---------- 인증 ----------
 const hashPin = (pin, salt) => crypto.scryptSync(pin, salt, 32).toString('hex');
@@ -458,7 +459,9 @@ function ensureRoom(code) {                       // 방이 없으면 만들고 
 }
 const userInRoom = (grp, name) => q1('SELECT * FROM users WHERE grp=? AND name=?', grp, name);
 const devOf = (body) => { const d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; };
+const BAN_MS = 24 * 3600e3;
 function checkDevice(grp, dev) {
+  if (dev && q1('SELECT 1 FROM bans WHERE grp IS ? AND dev=? AND at>?', grp, dev, now() - BAN_MS)) fail(403, '이 방에서 추방되어 한동안 다시 들어올 수 없습니다.');
   if (DEVICE_LIMIT && dev && q1('SELECT 1 FROM users WHERE grp IS ? AND dev=?', grp, dev)) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
 }
 function addAccount(grp, name, pin, dev) {
@@ -535,6 +538,17 @@ function adminOnly(req) {
 }
 
 // ---------- API ----------
+function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). 진행 중인 도박/게임에 걸려 있으면 거부
+  if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 처리할 수 없습니다. 그 도박이 끝난 뒤에 하십시오.');
+  if (q1("SELECT 1 FROM lun_p p JOIN lun r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM lad_p p JOIN lad r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM bj WHERE user_id=? AND status='playing'", u.id)) fail(400, '진행 중인 게임이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
+  run("UPDATE rps SET status='cancelled' WHERE host_id=? AND status='waiting'", u.id);
+  run('DELETE FROM sessions WHERE user_id=?', u.id);
+  run('DELETE FROM messages WHERE user_id=?', u.id);
+  run('DELETE FROM user_items WHERE user_id=?', u.id);
+  run('DELETE FROM users WHERE id=?', u.id);
+  run("UPDATE drops SET status='cancelled' WHERE host_id=? AND status='open'", u.id);
+  run("UPDATE begs SET status='closed' WHERE user_id=? AND status='open'", u.id);
+}
 const routes = {
   // (테스트/내부용) 방 코드를 안 주면 PIN을 방 코드로 씀. 방이 없으면 만들고 계정을 만듦
   'POST /api/signup': (req, body) => {
@@ -947,6 +961,17 @@ const routes = {
     run(`UPDATE users SET ${SLOT_COL[item.slot]}=? WHERE id=?`, item.id, u.id);
     return { ok: true };
   },
+  'POST /api/kick': (req, body, u) => {   // 방장이 방 멤버를 추방: 계정 삭제 + 그 기기는 일정 시간 재입장 불가
+    if (!u) fail(401, '로그인이 필요합니다.');
+    return tx(() => {
+      const t = q1('SELECT * FROM users WHERE id=?', Number(body.user_id));
+      if (!t || t.approved === 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '추방할 수 있는 멤버가 아닙니다.');
+      if (t.id === u.id) fail(400, '자신은 추방할 수 없습니다.');
+      removeUser(t);
+      if (t.dev) run('INSERT INTO bans(grp,dev,at) VALUES (?,?,?)', t.grp, t.dev, now());
+      return { ok: true };
+    });
+  },
   'POST /api/approve': (req, body, u) => {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
     if (!u) fail(401, '로그인이 필요합니다.');
     return tx(() => {
@@ -1073,13 +1098,7 @@ const routes = {
         if (q1('SELECT 1 FROM users WHERE grp=? AND name=? AND id<>?', g, u.name, u.id)) fail(409, '그 방에 같은 닉네임이 이미 있습니다.');
         run('UPDATE users SET grp=? WHERE id=?', g, u.id);
       } else if (body.action === 'delete') {
-        if (q1("SELECT 1 FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=? AND b.status IN ('open','closed')", u.id)) fail(400, '진행 중인 도박에 건 돈이 있어서 못 지웁니다. 그 도박을 먼저 정리하십시오.');
-        if (q1("SELECT 1 FROM lun_p p JOIN lun r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM lad_p p JOIN lad r ON r.id=p.room_id WHERE p.user_id=? AND r.status='waiting'", u.id) || q1("SELECT 1 FROM bj WHERE user_id=? AND status='playing'", u.id)) fail(400, '진행 중인 게임이 있어서 못 지웁니다. 끝나거나 닫힌 뒤에 지워주십시오.');
-        run("UPDATE rps SET status='cancelled' WHERE host_id=? AND status='waiting'", u.id);
-        run('DELETE FROM sessions WHERE user_id=?', u.id);
-        run('DELETE FROM messages WHERE user_id=?', u.id);
-        run('DELETE FROM user_items WHERE user_id=?', u.id);
-        run('DELETE FROM users WHERE id=?', u.id);
+        removeUser(u);
       } else fail(400, '알 수 없는 동작입니다.');
       return { ok: true };
     });
@@ -1109,7 +1128,7 @@ const routes = {
     return { ok: true };
   },
   'GET /api/ranking': (req, body, u) => !u ? [] : q(`
-    SELECT u.name, u.points, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge,
+    SELECT u.id, u.name, u.points, u.eq_title, u.eq_color, u.eq_fx, u.eq_badge,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout>0) wins,
       (SELECT COUNT(*) FROM wagers w JOIN bets b ON b.id=w.bet_id WHERE w.user_id=u.id AND b.status='resolved' AND w.payout=0) losses
     FROM users u WHERE u.grp IS ? AND u.approved=1 ORDER BY u.points DESC LIMIT 50`, grpOf(u)).map(({ eq_title, eq_color, eq_fx, eq_badge, ...r }) => ({ ...r, ...deco({ eq_title, eq_color, eq_fx, eq_badge }) })),
