@@ -1,16 +1,16 @@
 /**
  * 도박장 게임 규칙 (순수 계산만 — 저장/통신은 서버가 맡음).
  * Node 서버(server.js)와 구글 앱스 스크립트(gas/Games.gs)가 이 파일을 똑같이 씁니다.
- * 수정하면 `node build-gas.js` 로 gas/Games.gs 를 다시 만드세요.
+ * 수정하면 `node build-gas.js` 로 gas/Games.gs 를 다시 만드십시오.
  *
- * 난수는 모두 rnd() (0 이상 1 미만)로 받아서, 테스트에서는 고정된 값을 넣을 수 있어요.
+ * 난수는 모두 rnd() (0 이상 1 미만)로 받아서, 테스트에서는 고정된 값을 넣을 수 있습니다.
  */
 var GAMES = (function () {
   var G = {};
   function rint(n, rnd) { return Math.floor((rnd || Math.random)() * n); }
 
   /* ================= 혼자 하는 게임(블랙잭·슬롯) 하루 제한 ================= */
-  // 한도는 여기서만 바꾸면 돼요. 0 이면 그 제한은 꺼짐.
+  // 한도는 여기서만 바꾸면 됩니다. 0 이면 그 제한은 꺼짐.
   G.SOLO = {
     DAILY_NET_CAP: 500,    // 하루에 벌 수 있는 순이익(딴 돈 - 잃은 돈) 상한. 닿으면 그날은 더 못 함 (시작 점수 1000의 절반)
     DAILY_PLAYS: 30,       // 하루에 할 수 있는 판 수 (블랙잭 한 판, 슬롯 한 번이 각각 1회). 0 이면 무제한
@@ -35,8 +35,8 @@ var GAMES = (function () {
     return cap > 0 && net > 0 ? Math.min(net, Math.max(0, cap - netToday)) : net;
   };
   G.soloBlockedMessage = function (l) {
-    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '점까지 벌 수 있는데 한도에 도달했어요! 내일(한국 시간 자정 이후) 다시 해요.'
-      : '하루에 ' + l.plays_cap + '번까지만 할 수 있어요. 내일(한국 시간 자정 이후) 다시 해요.';
+    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '점까지 벌 수 있는데 한도에 도달했습니다! 내일(한국 시간 자정 이후) 다시 합니다.'
+      : '하루에 ' + l.plays_cap + '번까지만 할 수 있습니다. 내일(한국 시간 자정 이후) 다시 합니다.';
   };
 
   /* ================= 🤫 최저 유일 숫자 ================= */
@@ -53,7 +53,7 @@ var GAMES = (function () {
   /* ================= 🪜 사다리타기 ================= */
   G.LADDER = { MIN_SLOTS: 2, MAX_SLOTS: 6, ROWS: 9 };
   /** 사다리 만들기. rungs[행] = 그 행에서 가로줄이 놓인 칸 번호들(i는 i번과 i+1번 세로줄 사이). 이웃한 가로줄은 안 놓음.
-   *  놓을 자리를 무작위 순서로 훑어서, 왼쪽/오른쪽 어느 쪽도 치우치지 않게 만들어요. */
+   *  놓을 자리를 무작위 순서로 훑어서, 왼쪽/오른쪽 어느 쪽도 치우치지 않게 만들습니다. */
   G.ladderMake = function (slots, rnd) {
     var rungs = [];
     for (var r = 0; r < G.LADDER.ROWS; r++) {
@@ -139,7 +139,7 @@ var GAMES = (function () {
   }
   /** 히트: 카드 한 장 더. 21 초과면 버스트(패배), 정확히 21이면 자동으로 멈춤 */
   G.bjHit = function (s) {
-    if (s.status !== 'playing') throw new Error('끝난 게임이에요.');
+    if (s.status !== 'playing') throw new Error('끝난 게임입니다.');
     draw(s, 'player');
     var v = G.bjValue(s.player).total;
     if (v > 21) return finish(s, 'bust');
@@ -148,13 +148,13 @@ var GAMES = (function () {
   };
   /** 스탠드: 그만 받고 딜러 차례 */
   G.bjStand = function (s) {
-    if (s.status !== 'playing') throw new Error('끝난 게임이에요.');
+    if (s.status !== 'playing') throw new Error('끝난 게임입니다.');
     return dealerPlayAndCompare(s);
   };
   /** 더블다운: 처음 두 장일 때만. 건 돈을 2배로 하고 카드 딱 한 장만 받고 끝 (호출하는 쪽이 추가금을 미리 차감) */
   G.bjCanDouble = function (s) { return s.status === 'playing' && s.player.length === 2 && !s.doubled; };
   G.bjDouble = function (s) {
-    if (!G.bjCanDouble(s)) throw new Error('지금은 더블다운을 할 수 없어요.');
+    if (!G.bjCanDouble(s)) throw new Error('지금은 더블다운을 할 수 없습니다.');
     s.doubled = true;
     draw(s, 'player');
     if (G.bjValue(s.player).total > 21) return finish(s, 'bust');
@@ -203,6 +203,16 @@ var GAMES = (function () {
     for (a = 0; a < 6; a++) for (b = 0; b < 6; b++) for (c = 0; c < 6; c++)
       r += (G.SLOT.WEIGHTS[a] / T) * (G.SLOT.WEIGHTS[b] / T) * (G.SLOT.WEIGHTS[c] / T) * G.slotMultiplier([a, b, c]);
     return r;
+  };
+
+  /* ================= 💸 돈뿌리기 ================= */
+  G.DROP = { MIN_COUNT: 2, MAX_COUNT: 20 };
+  /** 남은 금액(left)을 남은 사람 수(cnt)가 나눠 받을 때, 이번 사람이 받을 금액. 남은 사람이 최소 1씩은 받도록 남겨 둠.
+   *  마지막 사람은 남은 전부. 한 번에 평균의 최대 2배까지 나올 수 있음. */
+  G.dropShare = function (left, cnt, rnd) {
+    if (cnt <= 1) return left;
+    var max = Math.min(Math.max(1, Math.floor(left / cnt * 2)), left - (cnt - 1));
+    return 1 + rint(max, rnd);
   };
 
   return G;
