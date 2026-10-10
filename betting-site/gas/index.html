@@ -450,7 +450,7 @@ async function gamesTick() {
 }
 
 /* ---- 🤫 최저 유일 숫자 ---- */
-const LUN_RULES = `<details %OPEN% class="rules"><summary><b>🤫 최저 유일 숫자가 뭐입니다?</b></summary>
+const LUN_RULES = `<details %OPEN% class="rules"><summary><b>🤫 최저 유일 숫자란 무엇입니까?</b></summary>
   <p>모두가 <b>1~10 중 숫자 하나를 몰래</b> 냅니다. 다 모이면 한꺼번에 공개됩니다.</p>
   <p>같은 숫자를 낸 사람이 둘 이상이면 그 숫자는 <b>무효</b>입니다. 남은 숫자 중 <b>가장 작은 숫자</b>를 낸 사람이 <b>판돈 전부</b>를 가져갑니다.</p>
   <p class="mute">예) A 1, B 1, C 3, D 7 → 1은 겹쳐서 무효 → 안 겹친 3·7 중 작은 3을 낸 <b>C 승</b></p>
@@ -496,7 +496,7 @@ const createLun = guard(async () => {
 });
 
 /* ---- 🪜 사다리타기 ---- */
-const LAD_RULES = `<details %OPEN% class="rules"><summary><b>🪜 사다리타기가 뭐입니다?</b></summary>
+const LAD_RULES = `<details %OPEN% class="rules"><summary><b>🪜 사다리타기란 무엇입니까?</b></summary>
   <p>방장이 <b>인원(2~6명)과 판돈</b>을 정하고 방을 열습니다. 사람들이 <b>자리(번호)를 골라 앉습니다.</b> 모두 같은 판돈을 냅니다.</p>
   <p><b>자리가 다 차는 순간</b> 사다리가 만들어지고, 아래쪽에서 <b>딱 한 칸이 당첨</b>으로 정해집니다. 그 칸에 도착한 사람이 <b>판돈 전부</b>를 가져갑니다.</p>
   <p class="mute">사다리는 자리가 다 찬 뒤에야 만들어지니까 미리 알고 고를 수는 없습니다. 어느 자리든 당첨 확률은 똑같이 1/인원수입니다.</p></details>`;
