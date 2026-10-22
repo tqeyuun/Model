@@ -136,7 +136,7 @@ ${extra}
 /* 화면 안의 확인·입력 창 */
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 #modal[hidden]{display:none}
-.mbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 0 30px rgba(168,85,247,.35)}
+.mbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.6)}
 .mmsg{white-space:pre-wrap;margin-bottom:12px}.mbox input{width:100%;margin-bottom:12px}.mbtn{display:flex;gap:8px;justify-content:flex-end}
 `;
 

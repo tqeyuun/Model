@@ -34,6 +34,7 @@ srv.listen(3140, async () => {
     console.log('B 걸고 난 뒤 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
     await A.waitForFunction(() => document.body.textContent.includes('총 100'), null, { timeout: 20000 }); console.log('A 화면에 총 100 반영');
     await A.screenshot({ path: process.env.SC + '/art_a.png' });
+    await A.click('button:has-text("랭킹")'); await A.waitForSelector('table'); await A.screenshot({ path: process.env.SC + '/art_rank.png' }); await A.click('button:has-text("도박장")');
     await A.click('button:has-text("취소(환불)")'); await A.waitForSelector('#modal:not([hidden]) .mmsg'); console.log('확인 창:', await A.textContent('.mmsg')); await A.click('#myes');
     await B.waitForFunction(() => document.querySelector('#who').textContent.includes('1,000'), null, { timeout: 20000 }); console.log('환불 뒤 B 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
     await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
