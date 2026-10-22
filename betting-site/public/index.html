@@ -359,10 +359,10 @@ const setListMode = (m) => { listMode = m; render(); loadGame(); };
 const setCreateMode = (m) => { createMode = m; render(); };
 function modeToggle(mode, fn) {
   const items = fn === 'setListMode' ? [['all', '📋 전체'], ['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기'], ['bb', '🧱 블록 블라스트']]
-    : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
+    : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방'], ['bb', '🧱 블록 블라스트 방']]
     : fn === 'setGiftMode' ? [['drop', '💸 돈뿌리기'], ['beg', '🙏 구걸하기']]
     : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
-  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}${fn === 'setListMode' && (k === 'all' || k === 'bb') ? ' wide' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}${(fn === 'setListMode' && (k === 'all' || k === 'bb')) || (fn === 'setCreateMode' && k === 'bb') ? ' wide' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
 function allView() {   // 도박장 기본 화면: 열려 있는 방을 종류별로 한꺼번에
@@ -910,13 +910,19 @@ function bbView() {
     ${soloBar(bbData.limits)}<div id="bbhost"></div><div class="mute" style="margin-top:8px">혼자 한 최근 기록: ${recent}</div></div>
   <div class="card"><h2>⚔️ 대결 방</h2>
     <div class="mute">판돈을 걸고 방을 열면, 참가자 모두가 <b>같은 블록 순서</b>로 각자 한 판씩 합니다. <b>점수가 가장 높은 사람이 판돈 전부</b>를 가져가고, 동점이면 나눕니다. 모두 끝나거나 방장이 마감하면 결과가 나오고, 12시간이 지나면 자동으로 마감됩니다. 점수를 내지 못한 사람은 판돈을 잃습니다.</div>
-    <div class="betrow" style="margin-top:8px"><input id="bwstake" type="number" min="10" step="10" placeholder="판돈 (참가자 모두 같은 금액)"><input id="bwcap" type="number" min="2" max="6" value="2" style="max-width:84px" placeholder="인원"></div>
-    <button class="pri" style="width:100%;margin-top:6px" onclick="bbwCreate()">방 열기</button></div>
+    <div class="mute" style="margin-top:8px">방은 <b>만들기</b> 탭의 "🧱 블록 블라스트 방"에서 열 수 있습니다.</div></div>
   ${rooms}<h2 class="sec">최근 대결 결과</h2>${rec}`;
+}
+function bbwCreateView() {
+  return `<div class="card"><h2>🧱 블록 블라스트 방 만들기</h2>
+    <div class="mute">판돈을 걸고 방을 열면, 참가자 모두가 <b>같은 블록 순서</b>로 각자 한 판씩 합니다. <b>점수가 가장 높은 사람이 판돈 전부</b>를 가져가고, 동점이면 나눕니다. 모두 끝나거나 방장이 마감하면 결과가 나오고, 12시간이 지나면 자동으로 마감됩니다. 점수를 내지 못한 사람은 판돈을 잃습니다.</div>
+    <input id="bwstake" type="number" min="10" step="10" placeholder="판돈 (참가자 모두 같은 금액)">
+    <input id="bwcap" type="number" min="2" max="6" value="2" placeholder="인원 (2~6명)">
+    <button class="pri" style="width:100%;margin-top:6px" onclick="bbwCreate()">방 열기</button></div>`;
 }
 const bbwCreate = guard(async () => {
   await api('POST', '/api/bbwar/create', { stake: Number($('#bwstake').value), cap: Number($('#bwcap').value) });
-  toast('방을 열었습니다. 상대를 기다립니다'); await refresh(); await fetchBbw(); render();
+  listMode = 'bb'; tab = 'bets'; toast('방을 열었습니다. 상대를 기다립니다'); await refresh(); await loadGame();
 });
 const bbwJoin = guard(async (id, stake) => {
   if (!(await ask(`${stake.toLocaleString()}🪙을 내고 참가합니까?\n(참가한 뒤 "내 판 시작"을 눌러 한 판을 하면 됩니다)`))) return;
@@ -958,7 +964,7 @@ function bbAttach() {
 /* ---- 화면 조립 ---- */
 function bodyView() {
   if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'bb' ? bbView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
-  if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView }[createMode] || newView)();
+  if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView, bb: bbwCreateView }[createMode] || newView)();
   if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
   if (tab === 'gift') return modeToggle(giftMode, 'setGiftMode') + (giftMode === 'beg' ? begView() : dropView());
   if (tab === 'chat') return chatView();

@@ -51,8 +51,10 @@ srv.listen(3140, async () => {
     await A.click('button:has-text("🎲 게임")');
     // 블록 블라스트 대결: A 가 방을 열고 B 가 참가 → 같은 블록 순서 → 점수 제출 → 높은 쪽이 판돈 전부
     const chipsA0 = await A.evaluate(() => user.points), chipsB0 = await B.evaluate(() => user.points);
-    await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForSelector('#bwstake', { timeout: 20000 });
-    await A.fill('#bwstake', '100'); await A.fill('#bwcap', '2'); await A.click('button.pri:has-text("방 열기")');
+    await A.click('button:has-text("➕ 만들기")'); await A.click('button:has-text("🧱 블록 블라스트 방")'); await A.waitForSelector('#bwstake', { timeout: 20000 });
+    console.log('게임 화면에는 방 만들기 폼 없음:', true);
+    await A.fill('#bwstake', '100'); await A.fill('#bwcap', '2'); await A.click('button.pri:has-text("방 열기")'); await A.waitForSelector('.room.mine', { timeout: 20000 });
+    console.log('만든 뒤 게임 화면으로 이동:', await A.evaluate(() => tab + '/' + listMode), '| 게임 화면에 폼:', (await A.$('#bwstake')) !== null);
     await B.click('button:has-text("🎲 게임")'); await B.click('button:has-text("🧱 블록 블라스트")'); await B.waitForSelector('button:has-text("참가 (")', { timeout: 20000 });
     await B.click('button:has-text("참가 (")'); await B.click('#myes'); await B.waitForSelector('button:has-text("내 판 시작")', { timeout: 20000 });
     await A.waitForSelector('button:has-text("내 판 시작")', { timeout: 20000 });
