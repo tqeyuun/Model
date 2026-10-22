@@ -28,10 +28,10 @@ button{cursor:pointer;white-space:nowrap;background:var(--card2);font-weight:600
 button.pri{background:var(--gold);border-color:var(--gold);color:#1a1300;font-weight:800}button.pri:hover:not(:disabled){background:#ffc94a}
 button.danger{background:#3a1519;border-color:#7a2a30;color:#ff9a9e}
 button:disabled{opacity:.4;cursor:default}
-.tabs{display:flex;gap:0;margin:12px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.tabs button{flex:1;border:0;border-radius:0;background:transparent;font-weight:700;font-size:13px;padding:11px 2px;color:var(--mute);border-right:1px solid var(--line)}.tabs button:last-child{border-right:0}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0}
+.tabs button{border:1px solid var(--line);border-radius:10px;background:var(--card);font-weight:800;font-size:15px;padding:12px 4px;color:var(--ink)}
 .tabs button.on{background:var(--gold);color:#1a1300}
-.tabs.mode{flex-wrap:wrap;gap:6px;margin:6px 0 10px;background:transparent;border:0;border-radius:0;overflow:visible}
+.tabs.mode{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
 .tabs.mode button{flex:1 1 calc(50% - 6px);border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:14px;padding:10px 6px}
 .tabs.mode button.on{background:#2a2108;border-color:var(--gold);color:var(--gold)}
 .opt{--c:var(--c0);margin:10px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);border-left:4px solid var(--c);background:var(--panel)}
@@ -1899,7 +1899,7 @@ function render() {
   if (window.__adminMode) { renderHeader(); return; }
   renderHeader();
   $('#app').innerHTML = !token ? authView() : user && user.pending ? pendingView() : `
-    ${approveCard()}<div class="tabs">${[['bets','도박장'],['new','만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    ${approveCard()}<div class="tabs">${[['bets','🎲 게임'],['new','➕ 만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
     ${bodyView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }

@@ -27,14 +27,14 @@ srv.listen(3140, async () => {
     const A = await open('u_owner_aaaaaaaaaaaaaaaa', true), B = await open('u_friend_bbbbbbbbbbbbbbbb', false);
     for (const [pg, name] of [[A, '민수'], [B, '지은']]) { await pg.waitForSelector('#n', { timeout: 20000 }); await pg.fill('#n', name); await pg.click('button:has-text("입장하기")'); await pg.waitForSelector('text=카지노', { timeout: 20000 }); }
     console.log('입장:', (await A.textContent('#who')).replace(/\s+/g, ' ').trim().slice(0, 40), '|', (await B.textContent('#who')).replace(/\s+/g, ' ').trim().slice(0, 40));
-    await A.click('button:has-text("만들기")'); await A.click('button:has-text("🎲 도박 만들기")').catch(() => {});
+    await A.click('button:has-text("➕ 만들기")'); await A.click('button:has-text("🎲 도박 만들기")').catch(() => {});
     await A.fill('#t', '점심 메뉴는?'); const opts = await A.$$('.o'); await opts[0].fill('한식'); await opts[1].fill('양식'); await A.click('button.pri:has-text("열기")');
     await B.waitForSelector('text=점심 메뉴는?', { timeout: 20000 });
     await B.fill('input[id^=a]', '100'); await B.click('button:has-text("걸기")'); await B.waitForFunction(() => document.querySelector('#who').textContent.includes('900'), null, { timeout: 20000 });
     console.log('B 걸고 난 뒤 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
     await A.waitForFunction(() => document.body.textContent.includes('총 100'), null, { timeout: 20000 }); console.log('A 화면에 총 100 반영');
     await A.screenshot({ path: process.env.SC + '/art_a.png' });
-    await A.click('button:has-text("랭킹")'); await A.waitForSelector('table'); await A.screenshot({ path: process.env.SC + '/art_rank.png' }); await A.click('button:has-text("도박장")');
+    await A.click('button:has-text("랭킹")'); await A.waitForSelector('table'); await A.screenshot({ path: process.env.SC + '/art_rank.png' }); await A.click('button:has-text("게임")');
     await A.click('button:has-text("취소(환불)")'); await A.waitForSelector('#modal:not([hidden]) .mmsg'); console.log('확인 창:', await A.textContent('.mmsg')); await A.click('#myes');
     await B.waitForFunction(() => document.querySelector('#who').textContent.includes('1,000'), null, { timeout: 20000 }); console.log('환불 뒤 B 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
     await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
