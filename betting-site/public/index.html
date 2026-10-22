@@ -38,6 +38,7 @@ button:disabled{opacity:.4;cursor:default}
 .tabs.mode{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
 .tabs.mode button{flex:1 1 calc(50% - 6px);border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:14px;padding:10px 6px}
 .tabs.mode button.on{background:#2a2108;border-color:var(--gold);color:var(--gold)}
+.tabs.mode button.wide{flex:1 1 100%}
 .opt{--c:var(--c0);margin:10px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);border-left:4px solid var(--c);background:var(--panel)}
 .opt .lbl{font-weight:800;font-size:16px;color:var(--ink)}
 .bar{height:6px;background:#0a0e15;border-radius:4px;overflow:hidden;margin:8px 0}
@@ -361,7 +362,7 @@ function modeToggle(mode, fn) {
     : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
     : fn === 'setGiftMode' ? [['drop', '💸 돈뿌리기'], ['beg', '🙏 구걸하기']]
     : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
-  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}${fn === 'setListMode' && (k === 'all' || k === 'bb') ? ' wide' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
 function allView() {   // 도박장 기본 화면: 열려 있는 방을 종류별로 한꺼번에
