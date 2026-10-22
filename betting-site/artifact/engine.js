@@ -56,7 +56,11 @@
   }
 
   /* ---------- 메모리 사본 ---------- */
-  Engine.prototype._rows = function (name) { var t = this.tables[name]; if (!t) throw new Error('없는 표: ' + name); return t.arr; };
+  Engine.prototype._rows = function (name) {
+    var t = this.tables[name]; if (!t) throw new Error('없는 표: ' + name);
+    if (t.unsorted) { t.arr.sort(byId); t.unsorted = false; }   // 한꺼번에 받은 문서는 읽을 때 한 번만 정렬 (넣을 때마다 정렬하면 2만 건에 4초)
+    return t.arr;
+  };
   Engine.prototype._keyOf = function (name, row) {
     if (name === 'items') return row.user_id + '_' + row.item_id;
     return String(row.id);
@@ -68,7 +72,7 @@
   };
   Engine.prototype._sortedInsert = function (name, row) {
     var t = this.tables[name]; t.arr.push(row);
-    if (name !== 'items' && t.arr.length > 1 && t.arr[t.arr.length - 2].id > row.id) t.arr.sort(byId);
+    if (name !== 'items' && t.arr.length > 1 && t.arr[t.arr.length - 2].id > row.id) t.unsorted = true;
   };
   Engine.prototype._add = function (name, row) {
     var key = this._keyOf(name, row); row._key = key;
