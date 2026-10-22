@@ -1,0 +1,2635 @@
+<title>도박장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+
+:root{--bg:#000;--card:#0e0e16;--ink:#f3f1ff;--mute:#8d8aa8;--line:#25233a;--pri:#a855f7;--pink:#ff2d95;--cyan:#22d3ee;--win:#34f5a0;--lose:#ff4d6d;--dog:#ffb800}
+*{box-sizing:border-box}
+body{margin:0;background:#000;color:var(--ink);font:16px/1.5 'Noto Sans KR',system-ui,-apple-system,'Malgun Gothic',sans-serif;min-height:100vh;
+ background-image:radial-gradient(600px 300px at 10% -5%,rgba(168,85,247,.28),transparent),radial-gradient(500px 300px at 95% 5%,rgba(255,45,149,.2),transparent),radial-gradient(500px 400px at 50% 110%,rgba(34,211,238,.14),transparent);background-attachment:fixed}
+main{max-width:640px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header b{font-size:20px;background:linear-gradient(90deg,var(--cyan),var(--pri),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 8px rgba(168,85,247,.6))}
+.pts{font-weight:800;color:var(--dog);text-shadow:0 0 10px rgba(255,184,0,.7)}
+.card{position:relative;background:linear-gradient(160deg,#14141f,var(--card));border:1px solid var(--line);border-radius:16px;padding:14px;margin:14px 0;box-shadow:0 0 0 1px rgba(168,85,247,.08),0 8px 30px rgba(168,85,247,.12);transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(168,85,247,.5),0 10px 36px rgba(255,45,149,.2)}
+h2{font-size:18px;margin:0 0 4px}.mute{color:var(--mute);font-size:13px}
+input,button{font:inherit;border-radius:12px;border:1px solid var(--line);padding:10px 12px;background:#07070c;color:var(--ink);outline:none}
+input{width:100%;margin:4px 0}input:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(168,85,247,.25)}
+button{cursor:pointer;transition:transform .1s,filter .15s}button:hover:not(:disabled){filter:brightness(1.25)}button:active:not(:disabled){transform:scale(.96)}
+button.pri{background:linear-gradient(90deg,var(--pri),var(--pink));border:0;color:#fff;font-weight:700;box-shadow:0 0 16px rgba(255,45,149,.45)}
+button:disabled{opacity:.4;cursor:default}
+.tabs{display:flex;gap:6px;margin:12px 0}.tabs button{flex:1;font-weight:600}
+.tabs .on{background:linear-gradient(90deg,var(--cyan),var(--pri));color:#000;border:0;box-shadow:0 0 16px rgba(34,211,238,.5)}
+.opt{margin:12px 0;padding:8px 10px;border-radius:12px;border:1px solid transparent}
+.bar{height:10px;background:#1a1a28;border-radius:8px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--pri));box-shadow:0 0 12px var(--pri);transition:width .5s}
+.opt.dog{border-color:rgba(255,184,0,.45);background:rgba(255,184,0,.06);animation:glow 2s infinite}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink));box-shadow:0 0 12px var(--dog)}
+.opt.won{border-color:var(--win);background:rgba(52,245,160,.07);box-shadow:0 0 18px rgba(52,245,160,.3)}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan));box-shadow:0 0 12px var(--win)}
+@keyframes glow{50%{box-shadow:0 0 16px rgba(255,184,0,.35)}}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:linear-gradient(90deg,var(--dog),var(--pink));color:#000;margin-left:6px;vertical-align:middle}
+.tag.s{background:#26243a;color:var(--cyan)}
+.win{color:var(--win);font-weight:800;text-shadow:0 0 10px rgba(52,245,160,.6)}.lose{color:var(--lose);font-weight:800}
+.lucky{display:inline-block;margin-left:6px;padding:2px 10px;border-radius:99px;font-weight:800;color:#000;background:linear-gradient(90deg,#fff176,#ffb800,#ff8a3d);box-shadow:0 0 14px rgba(255,184,0,.8)}
+.betrow{display:flex;gap:6px;margin-top:6px}.betrow input{margin:0}
+.msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff;font-weight:700;padding:10px 18px;border-radius:12px;z-index:9;max-width:90%;box-shadow:0 0 24px rgba(255,45,149,.6)}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}td:nth-child(n+3),th:nth-child(n+3){text-align:right}
+tr:nth-child(2) td:first-child{color:#ffd700}tr:nth-child(3) td:first-child{color:#c0c0c0}tr:nth-child(4) td:first-child{color:#cd7f32}
+tr:nth-child(2){background:rgba(255,215,0,.07)}
+
+/* ---- 더 화려하게 ---- */
+:root{--c0:#22d3ee;--c1:#ff2d95;--c2:#ffb800;--c3:#34f5a0;--c4:#a855f7;--c5:#ff6b3d}
+header b{font-size:22px;letter-spacing:.5px}
+.card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:16px 16px 0 0;background:linear-gradient(90deg,#22d3ee,#a855f7,#ff2d95)}
+.card h2{color:var(--ink)}   /* 그라데이션 글자는 이모지를 실루엣으로 덮어서 단색으로 */
+.opt{--c:var(--c0);border-color:color-mix(in srgb,var(--c) 35%,transparent);background:color-mix(in srgb,var(--c) 7%,transparent)}
+.opt .bar i{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 55%,#fff));box-shadow:0 0 14px var(--c)}
+.opt .lbl{color:var(--c);font-weight:700;text-shadow:0 0 10px color-mix(in srgb,var(--c) 60%,transparent)}
+.opt.dog .bar i{background:linear-gradient(90deg,var(--dog),var(--pink))}
+.opt.won .bar i{background:linear-gradient(90deg,var(--win),var(--cyan))}
+.opt button.pri{background:linear-gradient(90deg,var(--c),color-mix(in srgb,var(--c) 50%,var(--pink)));box-shadow:0 0 16px color-mix(in srgb,var(--c) 60%,transparent);color:#000}
+
+
+
+.tabs button{border-width:2px}
+
+.tag.s{background:linear-gradient(90deg,#22d3ee33,#a855f733);color:#e9d5ff;border:1px solid #a855f777}
+
+.tabs button{padding:10px 4px}
+
+#chatbox{height:50vh;overflow-y:auto;padding:6px;margin:8px 0;background:#07070c;border:1px solid var(--line);border-radius:12px}
+.cm{margin:8px 0;max-width:85%}.cm.me{margin-left:auto;text-align:right}
+.cn{font-size:12px;font-weight:700}.cn span{color:var(--mute);font-weight:400;margin-left:4px}
+.cb{display:inline-block;padding:6px 12px;border-radius:14px;background:#1b1b2b;word-break:break-word;text-align:left}
+.cm.me .cb{background:linear-gradient(90deg,var(--pri),var(--pink));color:#fff}
+button{white-space:nowrap}header{flex-wrap:wrap}header #who{font-size:14px}
+
+.tabs button{font-size:13px;padding:10px 2px}
+
+
+.ttl{display:inline-block;font-size:11px;font-weight:800;padding:1px 7px;margin-right:5px;border-radius:99px;color:#000;background:linear-gradient(90deg,#ffb800,#ff2d95);vertical-align:middle}
+.nm{font-weight:700}
+.nm.fx-glow{color:#fff;text-shadow:0 0 6px #22d3ee,0 0 14px #a855f7,0 0 24px #ff2d95}
+.nm.fx-fire{background:linear-gradient(0deg,#ff2d00,#ffb800,#fff176);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 6px rgba(255,100,0,.8))}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px}
+.item{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
+.item.eq{border-color:var(--win);box-shadow:0 0 14px rgba(52,245,160,.35)}.item .pv{min-height:26px}
+.item button{width:100%}
+
+.tabs.mode{margin:4px 0 8px}.tabs.mode button{font-size:14px;padding:9px 6px}
+.tabs.mode button.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5);color:#fff}
+.room{background:#07070c;border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.room.mine{border-color:var(--dog);background:rgba(255,184,0,.06)}
+.hands{display:flex;gap:8px;margin-top:8px}
+.hand{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:700;padding:10px 4px;border-width:2px}
+.hand span{font-size:30px;line-height:1.1}
+.hands.pick{margin:12px 0}.hand.sel{border-color:var(--win);background:rgba(52,245,160,.12);box-shadow:0 0 16px rgba(52,245,160,.45)}
+.rec{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.rec.me{background:rgba(168,85,247,.08)}
+
+
+
+.tabs.mode button:nth-child(n){border-color:var(--line)}.tabs.mode button.on{border-color:transparent}
+.card.done{opacity:.5;transition:opacity .15s}.card.done:hover{opacity:.9;transform:none}
+
+.tabs button.t-bets.on{background:linear-gradient(90deg,#22d3ee,#34f5a0);box-shadow:0 0 16px rgba(34,211,238,.45)}.tabs button.t-bets{border-color:#22d3ee55}
+.tabs button.t-new.on{background:linear-gradient(90deg,#ff2d95,#ffb800);box-shadow:0 0 16px rgba(255,45,149,.5)}.tabs button.t-new{border-color:#ff2d9555}
+.tabs button.t-casino.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5)}.tabs button.t-casino{border-color:#ff6b3d55}
+.tabs button.t-gift.on{background:linear-gradient(90deg,#b57bff,#ff2d95);box-shadow:0 0 16px rgba(181,123,255,.5)}.tabs button.t-gift{border-color:#b57bff55}
+.tabs button.t-shop.on{background:linear-gradient(90deg,#ffb800,#ff2d95);box-shadow:0 0 16px rgba(255,184,0,.5)}.tabs button.t-shop{border-color:#ffb80055}
+.tabs button.t-rank.on{background:linear-gradient(90deg,#34f5a0,#22d3ee);box-shadow:0 0 16px rgba(52,245,160,.5)}.tabs button.t-rank{border-color:#34f5a055}
+.tabs:not(.mode) button{font-size:13px;padding:10px 2px;border-width:2px}
+.tabs.mode{flex-wrap:wrap}.tabs.mode button{flex:1 1 calc(50% - 6px);font-size:14px;padding:9px 6px}
+.tabs.mode button.on{background:linear-gradient(90deg,#ff6b3d,#ff2d95);box-shadow:0 0 16px rgba(255,107,61,.5);color:#fff;border-color:transparent}
+.nums{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0}.nums.n4{grid-template-columns:repeat(4,1fr)}.nums.n5{grid-template-columns:repeat(5,1fr)}.nums.n6{grid-template-columns:repeat(3,1fr)}
+.num{padding:10px 0;font-weight:800;font-size:16px;border-width:2px}.num.sel{border-color:var(--win);background:rgba(52,245,160,.15);box-shadow:0 0 14px rgba(52,245,160,.4)}
+.seats{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.seat{padding:6px 12px;border-radius:99px;border:1px dashed var(--line);font-size:13px;color:var(--mute)}.seat.on{border-style:solid;color:var(--ink);background:#1b1b2b}.seat.mine{border-color:var(--win)}
+button.seat.free{border-style:solid;border-color:var(--cyan);color:var(--cyan);cursor:pointer}
+.pn{display:inline-block;padding:1px 9px;border-radius:99px;background:#1b1b2b;margin:2px;font-size:13px;border:1px solid transparent}.pn.uq{border-color:var(--cyan)}.pn.win{background:rgba(52,245,160,.2);border-color:var(--win)}
+.card.sub{padding:10px}.card.sub.me{border-color:var(--pri)}
+.lv,.lr{stroke:#3a3856;stroke-width:3;stroke-linecap:round}
+.rules p,.rules ul,.rules ol{margin:6px 0}.rules li{margin:4px 0}.rules summary{cursor:pointer;font-size:16px}.rules b{color:var(--cyan)}.rules ul,.rules ol{padding-left:20px}
+.hand-row{display:flex;flex-wrap:wrap;margin:4px 0}
+.pc{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:60px;margin:3px;border-radius:8px;background:#f5f5fa;color:#111;font-weight:800;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.pc.red{color:#d92d3a}.pc.back{background:repeating-linear-gradient(45deg,#3b2a8c,#3b2a8c 6px,#2a1f66 6px,#2a1f66 12px);color:#fff}
+.reels{display:flex;gap:8px;justify-content:center;margin:14px 0}.reel{width:78px;height:78px;display:flex;align-items:center;justify-content:center;font-size:42px;background:#07070c;border:2px solid var(--line);border-radius:14px}
+.limit{background:#07070c;border:1px dashed var(--line);border-radius:12px;padding:8px 12px;font-size:13px;margin:8px 0}
+
+/* 글꼴: 본문은 Noto Sans KR, 로고·제목·점수는 Black Han Sans (구글 폰트가 안 불러와져도 기본 글꼴로 보임) */
+:root{--display:'Black Han Sans','Noto Sans KR',system-ui,sans-serif}
+header b,.card h2,.pts{font-family:var(--display);font-weight:400;letter-spacing:.3px}
+header b{font-size:24px}.card h2{font-size:20px}
+.lg{display:flex;align-items:center;gap:8px}.dice{font-size:24px;line-height:1}   /* 이모지는 그라데이션 글자 바깥에 둬야 색이 살습니다 */
+.card h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
+.member .kick{padding:0 6px;margin-left:4px;font-size:12px;line-height:18px;border-radius:9px;color:#ff6b8a;border-color:#ff6b8a66}
+.sec{margin:16px 4px 6px;font-size:16px}
+.members{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.member{padding:4px 10px;border-radius:99px;background:#1b1b2b;border:1px solid var(--line);font-size:14px}.member.me{border-color:var(--cyan)}
+/* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
+.chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
+  background:radial-gradient(circle,#ff2d95 0 30%,#fff 31% 38%,#ff2d95 39% 47%,transparent 48%),repeating-conic-gradient(#fff 0 16deg,#b3125f 16deg 45deg);
+  border:.07em solid #fff;box-shadow:0 0 .5em rgba(255,45,149,.75),inset 0 0 .15em rgba(0,0,0,.45)}
+
+:root{color-scheme:dark}
+/* 관리자 화면 */
+
+h1{margin:6px 0 12px;font-size:22px;background:linear-gradient(90deg,var(--pink),var(--dog));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+
+.stat{background:#07070c;border:1px solid var(--line);border-radius:12px;padding:10px}
+.stat b{display:block;font-size:22px;color:var(--cyan);text-shadow:0 0 10px rgba(34,211,238,.6)}
+button:hover{filter:brightness(1.3)}
+
+button.danger{border-color:var(--lose);color:var(--lose)}
+
+.acts{display:flex;gap:4px;flex-wrap:wrap}
+
+.opts button{margin:2px}
+
+.set{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.set input[type=number]{width:120px}
+.sw{display:flex;gap:6px;align-items:center}
+.sw input{width:auto}
+
+.item2{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+
+h1,h2{font-family:var(--display);font-weight:400;letter-spacing:.3px}
+
+h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
+/* 화면 안의 확인·입력 창 */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+#modal[hidden]{display:none}
+.mbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:420px;width:100%;box-shadow:0 0 30px rgba(168,85,247,.35)}
+.mmsg{white-space:pre-wrap;margin-bottom:12px}.mbox input{width:100%;margin-bottom:12px}.mbtn{display:flex;gap:8px;justify-content:flex-end}
+
+</style>
+<header><span class="lg"><span class="dice">🎲</span><b>도박장</b></span><span id="who"></span></header>
+<main id="app"></main>
+<div id="modal" hidden></div>
+<script>
+/**
+ * 아티팩트용 저장소 엔진.
+ * 구글 앱스 스크립트 버전의 규칙 코드(Code.gs)를 그대로 쓰고, 시트 대신 아티팩트의 공유 DB(claude.use('db'))에 저장합니다.
+ *
+ * - 읽기: 실시간 구독으로 유지되는 메모리 사본에서 바로 (빠름)
+ * - 쓰기(POST): DB 의 짧은 임대(acquire)로 한 번에 한 사람씩 → 최신 상태로 맞춘 뒤 규칙 실행 → 바뀐 문서만 저장
+ * - 채팅은 새 문서를 추가할 뿐이라 임대 없이 바로 저장
+ */
+(function (root) {
+  'use strict';
+  var PERSIST = ['users', 'bets', 'options', 'wagers', 'items', 'rooms', 'rps', 'lun', 'lunp', 'lad', 'ladp', 'bj', 'slots', 'drops', 'dropc', 'begs', 'begg'];
+  var LOCAL = ['sessions'];                       // 이 브라우저에만 있는 표 (로그인 표시)
+  var MESSAGES = 'messages';                      // 채팅: 최근 것만 구독, 임대 없이 추가
+  var MSG_LIMIT = 400;
+  var LEASE_MS = 1200;
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function byId(a, b) { return a.id - b.id; }
+
+  function Engine(opts) {
+    var self = this;
+    this.db = opts.db;
+    this.uid = opts.uid;                          // 이 사람의 아이디 (user.id())
+    this.isOwner = !!opts.isOwner;
+    this.makeGS = opts.makeGS;                    // (ctx) => 규칙 코드 모듈
+    this.tables = {};                             // name -> { map: Map(key -> row), arr: [row...] }
+    this.dirty = new Map();                       // 'table/key' -> { table, key, data|null }
+    this.pendingKeys = new Set();                 // 저장 중인 문서는 구독이 덮어쓰지 않게
+    this.listeners = [];
+    this.unsubs = [];
+    this.settingsJson = '';
+    this.settingsWrite = null;
+    this.leaseHeld = false;
+    this.needLock = false;
+    this.rev = 0;
+    this.lastFull = 0;
+    this.ready = false;
+    this.queue = Promise.resolve();               // 이 브라우저 안에서도 쓰기는 한 줄로
+    PERSIST.concat(LOCAL, [MESSAGES]).forEach(function (n) { self.tables[n] = { map: new Map(), arr: [] }; });
+    this.msgSeq = 0;
+
+    var ctx = {
+      rows: function (name) { return self._rows(name); },
+      nextId: function (name) { return self._nextId(name); },
+      add: function (name, row) { self._add(name, row); },
+      touch: function (name, row) { self._touch(name, row); },
+      del: function (name, row) { self._del(name, row); },
+      isOwner: function () { return self.isOwner; },
+      lockOk: function () { if (self.leaseHeld) return true; self.needLock = true; return false; },
+      getProp: function (k) { return k === 'SETTINGS' ? self.settingsJson : undefined; },
+      setProp: function (k, v) { if (k === 'SETTINGS') { self.settingsJson = v; self.settingsWrite = v; } },
+    };
+    this.ctx = ctx;
+    this.gs = this.makeGS(ctx);
+  }
+
+  /* ---------- 메모리 사본 ---------- */
+  Engine.prototype._rows = function (name) { var t = this.tables[name]; if (!t) throw new Error('없는 표: ' + name); return t.arr; };
+  Engine.prototype._keyOf = function (name, row) {
+    if (name === 'items') return row.user_id + '_' + row.item_id;
+    return String(row.id);
+  };
+  Engine.prototype._nextId = function (name) {
+    if (name === MESSAGES) return Date.now() * 1000 + (this.msgSeq = (this.msgSeq + 1) % 1000);   // 임대 없이 쓰므로 겹치지 않게 시간 기반
+    var m = 0; this.tables[name].arr.forEach(function (r) { if (r.id > m) m = r.id; });
+    return m + 1;
+  };
+  Engine.prototype._sortedInsert = function (name, row) {
+    var t = this.tables[name]; t.arr.push(row);
+    if (name !== 'items' && t.arr.length > 1 && t.arr[t.arr.length - 2].id > row.id) t.arr.sort(byId);
+  };
+  Engine.prototype._add = function (name, row) {
+    var key = this._keyOf(name, row); row._key = key;
+    var t = this.tables[name], old = t.map.get(key);
+    if (old && old !== row) { var i = t.arr.indexOf(old); if (i >= 0) t.arr.splice(i, 1); }
+    t.map.set(key, row); this._sortedInsert(name, row);
+    this._mark(name, row);
+  };
+  Engine.prototype._touch = function (name, row) { if (!row._key) row._key = this._keyOf(name, row); this._mark(name, row); };
+  Engine.prototype._del = function (name, row) {
+    var t = this.tables[name], key = row._key || this._keyOf(name, row), cur = t.map.get(key);
+    if (cur) { var i = t.arr.indexOf(cur); if (i >= 0) t.arr.splice(i, 1); t.map.delete(key); }
+    if (LOCAL.indexOf(name) < 0) { this.dirty.set(name + '/' + key, { table: name, key: key, data: null }); }
+  };
+  Engine.prototype._mark = function (name, row) {
+    if (LOCAL.indexOf(name) >= 0) return;
+    var data = {}; Object.keys(row).forEach(function (k) { if (k !== '_key' && row[k] !== undefined) data[k] = row[k]; });
+    this.dirty.set(name + '/' + row._key, { table: name, key: row._key, data: clone(data) });
+  };
+  /** 서버에서 온 문서를 사본에 반영 (같은 행 객체를 계속 쓰도록 안쪽만 바꿈) */
+  Engine.prototype._apply = function (name, key, data) {
+    var t = this.tables[name]; if (!t) return;
+    if (this.pendingKeys.has(name + '/' + key)) return;   // 내가 저장 중인 건 내 값을 유지
+    var cur = t.map.get(key);
+    if (data === null) { if (cur) { var i = t.arr.indexOf(cur); if (i >= 0) t.arr.splice(i, 1); t.map.delete(key); } return; }
+    if (cur) { Object.keys(cur).forEach(function (k) { delete cur[k]; }); Object.assign(cur, data); cur._key = key; }
+    else { var row = Object.assign({}, data, { _key: key }); t.map.set(key, row); this._sortedInsert(name, row); }
+  };
+  Engine.prototype._replaceAll = function (name, docs, truncated) {
+    var self = this, seen = new Set();
+    docs.forEach(function (d) { seen.add(d.id); self._apply(name, d.id, d.data()); });
+    if (truncated) return;     // 1000개를 꽉 채워 받았으면 일부만 본 것일 수 있어 지우지 않음 (구독이 채워 줌)
+    var t = this.tables[name];
+    Array.from(t.map.keys()).forEach(function (k) { if (!seen.has(k) && !self.pendingKeys.has(name + '/' + k)) self._apply(name, k, null); });
+  };
+  Engine.prototype._emit = function () { var self = this; if (this._emitT) return; this._emitT = setTimeout(function () { self._emitT = null; self.listeners.forEach(function (f) { try { f(); } catch (e) { /* 무시 */ } }); }, 60); };
+  Engine.prototype.onChange = function (f) { this.listeners.push(f); };
+
+  /* ---------- 시작: 구독 ---------- */
+  Engine.prototype.start = function () {
+    var self = this, db = this.db, waits = [];
+    function sub(name, query) {
+      var first = true, resolve; var p = new Promise(function (r) { resolve = r; });
+      var un = query.onSnapshot(function (snap) {
+        snap.docChanges().forEach(function (c) { self._apply(name, c.doc.id, c.type === 'removed' ? null : clone(c.doc.data())); });
+        if (first) { first = false; resolve(); } else self._emit();
+      }, function () { if (first) { first = false; resolve(); } });
+      self.unsubs.push(un); waits.push(p);
+    }
+    PERSIST.forEach(function (n) { sub(n, db.collection(n)); });
+    sub(MESSAGES, db.collection(MESSAGES).orderBy('created_at', 'desc').limit(MSG_LIMIT));
+    var pc = new Promise(function (resolve) {
+      var first = true;
+      self.unsubs.push(db.doc('config/settings').onSnapshot(function (s) {
+        self.settingsJson = s.exists && s.data().json ? String(s.data().json) : '';
+        if (first) { first = false; resolve(); } else self._emit();
+      }, function () { if (first) { first = false; resolve(); } }));
+    });
+    waits.push(pc);
+    return Promise.all(waits).then(function () {
+      return db.doc('meta/rev').get();
+    }).then(function (s) { self.rev = s.exists ? s.data().n : 0; self.lastFull = Date.now(); self.ready = true; });
+  };
+  Engine.prototype.stop = function () { this.unsubs.forEach(function (u) { try { u(); } catch (e) { /* 무시 */ } }); this.unsubs = []; };
+
+  /* ---------- 임대(한 번에 한 사람씩 쓰기) ---------- */
+  Engine.prototype._lease = function () {
+    var self = this;
+    return (async function () {
+      for (var tries = 0; tries < 40; tries++) {
+        var r = await self.db.doc('locks/main').acquire({ holder: self.uid, ttlMs: LEASE_MS });
+        if (r.acquired) return;
+        var wait = r.expiresAt ? Date.parse(r.expiresAt) - Date.now() : 300;
+        await sleep(Math.min(Math.max(wait, 80), 2000) + Math.random() * 80);
+      }
+      throw new Error('다른 사람이 처리 중입니다. 잠시 뒤 다시 해주십시오.');
+    })();
+  };
+  Engine.prototype._fresh = async function () {
+    var self = this, s = await this.db.doc('meta/rev').get(), rev = s.exists ? s.data() : { n: 0, tables: [] };
+    var full = Date.now() - this.lastFull > 60000;
+    if (rev.n === this.rev && !full) return;
+    var names = rev.n === this.rev + 1 && rev.tables && !full ? rev.tables.filter(function (n) { return PERSIST.indexOf(n) >= 0; }) : PERSIST;
+    await Promise.all(names.map(async function (n) { var snap = await self.db.collection(n).limit(1000).get(); self._replaceAll(n, snap.docs, snap.docs.length >= 1000); }));
+    this.rev = rev.n; if (names === PERSIST) this.lastFull = Date.now();
+  };
+  Engine.prototype._flush = async function () {
+    var self = this, items = Array.from(this.dirty.values()), tables = {};
+    this.dirty.clear();
+    items.forEach(function (e) { self.pendingKeys.add(e.table + '/' + e.key); tables[e.table] = 1; });
+    var i = 0, err = null;
+    async function worker() {
+      while (i < items.length) {
+        var e = items[i++];
+        try {
+          var ref = self.db.collection(e.table).doc(e.key);
+          if (e.data) await ref.set(e.data); else await ref.delete();
+        } catch (x) { err = err || x; }
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker(), worker()]);
+    items.forEach(function (e) { self.pendingKeys.delete(e.table + '/' + e.key); });
+    if (self.settingsWrite !== null) { var v = self.settingsWrite; self.settingsWrite = null; try { await self.db.doc('config/settings').set({ json: v }); } catch (x) { err = err || x; } }
+    return { tables: Object.keys(tables), err: err };
+  };
+
+  /* ---------- 호출 (화면의 api() 가 부름) ---------- */
+  Engine.prototype._run = function (token, method, url, body) {
+    return JSON.parse(this.gs.handle(token, '', method, url, body || {}));
+  };
+  Engine.prototype.call = function (token, method, url, body) {
+    var self = this;
+    var p = this._call(token, method, url, body || {});
+    return p;
+  };
+  Engine.prototype._isLeaseFree = function (method, url) { return method === 'POST' && /^\/api\/chat(\?|$)/.test(url); };
+  Engine.prototype._call = async function (token, method, url, body) {
+    var self = this;
+    if (!this.ready) return { error: '연결 중입니다. 잠시 뒤 다시 해주십시오.', code: 503 };
+    // 읽기: 메모리 사본에서 바로. 정리(환불 등)가 필요하면 임대를 잡고 다시
+    if (method !== 'POST') {
+      this.needLock = false; this.dirty.clear();
+      var out = this._run(token, method, url, body);
+      if (!this.needLock) { if (this.dirty.size) await this._persistFree(); return out; }
+      this.dirty.clear(); this.needLock = false;
+    } else if (this._isLeaseFree(method, url)) {
+      var o; this.leaseHeld = true;            // 새 문서를 추가할 뿐이라 임대 없이 (아래 실행은 중간에 멈추지 않음)
+      try { o = this._run(token, method, url, body); } finally { this.leaseHeld = false; }
+      await this._persistFree();
+      return o;
+    }
+    return this._locked(token, method, url, body);
+  };
+  Engine.prototype._persistFree = async function () { var r = await this._flush(); if (r.err) this._emit(); };
+  Engine.prototype._locked = function (token, method, url, body) {
+    var self = this;
+    var job = this.queue.then(async function () {
+      await self._lease();
+      self.leaseHeld = true;
+      try {
+        await self._fresh();
+        self.dirty.clear();
+        var out = self._run(token, method, url, body);
+        if (self.dirty.size || self.settingsWrite !== null) {
+          await self.db.doc('locks/main').acquire({ holder: self.uid, ttlMs: LEASE_MS });   // 저장하는 동안 임대 연장
+          var r = await self._flush();
+          if (r.tables.length) {
+            self.rev = self.rev + 1;
+            try { await self.db.doc('meta/rev').set({ n: self.rev, tables: r.tables, by: self.uid, at: Date.now() }); } catch (x) { /* 다음 호출 때 전체를 다시 읽음 */ self.rev = -1; }
+          }
+          if (r.err) return { error: '저장 중 문제가 생겼습니다. 새로고침 후 확인하십시오. (' + (r.err.message || r.err.code) + ')', code: 500 };
+        }
+        return out;
+      } finally { self.leaseHeld = false; }
+    });
+    this.queue = job.catch(function () { /* 다음 호출은 계속 */ });
+    return job.catch(function (e) { return { error: e.message || '처리하지 못했습니다.', code: 503 }; });
+  };
+
+
+  /* ---------- 입장: 계정 번호(user.id)로 자동 로그인, 처음이면 닉네임으로 가입 ---------- */
+  var ROOM = 'dobak';
+  Engine.prototype.devKey = function () { var k = String(this.uid).replace(/[^A-Za-z0-9]/g, ''); while (k.length < 16) k += '0'; return k.slice(0, 64); };
+  Engine.prototype.myUser = function () { var k = this.devKey(); return this.tables.users.arr.filter(function (u) { return u.dev === k; })[0] || null; };
+  Engine.prototype.enter = async function (name) {
+    var mine = this.myUser(), self = this, body;
+    if (!this.ready) return { error: '연결 중입니다. 잠시 뒤 다시 해주십시오.', code: 503 };
+    if (mine) {      // 이미 가입한 사람: 저장 없이 로그인 표시만
+      body = { room: ROOM, name: mine.name, pin: this.devKey().slice(0, 16), dev: this.devKey(), mode: 'join', create: true };
+      this.needLock = false; this.leaseHeld = true;
+      try { var out = this._run('', 'POST', '/api/enter', body); } finally { this.leaseHeld = false; }
+      if (this.dirty.size) await this._persistFree();
+      return out;
+    }
+    name = String(name || '').trim();
+    if (this.tables.users.arr.some(function (u) { return u.name === name; })) return { error: '이미 사용 중인 닉네임입니다. 다른 닉네임을 정하십시오.', code: 409 };
+    var exists = this.tables.rooms.arr.length > 0;
+    body = { room: ROOM, name: name, pin: this.devKey().slice(0, 16), dev: this.devKey(), mode: exists ? 'join' : 'create', create: true };
+    return this._locked('', 'POST', '/api/enter', body);
+  };
+
+  root.ArtifactEngine = Engine;
+  if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+const makeGS = function (ctx) {
+/* ===== 구글 서비스를 흉내 내는 부분 (규칙 코드가 그대로 돌도록) ===== */
+var ENG = ctx;
+var console = { error: function (e) { if (!(e && e.message === 'NEED_LOCK') && typeof globalThis !== 'undefined') globalThis.console.error(e); }, log: function () {}, warn: function () {} };   // 임대 요청용 예외는 조용히
+var __mem = { PEPPER: 'artifact' };
+var __cache = {};
+var CacheService = { getScriptCache: function () { return {
+  get: function (k) { var e = __cache[k]; if (!e) return null; if (e.exp && e.exp < Date.now()) { delete __cache[k]; return null; } return e.v; },
+  put: function (k, v, sec) { __cache[k] = { v: String(v), exp: sec ? Date.now() + sec * 1000 : 0 }; },
+  remove: function (k) { delete __cache[k]; },
+  removeAll: function (ks) { ks.forEach(function (k) { delete __cache[k]; }); }
+}; } };
+var PropertiesService = { getScriptProperties: function () { return {
+  getProperty: function (k) { var v = ENG.getProp(k); if (v !== undefined) return v; return __mem[k] === undefined ? null : __mem[k]; },
+  setProperty: function (k, v) { if (k === 'SETTINGS') ENG.setProp(k, v); else __mem[k] = v; }
+}; } };
+var LockService = { getScriptLock: function () { return {
+  waitLock: function () { if (!ENG.lockOk()) throw new Error('NEED_LOCK'); },   // 쓰기 임대가 없으면 엔진이 임대를 잡고 다시 부름
+  releaseLock: function () {}
+}; } };
+var Utilities = {
+  getUuid: function () {
+    var b = new Uint8Array(16); (typeof crypto !== 'undefined' && crypto.getRandomValues ? crypto : require('node:crypto').webcrypto).getRandomValues(b);
+    var h = Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+};
+
+/**
+ * 도박장 게임 규칙 (순수 계산만 — 저장/통신은 서버가 맡음).
+ * Node 서버(server.js)와 구글 앱스 스크립트(gas/Games.gs)가 이 파일을 똑같이 씁니다.
+ * 수정하면 `node build-gas.js` 로 gas/Games.gs 를 다시 만드십시오.
+ *
+ * 난수는 모두 rnd() (0 이상 1 미만)로 받아서, 테스트에서는 고정된 값을 넣을 수 있습니다.
+ */
+var GAMES = (function () {
+  var G = {};
+  function rint(n, rnd) { return Math.floor((rnd || Math.random)() * n); }
+
+  /* ================= 혼자 하는 게임(블랙잭·슬롯) 하루 제한 ================= */
+  // 한도는 여기서만 바꾸면 됩니다. 0 이면 그 제한은 꺼짐.
+  G.SOLO = {
+    DAILY_NET_CAP: 500,    // 하루에 벌 수 있는 순이익(딴 돈 - 잃은 돈) 상한. 닿으면 그날은 더 못 함 (시작 점수 1000의 절반)
+    DAILY_PLAYS: 30,       // 하루에 할 수 있는 판 수 (블랙잭 한 판, 슬롯 한 번이 각각 1회). 0 이면 무제한
+    TZ_OFFSET_H: 9,        // 하루의 기준 시간대: 한국 시간(자정에 초기화)
+  };
+  /** 오늘(한국 시간 기준)이 시작된 시각(ms) */
+  G.dayStart = function (nowMs) { var off = G.SOLO.TZ_OFFSET_H * 3600e3; return Math.floor((nowMs + off) / 864e5) * 864e5 - off; };
+  /** 오늘의 순이익/판 수로 지금 제한 상태 계산 */
+  G.soloLimits = function (netToday, playsToday) {
+    var c = G.SOLO, blocked = null;
+    if (c.DAILY_NET_CAP > 0 && netToday >= c.DAILY_NET_CAP) blocked = 'net';
+    else if (c.DAILY_PLAYS > 0 && playsToday >= c.DAILY_PLAYS) blocked = 'plays';
+    return {
+      net_cap: c.DAILY_NET_CAP, plays_cap: c.DAILY_PLAYS, net_today: netToday, plays_today: playsToday,
+      remaining: c.DAILY_NET_CAP > 0 ? Math.max(0, c.DAILY_NET_CAP - netToday) : null,
+      plays_left: c.DAILY_PLAYS > 0 ? Math.max(0, c.DAILY_PLAYS - playsToday) : null, blocked: blocked,
+    };
+  };
+  /** 이번 판의 순이익(net)이 양수일 때, 오늘 한도 안에서 실제로 받을 수 있는 순이익 */
+  G.soloClampWin = function (net, netToday) {
+    var cap = G.SOLO.DAILY_NET_CAP;
+    return cap > 0 && net > 0 ? Math.min(net, Math.max(0, cap - netToday)) : net;
+  };
+  G.soloBlockedMessage = function (l) {
+    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '점까지 벌 수 있는데 한도에 도달했습니다! 내일(한국 시간 자정 이후) 다시 합니다.'
+      : '하루에 ' + l.plays_cap + '번까지만 할 수 있습니다. 내일(한국 시간 자정 이후) 다시 합니다.';
+  };
+
+  /* ================= 🤫 최저 유일 숫자 ================= */
+  G.LUN = { MIN: 1, MAX: 10, MIN_PLAYERS: 3, MAX_PLAYERS: 6 };
+  /** nums: 낸 숫자들(참가 순서). 다른 사람과 겹치지 않은 숫자 중 가장 작은 걸 낸 사람의 index. 없으면 -1 */
+  G.lunWinner = function (nums) {
+    var count = {};
+    nums.forEach(function (n) { count[n] = (count[n] || 0) + 1; });
+    var best = -1;
+    nums.forEach(function (n, i) { if (count[n] === 1 && (best < 0 || n < nums[best])) best = i; });
+    return best;
+  };
+
+  /* ================= 🪜 사다리타기 ================= */
+  G.LADDER = { MIN_SLOTS: 2, MAX_SLOTS: 6, ROWS: 9 };
+  /** 사다리 만들기. rungs[행] = 그 행에서 가로줄이 놓인 칸 번호들(i는 i번과 i+1번 세로줄 사이). 이웃한 가로줄은 안 놓음.
+   *  놓을 자리를 무작위 순서로 훑어서, 왼쪽/오른쪽 어느 쪽도 치우치지 않게 만들습니다. */
+  G.ladderMake = function (slots, rnd) {
+    var rungs = [];
+    for (var r = 0; r < G.LADDER.ROWS; r++) {
+      var order = [], row = [], i, j, t;
+      for (i = 0; i < slots - 1; i++) order.push(i);
+      for (i = order.length - 1; i > 0; i--) { j = rint(i + 1, rnd); t = order[i]; order[i] = order[j]; order[j] = t; }
+      order.forEach(function (k) {
+        if ((rnd || Math.random)() < 0.7 && row.indexOf(k - 1) < 0 && row.indexOf(k + 1) < 0) row.push(k);
+      });
+      row.sort(function (x, y) { return x - y; });
+      rungs.push(row);
+    }
+    return rungs;
+  };
+  /** 위에서 start번 칸으로 출발해서 내려간 끝 칸 */
+  G.ladderEnd = function (rungs, start) {
+    var pos = start;
+    rungs.forEach(function (row) {
+      if (row.indexOf(pos) >= 0) pos += 1;
+      else if (row.indexOf(pos - 1) >= 0) pos -= 1;
+    });
+    return pos;
+  };
+  /** 출발 칸별 지나간 길(행마다의 위치). 그림 그리기용 */
+  G.ladderPath = function (rungs, start) {
+    var pos = start, path = [pos];
+    rungs.forEach(function (row) {
+      if (row.indexOf(pos) >= 0) pos += 1;
+      else if (row.indexOf(pos - 1) >= 0) pos -= 1;
+      path.push(pos);
+    });
+    return path;
+  };
+  /** 당첨 끝 칸을 무작위로 정함 (사다리와 독립 → 어느 출발 칸이든 당첨 확률은 똑같이 1/칸수) */
+  G.ladderWinEnd = function (slots, rnd) { return rint(slots, rnd); };
+
+  /* ================= 🃏 블랙잭 ================= */
+  G.BJ = { MIN_BET: 10, MAX_BET: 500, BLACKJACK_PAYS: 2.5 };   // 블랙잭은 3:2 (건 돈 + 1.5배 = 총 2.5배 돌려받음)
+  var SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  G.bjCard = function (code) { return { rank: RANKS[code % 13], suit: SUITS[Math.floor(code / 13)], red: Math.floor(code / 13) === 1 || Math.floor(code / 13) === 2 }; };
+  G.bjNewDeck = function (rnd) {
+    var d = [], i, j, t;
+    for (i = 0; i < 52; i++) d.push(i);
+    for (i = 51; i > 0; i--) { j = rint(i + 1, rnd); t = d[i]; d[i] = d[j]; d[j] = t; }   // 섞기 (Fisher-Yates)
+    return d;
+  };
+  /** 카드 점수. A는 11 또는 1 중 유리한 쪽, J/Q/K는 10 */
+  G.bjValue = function (codes) {
+    var total = 0, aces = 0;
+    codes.forEach(function (c) {
+      var r = c % 13;
+      if (r === 0) { aces++; total += 11; } else total += r >= 9 ? 10 : r + 1;
+    });
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    return { total: total, soft: aces > 0 };
+  };
+  var isNatural = function (codes) { return codes.length === 2 && G.bjValue(codes).total === 21; };
+
+  /** 새 판: 건 돈 bet. 플레이어 2장, 딜러 2장(한 장은 가려짐). 시작하자마자 블랙잭이면 바로 끝남. */
+  G.bjStart = function (bet, rnd) {
+    var deck = G.bjNewDeck(rnd);
+    var s = { bet: bet, doubled: false, player: [deck[0], deck[2]], dealer: [deck[1], deck[3]], deck: deck.slice(4), status: 'playing', outcome: null, payout: 0 };
+    var pn = isNatural(s.player), dn = isNatural(s.dealer);
+    if (pn && dn) finish(s, 'push');
+    else if (pn) finish(s, 'blackjack');
+    else if (dn) finish(s, 'lose');       // 딜러가 블랙잭이면 바로 패배 (딜러 카드 공개)
+    return s;
+  };
+  function wager(s) { return s.bet * (s.doubled ? 2 : 1); }
+  function finish(s, outcome) {
+    s.status = 'done'; s.outcome = outcome;
+    var w = wager(s);
+    s.payout = outcome === 'blackjack' ? Math.floor(w * G.BJ.BLACKJACK_PAYS)
+      : outcome === 'win' ? w * 2
+      : outcome === 'push' ? w : 0;
+    return s;
+  }
+  function draw(s, who) { s[who].push(s.deck.shift()); }
+  function dealerPlayAndCompare(s) {
+    while (G.bjValue(s.dealer).total < 17) draw(s, 'dealer');   // 딜러는 16 이하면 계속 뽑고 17 이상이면 멈춤
+    var p = G.bjValue(s.player).total, d = G.bjValue(s.dealer).total;
+    return finish(s, d > 21 || p > d ? 'win' : p === d ? 'push' : 'lose');
+  }
+  /** 히트: 카드 한 장 더. 21 초과면 버스트(패배), 정확히 21이면 자동으로 멈춤 */
+  G.bjHit = function (s) {
+    if (s.status !== 'playing') throw new Error('끝난 게임입니다.');
+    draw(s, 'player');
+    var v = G.bjValue(s.player).total;
+    if (v > 21) return finish(s, 'bust');
+    if (v === 21) return dealerPlayAndCompare(s);
+    return s;
+  };
+  /** 스탠드: 그만 받고 딜러 차례 */
+  G.bjStand = function (s) {
+    if (s.status !== 'playing') throw new Error('끝난 게임입니다.');
+    return dealerPlayAndCompare(s);
+  };
+  /** 더블다운: 처음 두 장일 때만. 건 돈을 2배로 하고 카드 딱 한 장만 받고 끝 (호출하는 쪽이 추가금을 미리 차감) */
+  G.bjCanDouble = function (s) { return s.status === 'playing' && s.player.length === 2 && !s.doubled; };
+  G.bjDouble = function (s) {
+    if (!G.bjCanDouble(s)) throw new Error('지금은 더블다운을 할 수 없습니다.');
+    s.doubled = true;
+    draw(s, 'player');
+    if (G.bjValue(s.player).total > 21) return finish(s, 'bust');
+    return dealerPlayAndCompare(s);
+  };
+  /** 화면에 보낼 모습. 진행 중에는 딜러의 두 번째 카드가 null(가려짐) — 서버가 모르는 척하는 게 아니라 아예 안 보냄 */
+  G.bjView = function (s) {
+    var playing = s.status === 'playing';
+    return {
+      bet: s.bet, doubled: s.doubled, status: s.status, outcome: s.outcome,
+      player: s.player.map(G.bjCard), pv: G.bjValue(s.player),
+      dealer: playing ? [G.bjCard(s.dealer[0]), null] : s.dealer.map(G.bjCard),
+      dv: playing ? G.bjValue([s.dealer[0]]) : G.bjValue(s.dealer),
+      can_double: G.bjCanDouble(s),
+      wagered: wager(s), payout: s.payout, net: s.status === 'done' ? s.payout - wager(s) : null, capped: !!s.capped,
+    };
+  };
+
+  /* ================= 🎰 슬롯머신 ================= */
+  G.SLOT = {
+    MIN_BET: 10, MAX_BET: 500,
+    SYMBOLS: ['🍒', '🍋', '🔔', '⭐', '💎', '7️⃣'],
+    WEIGHTS: [30, 25, 20, 15, 8, 2],                    // 릴 하나에서 각 그림이 나올 가능성 (합계 100)
+    TRIPLE: [3, 5, 8, 20, 50, 200],                    // 같은 그림 3개 → 건 돈의 몇 배
+    CHERRY2: 2, CHERRY1: 0.5,                           // 🍒가 정확히 2개 / 1개일 때
+  };
+  function pickSymbol(rnd) {
+    var r = (rnd || Math.random)() * 100, acc = 0;
+    for (var i = 0; i < G.SLOT.WEIGHTS.length; i++) { acc += G.SLOT.WEIGHTS[i]; if (r < acc) return i; }
+    return G.SLOT.WEIGHTS.length - 1;
+  }
+  /** reels: 그림 번호 3개 → 배수 */
+  G.slotMultiplier = function (reels) {
+    var a = reels[0], b = reels[1], c = reels[2];
+    if (a === b && b === c) return G.SLOT.TRIPLE[a];
+    var cherries = reels.filter(function (x) { return x === 0; }).length;
+    if (cherries === 2) return G.SLOT.CHERRY2;
+    if (cherries === 1) return G.SLOT.CHERRY1;
+    return 0;
+  };
+  G.slotSpin = function (rnd) { var reels = [pickSymbol(rnd), pickSymbol(rnd), pickSymbol(rnd)]; return { reels: reels, mult: G.slotMultiplier(reels) }; };
+  G.slotPayout = function (bet, mult) { return Math.floor(bet * mult); };
+  /** 이론상 환수율 (건 돈 대비 평균적으로 돌려받는 비율) */
+  G.slotRtp = function () {
+    var T = 100, r = 0, a, b, c;
+    for (a = 0; a < 6; a++) for (b = 0; b < 6; b++) for (c = 0; c < 6; c++)
+      r += (G.SLOT.WEIGHTS[a] / T) * (G.SLOT.WEIGHTS[b] / T) * (G.SLOT.WEIGHTS[c] / T) * G.slotMultiplier([a, b, c]);
+    return r;
+  };
+
+  /* ================= 💸 돈뿌리기 ================= */
+  G.DROP = { MIN_COUNT: 2, MAX_COUNT: 20 };
+  /** 남은 금액(left)을 남은 사람 수(cnt)가 나눠 받을 때, 이번 사람이 받을 금액. 남은 사람이 최소 1씩은 받도록 남겨 둠.
+   *  마지막 사람은 남은 전부. 한 번에 평균의 최대 2배까지 나올 수 있음. */
+  G.dropShare = function (left, cnt, rnd) {
+    if (cnt <= 1) return left;
+    var max = Math.min(Math.max(1, Math.floor(left / cnt * 2)), left - (cnt - 1));
+    return 1 + rint(max, rnd);
+  };
+
+  return G;
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = GAMES;
+
+/**
+ * 도박장 (Google Apps Script 웹 앱 버전)
+ * - 이 스크립트가 붙어있는 구글 시트에 모든 데이터(유저·도박·채팅·상점)를 저장합니다.
+ * - 서버/호스팅 없이 웹 앱 링크 하나로 동작. 사이트 전용 칩(실제 돈과 무관).
+ * - 관리자: 시트의 '관리자' 탭 B1 칸에 비밀번호(8자 이상)를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여 들어갑니다.
+ */
+var RPS = { HANDS: ['rock', 'paper', 'scissors'], BEATS: { rock: 'scissors', scissors: 'paper', paper: 'rock' }, EXPIRE_MS: 12 * 3600e3, MAX_OPEN: 3 };
+var CFG = { RENAME_OPEN: false, /* 닉네임 변경: 나중에 상점 상품으로 넣을 예정이라 지금은 닫아 둠 */ APPROVAL: true, /* 가입 승인제 */ DEVICE_LIMIT: true, SHOP_OPEN: false, /* 상점 열기/닫기: true 로 바꾸고 새 버전으로 배포하면 열립니다 */ START_POINTS: 1000, MIN_BET: 10, DAILY_AID: 100, UNDERDOG_SHARE: 0.30, UNDERDOG_BONUS: 0.20, LUCKY_CHANCE: 0.07, LUCKY_BONUS: 0.5 };
+
+var SHEETS = {
+  users: ['id', 'name', 'salt', 'hash', 'points', 'last_aid', 'created_at', 'eq_title', 'eq_color', 'eq_fx', 'eq_badge', 'grp', 'dev', 'approved'],
+  sessions: ['token', 'user_id', 'created_at'],
+  bets: ['id', 'title', 'creator_id', 'status', 'winner', 'closes_at', 'created_at'],
+  options: ['id', 'bet_id', 'label'],
+  wagers: ['id', 'bet_id', 'option_id', 'user_id', 'amount', 'payout', 'lucky', 'created_at'],
+  messages: ['id', 'user_id', 'text', 'created_at', 'bet_id'],
+  items: ['user_id', 'item_id'],
+  rooms: ['id', 'grp', 'code', 'created_at'],
+  rps: ['id', 'host_id', 'stake', 'host_hand', 'guest_id', 'guest_hand', 'status', 'result', 'created_at', 'played_at'],
+  lun: ['id', 'host_id', 'stake', 'cap', 'status', 'winner_id', 'created_at', 'played_at'],
+  lunp: ['id', 'room_id', 'user_id', 'num', 'joined_at'],
+  lad: ['id', 'host_id', 'stake', 'slots', 'status', 'win_end', 'rungs', 'winner_id', 'created_at', 'played_at'],
+  ladp: ['id', 'room_id', 'user_id', 'slot', 'joined_at'],
+  bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
+  slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
+  drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
+  dropc: ['id', 'drop_id', 'user_id', 'amount', 'at'],
+  begs: ['id', 'user_id', 'want', 'got', 'msg', 'status', 'created_at'],
+  begg: ['id', 'beg_id', 'user_id', 'amount', 'at']
+};
+
+/* ================= 웹 앱 진입점 ================= */
+function doGet(e) {
+  var adminParam = e && e.parameter && e.parameter.admin;
+  var t = HtmlService.createTemplateFromFile(adminParam !== undefined ? 'admin' : 'index');
+  t.adminKey = JSON.stringify(String(adminParam || '')).replace(/</g, '\\u003c');
+  return t.evaluate().setTitle(adminParam !== undefined ? '관리자' : '도박장')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** 브라우저(google.script.run)가 부르는 단 하나의 함수. 결과는 JSON 문자열. */
+/** 방 코드 + 방별 닉네임 구조로 바뀐 첫 실행: 예전 계정·방·기록은 전부 비웁니다 (관리자 설정·관리자 비밀번호는 유지) */
+var SCHEMA_V = '2';
+function ensureSchema() {
+  if (props().getProperty('SCHEMA_V') === SCHEMA_V) return;
+  withLock(function () {
+    if (props().getProperty('SCHEMA_V') === SCHEMA_V) return;
+    var oldTokens = tbl('sessions').all().map(function (r) { return 's_' + r.token; });   // 캐시에 남은 예전 로그인도 지움 (새 계정과 번호가 겹쳐도 못 쓰게)
+    if (oldTokens.length) CacheService.getScriptCache().removeAll(oldTokens);
+    Object.keys(SHEETS).forEach(function (n) { var sh = tbl(n).sheet, last = sh.getLastRow(); if (last > 1) sh.deleteRows(2, last - 1); TBL[n] = null; });
+    props().setProperty('SCHEMA_V', SCHEMA_V);
+  });
+}
+var HOLDING = false; // 이 실행이 이미 스크립트 락을 잡고 있는지 (락은 재진입이 안 돼서 구분 필요)
+function handle(token, adminKey, method, url, body) {
+  var write = method === 'POST', lock = null;
+  try {
+    var parts = String(url).split('?'), path = parts[0], qs = {};
+    (parts[1] || '').split('&').forEach(function (kv) { if (kv) { var p = kv.split('='); qs[p[0]] = decodeURIComponent(p[1] || ''); } });
+    applySettings();
+    var fn = ROUTES[method + ' ' + path];
+    if (!fn) fail(404, '없는 주소입니다.');
+    if (write) { lock = LockService.getScriptLock(); lock.waitLock(25000); HOLDING = true; }
+    ensureSchema();
+    var ctx = { token: String(token || ''), adminKey: String(adminKey || ''), qs: qs };
+    ctx.user = authUser(ctx.token);
+    if (ctx.token && !ctx.user) fail(401, '다시 로그인하십시오.');
+    if (isPending(ctx.user) && method + ' ' + path !== 'GET /api/state') fail(403, '방장의 승인을 기다리는 중입니다.');   // 승인 전에는 내 정보만 볼 수 있음
+    return JSON.stringify({ data: fn(body || {}, ctx.user, ctx) });
+  } catch (e) {
+    if (e && e.http) return JSON.stringify({ error: e.message, code: e.http });
+    console.error(e && e.stack || e);
+    return JSON.stringify({ error: '서버 오류: ' + (e && e.message), code: 500 });
+  } finally { if (lock) lock.releaseLock(); }
+}
+
+/* ================= 시트 = 테이블 ================= */
+var TBL = {};
+function tbl(name) { return TBL[name] || (TBL[name] = new Table(name)); }
+function toCell(v) { return v === null || v === undefined ? '' : (typeof v === 'string' && v !== '' ? '\u200B' + v : v); } // 글자 앞 보이지 않는 표시 → 시트가 숫자/날짜/수식으로 오해하지 않게
+function fromCell(v) { return typeof v === 'string' ? v.replace(/^\u200B/, '') : v; }
+
+function Table(name) {
+  this.name = name; this.cols = SHEETS[name]; this.rows = null;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  this.sheet = ss.getSheetByName(name);
+  if (!this.sheet) {
+    this.sheet = ss.insertSheet(name);
+    this.sheet.getRange(1, 1, 1, this.cols.length).setValues([this.cols]).setFontWeight('bold');
+    this.sheet.setFrozenRows(1);
+  } else if (this.sheet.getLastColumn() < this.cols.length) {   // 버전업으로 열이 늘어난 경우 머리글만 보강
+    this.sheet.getRange(1, 1, 1, this.cols.length).setValues([this.cols]).setFontWeight('bold');
+  }
+}
+Table.prototype.all = function () {
+  if (!this.rows) {
+    var n = this.sheet.getLastRow() - 1, cols = this.cols;
+    var vals = n > 0 ? this.sheet.getRange(2, 1, n, cols.length).getValues() : [];
+    this.rows = vals.map(function (v, i) { var o = { _row: i + 2 }; cols.forEach(function (c, j) { o[c] = fromCell(v[j]); }); return o; });
+  }
+  return this.rows;
+};
+Table.prototype.find = function (fn) { return this.all().filter(fn)[0] || null; };
+Table.prototype.where = function (fn) { return this.all().filter(fn); };
+Table.prototype.insert = function (o) {
+  if (this.cols[0] === 'id') o.id = this.all().reduce(function (m, r) { return Math.max(m, r.id); }, 0) + 1;
+  this.sheet.appendRow(this.cols.map(function (c) { return toCell(o[c]); }));
+  o._row = this.sheet.getLastRow(); this.all().push(o); return o;
+};
+Table.prototype.save = function (o) { this.sheet.getRange(o._row, 1, 1, this.cols.length).setValues([this.cols.map(function (c) { return toCell(o[c]); })]); };
+Table.prototype.remove = function (o) {
+  this.sheet.deleteRow(o._row);
+  var rows = this.all(); rows.splice(rows.indexOf(o), 1);
+  rows.forEach(function (r) { if (r._row > o._row) r._row--; });
+};
+Table.prototype.removeWhere = function (fn) { var self = this; this.where(fn).sort(function (a, b) { return b._row - a._row; }).forEach(function (o) { self.remove(o); }); };
+
+/* ================= 공통 도구 ================= */
+function fail(code, msg) { var e = new Error(msg); e.http = code; throw e; }
+function now() { return Date.now(); }
+function props() { return PropertiesService.getScriptProperties(); }
+function secret(key) {
+  var p = props(), v = p.getProperty(key);
+  if (!v) { v = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); p.setProperty(key, v); }
+  return v;
+}
+function hashPin(pin, salt) {
+  var d = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret('PEPPER') + salt + pin);
+  return Utilities.base64Encode(d);
+}
+/** PIN이 같은 사람끼리만 같은 '방'. 방 번호(grp)는 PIN에서 만든 값이고, 도박·가위바위보·채팅·랭킹은 같은 방끼리만 보입니다. */
+function groupKey(pin) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret('PEPPER') + 'grp:' + pin)).slice(0, 16);
+}
+function grpOf(u) { return u && u.grp ? String(u.grp) : ''; }
+/** 방 코드(상대와 같은 값 → 같은 방)와 PIN(나만 아는 로그인 비밀번호)은 따로입니다. 닉네임은 방 안에서만 겹치지 않으면 됩니다. */
+var PIN_RE = /^\S{4,16}$/, ROOM_RE = /^[\p{L}\p{N}]{4,12}$/u;
+function roomRowOf(grp) { return tbl('rooms').find(function (r) { return String(r.grp) === grp; }); }
+function roomCodeOf(u) { var r = u && u.grp ? roomRowOf(grpOf(u)) : null; return r ? r.code : null; }
+/** 방이 없으면 만들고 방 번호(grp)를 돌려줌 */
+function ensureRoom(code) {
+  if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자입니다.');
+  var g = groupKey(code);
+  if (!roomRowOf(g)) tbl('rooms').insert({ grp: g, code: code, created_at: now() });
+  return g;
+}
+function userInRoom(grp, name) { return tbl('users').find(function (x) { return grpOf(x) === grp && x.name === name; }); }
+function devOf(body) { var d = String(body.dev || ''); return /^[A-Za-z0-9]{12,64}$/.test(d) ? d : ''; }
+function checkDevice(grp, dev) {
+  if (CFG.DEVICE_LIMIT && dev && tbl('users').find(function (x) { return grpOf(x) === grp && x.dev === dev; })) fail(403, '이 기기에서는 이 방에 이미 계정이 있습니다. 기존 계정으로 들어가십시오.');
+}
+function addAccount(grp, name, pin, dev) {
+  if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+  checkDevice(grp, dev);
+  var salt = Utilities.getUuid().slice(0, 8);
+  var ok = !tbl('users').find(function (x) { return grpOf(x) === grp; }) || !CFG.APPROVAL;   // 방의 첫 계정(방장)은 자동 승인. 승인 전에는 칩도 없음
+  var nu = tbl('users').insert({ name: name, salt: salt, hash: hashPin(pin, salt), points: ok ? CFG.START_POINTS : 0, last_aid: 0, created_at: now(), grp: grp, dev: dev || '', approved: ok ? 1 : 0 });
+  return newSession(nu.id);
+}
+function sameRoom(userId, me) { var o = userById(userId); return !!o && grpOf(o) === grpOf(me); }
+function throttle(key, limit) {
+  var c = CacheService.getScriptCache(), n = Number(c.get(key) || 0);
+  if (n >= limit) fail(429, '시도가 너무 많습니다. 5분 뒤 다시 하십시오.');
+  c.put(key, String(n + 1), 300);
+}
+var NAME_RE = /^[\p{L}\p{N}_ ]{1,12}$/u;
+function checkName(raw) {
+  var name = String(raw || '').trim();
+  if (!NAME_RE.test(name)) fail(400, '닉네임은 12자 이내 글자/숫자만 가능합니다.');
+  return name;
+}
+function userById(id) { return tbl('users').find(function (u) { return u.id === id; }); }
+function addPoints(userId, delta) { var u = userById(userId); if (u) { u.points += delta; tbl('users').save(u); } }
+
+/* ================= 인증 ================= */
+function newSession(userId) {
+  var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  tbl('sessions').insert({ token: token, user_id: userId, created_at: now() });
+  CacheService.getScriptCache().put('s_' + token, String(userId), 21600);
+  return token;
+}
+function authUser(token) {
+  if (!token) return null;
+  var cache = CacheService.getScriptCache(), id = cache.get('s_' + token);
+  if (!id) {
+    var s = tbl('sessions').find(function (r) { return r.token === token; });
+    if (!s) return null;
+    id = String(s.user_id); cache.put('s_' + token, id, 21600);
+  }
+  return userById(Number(id));
+}
+/** 같은 길이로 끝까지 비교(글자 하나 틀려도 같은 시간) */
+function safeEq(a, b) {
+  a = String(a); b = String(b);
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+/** 시트의 '관리자' 탭. 없으면 만들습니다. B1 칸에 관리자 비밀번호를 적으면 됩니다. */
+function ensureAdminSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName('관리자');
+  if (sh) return sh;
+  try {
+    sh = ss.insertSheet('관리자');
+    sh.getRange('A1').setValue('관리자 비밀번호 →').setFontWeight('bold');
+    sh.getRange('C1').setValue('← B1 칸에 8자 이상의 비밀번호를 적으십시오. 나만 알아야 합니다!');
+    sh.getRange('A3').setValue('관리자 링크 = 웹 앱 주소 뒤에  ?admin=비밀번호  를 붙인 것');
+    sh.getRange('A4').setValue('예)  https://script.google.com/macros/s/.../exec?admin=내비밀번호');
+    sh.getRange('A6').setValue('※ 이 시트를 다른 사람에게 공유하지 마십시오. 비밀번호를 바꾸면 이전 링크는 바로 쓸 수 없습니다.');
+  } catch (e) { sh = ss.getSheetByName('관리자'); }
+  return sh;
+}
+function adminPassword() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('관리자');
+  if (!sh) return '';
+  var v = sh.getRange('B1').getValue();
+  return v === null || v === undefined ? '' : String(v).trim();
+}
+function adminOnly(ctx) {
+  throttle('admin|x', 20);
+  var key = String(ctx.adminKey || ''), pw = adminPassword(), ok = false;
+  if (key) ok = (pw.length >= 8 && safeEq(key, pw)) || safeEq(key, secret('ADMIN_KEY'));   // 시트 비밀번호(8자 이상) 또는 예전 자동 키
+  if (!ok) {
+    ensureAdminSheet();
+    fail(403, "관리자 비밀번호가 맞지 않습니다. 시트의 '관리자' 탭 B1 칸에 8자 이상의 비밀번호를 적고, 웹 앱 주소 뒤에 ?admin=비밀번호 를 붙여서 들어오십시오.");
+  }
+  CacheService.getScriptCache().remove('admin|x');
+}
+
+/* ================= 상점 ================= */
+var SHOP = [];
+[['t_gambler', '도박꾼', 300], ['t_dog', '역배 장인', 500], ['t_lucky', '행운아', 800], ['t_whale', '큰손', 1500], ['t_oracle', '예언가', 2500], ['t_legend', '전설', 5000]]
+  .forEach(function (a) { SHOP.push({ id: a[0], slot: 'title', name: a[1], price: a[2], value: a[1] }); });
+[['c_pink', '네온 핑크', 200, '#ff4fa3'], ['c_cyan', '네온 시안', 200, '#22d3ee'], ['c_mint', '민트', 200, '#34f5a0'], ['c_gold', '골드', 400, '#ffc83d'], ['c_violet', '바이올렛', 300, '#b57bff']]
+  .forEach(function (a) { SHOP.push({ id: a[0], slot: 'color', name: a[1], price: a[2], value: a[3] }); });
+SHOP.push({ id: 'f_glow', slot: 'fx', name: '네온 글로우', price: 600, value: 'glow' },
+  { id: 'f_fire', slot: 'fx', name: '불타는 글자', price: 1800, value: 'fire' });
+[['b_dice', '주사위', 150, '🎲'], ['b_clover', '네잎클로버', 300, '🍀'], ['b_fire', '불꽃', 300, '🔥'], ['b_gem', '다이아', 1200, '💎'], ['b_crown', '왕관', 2000, '👑']]
+  .forEach(function (a) { SHOP.push({ id: a[0], slot: 'badge', name: a[1], price: a[2], value: a[3] }); });
+var SHOP_BY_ID = {}; SHOP.forEach(function (i) { SHOP_BY_ID[i.id] = i; });
+var SLOT_COL = { title: 'eq_title', color: 'eq_color', fx: 'eq_fx', badge: 'eq_badge' };
+function deco(r) {
+  function v(k) { var i = SHOP_BY_ID[r[k]]; return i ? i.value : null; }
+  return { title: v('eq_title'), color: v('eq_color'), fx: v('eq_fx'), badge: v('eq_badge') };
+}
+function isPending(u) { return !!u && u.approved === 0; }
+function ownerIdOf(grp) { var l = tbl('users').all().filter(function (x) { return grpOf(x) === grp && x.approved !== 0; }).sort(function (a, b) { return a.id - b.id; }); return l.length ? l[0].id : null; }   // 방장 = 방에서 가장 먼저 승인된 계정
+function pendingListFor(u) {
+  if (isPending(u) || ownerIdOf(grpOf(u)) !== u.id) return [];
+  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved === 0; }).sort(function (a, b) { return a.id - b.id; }).map(function (x) { return { id: x.id, name: x.name }; });
+}
+function meView(u) {
+  var o = { id: u.id, name: u.name, points: u.points, can_aid: !isPending(u) && u.points < CFG.MIN_BET && now() - (u.last_aid || 0) > 864e5,
+    group_size: tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(u) && x.approved !== 0; }).length, room: roomCodeOf(u), pending: isPending(u), pending_list: pendingListFor(u), can_rename: !!CFG.RENAME_OPEN, is_owner: !isPending(u) && ownerIdOf(grpOf(u)) === u.id };
+  var d = deco(u); for (var k in d) o[k] = d[k];
+  return o;
+}
+
+/* ================= 도박 ================= */
+function sweep() {
+  var due = function () { return tbl('bets').where(function (b) { return b.status === 'open' && b.closes_at && b.closes_at <= now(); }); };
+  if (!due().length) return;
+  var lock = null;
+  if (!HOLDING) { lock = LockService.getScriptLock(); lock.waitLock(10000); }
+  try {
+    TBL.bets = null; // 락 잡은 뒤 최신 상태로 다시 읽기
+    due().forEach(function (b) { b.status = 'closed'; tbl('bets').save(b); });
+  } finally { if (lock) lock.releaseLock(); }
+}
+function groupBy(rows, key) { var m = {}; rows.forEach(function (r) { (m[r[key]] = m[r[key]] || []).push(r); }); return m; }
+
+function betViews(bets, me) {
+  var optsBy = groupBy(tbl('options').all(), 'bet_id'), wagBy = groupBy(tbl('wagers').all(), 'bet_id');
+  var names = {}; tbl('users').all().forEach(function (u) { names[u.id] = u.name; });
+  var chatBy = {}; tbl('messages').all().forEach(function (m) { chatBy[m.bet_id] = (chatBy[m.bet_id] || 0) + 1; });
+  return bets.map(function (b) {
+    var ws = wagBy[b.id] || [], total = ws.reduce(function (s, w) { return s + w.amount; }, 0);
+    var mine = me ? ws.filter(function (w) { return w.user_id === me.id; }) : [];
+    var done = b.status === 'resolved' || b.status === 'cancelled';
+    return {
+      id: b.id, title: b.title, creator: names[b.creator_id], mine_created: !!me && me.id === b.creator_id, status: b.status,
+      winner: b.winner === '' ? null : b.winner, closes_at: b.closes_at === '' ? null : b.closes_at, created_at: b.created_at, total: total,
+      options: (optsBy[b.id] || []).map(function (o) {
+        var ow = ws.filter(function (w) { return w.option_id === o.id; }), pool = ow.reduce(function (s, w) { return s + w.amount; }, 0), share = total ? pool / total : 0;
+        return { id: o.id, label: o.label, pool: pool, bettors: ow.length, share: share, multiplier: pool ? Math.round(total / pool * 100) / 100 : null,
+          underdog: total > 0 && share < CFG.UNDERDOG_SHARE,
+          my_amount: mine.filter(function (w) { return w.option_id === o.id; }).reduce(function (s, w) { return s + w.amount; }, 0) };
+      }),
+      my_payout: mine.length && done ? mine.reduce(function (s, w) { return s + (Number(w.payout) || 0); }, 0) : null,
+      my_total: mine.reduce(function (s, w) { return s + w.amount; }, 0),
+      my_lucky: mine.some(function (w) { return Number(w.lucky) === 1; }),
+      chat_count: chatBy[b.id] || 0
+    };
+  });
+}
+
+function refund(w) { w.payout = w.amount; tbl('wagers').save(w); addPoints(w.user_id, w.amount); }
+
+/** 파리뮤추얼 + 역배 보너스 + 럭키 보너스 (Node 버전과 동일 규칙) */
+function settle(bet, winnerId) {
+  var wagers = tbl('wagers').where(function (w) { return w.bet_id === bet.id; });
+  var total = wagers.reduce(function (s, w) { return s + w.amount; }, 0);
+  var winners = wagers.filter(function (w) { return w.option_id === winnerId; });
+  var winPool = winners.reduce(function (s, w) { return s + w.amount; }, 0);
+  if (winPool === 0 || winPool === total) { wagers.forEach(refund); return { refunded: true, total: total, underdog: false }; }
+  var underdog = winPool / total < CFG.UNDERDOG_SHARE;
+  var pot = total + (underdog ? Math.floor(total * CFG.UNDERDOG_BONUS) : 0), paid = 0;
+  winners.forEach(function (w, i) {
+    var base = i === winners.length - 1 && !underdog ? total - paid : Math.floor(pot * w.amount / winPool);
+    paid += base;
+    var lucky = Math.random() < CFG.LUCKY_CHANCE;
+    var pay = base + (lucky ? Math.max(1, Math.floor(base * CFG.LUCKY_BONUS)) : 0);
+    w.payout = pay; w.lucky = lucky ? 1 : 0; tbl('wagers').save(w); addPoints(w.user_id, pay);
+  });
+  wagers.forEach(function (w) { if (w.option_id !== winnerId) { w.payout = 0; tbl('wagers').save(w); } });
+  return { refunded: false, total: total, underdog: underdog };
+}
+
+function betAction(bet, body) {
+  if (bet.status === 'resolved' || bet.status === 'cancelled') fail(400, '이미 끝난 도박입니다.');
+  if (body.action === 'close') { bet.status = 'closed'; tbl('bets').save(bet); return { ok: true }; }
+  if (body.action === 'cancel') {
+    tbl('wagers').where(function (w) { return w.bet_id === bet.id; }).forEach(refund);
+    bet.status = 'cancelled'; tbl('bets').save(bet); return { ok: true };
+  }
+  if (body.action === 'resolve') {
+    var oid = Number(body.option_id);
+    var opt = tbl('options').find(function (o) { return o.id === oid && o.bet_id === bet.id; }) || fail(400, '정답 선택지를 골라주십시오.');
+    var r = settle(bet, opt.id);
+    bet.status = r.refunded ? 'cancelled' : 'resolved'; bet.winner = r.refunded ? '' : opt.id; tbl('bets').save(bet);
+    return { ok: true, refunded: r.refunded, total: r.total, underdog: r.underdog };
+  }
+  fail(400, '알 수 없는 동작입니다.');
+}
+function needLogin(u) { if (!u) fail(401, '로그인이 필요합니다.'); return u; }
+function betById(id) { return tbl('bets').find(function (b) { return b.id === Number(id); }) || fail(404, '도박이 없습니다.'); }
+
+function rankingView(me) {
+  var wagers = tbl('wagers').all(), bets = {}; tbl('bets').all().forEach(function (b) { bets[b.id] = b.status; });
+  return tbl('users').all().filter(function (x) { return grpOf(x) === grpOf(me) && x.approved !== 0; }).sort(function (a, b) { return b.points - a.points; }).slice(0, 50).map(function (u) {
+    var mine = wagers.filter(function (w) { return w.user_id === u.id && bets[w.bet_id] === 'resolved'; });
+    var o = { id: u.id, name: u.name, points: u.points, wins: mine.filter(function (w) { return w.payout > 0; }).length, losses: mine.filter(function (w) { return w.payout === 0; }).length };
+    var d = deco(u); for (var k in d) o[k] = d[k];
+    return o;
+  });
+}
+function betsList(u) {
+  var bets = tbl('bets').all().filter(function (b) { return sameRoom(b.creator_id, u); }).sort(function (a, b) {
+    var ao = a.status === 'open' || a.status === 'closed' ? 1 : 0, bo = b.status === 'open' || b.status === 'closed' ? 1 : 0;
+    return bo - ao || b.id - a.id;
+  }).slice(0, 100);
+  return betViews(bets, u);
+}
+
+/* ================= 관리자 설정 (화면에서 바로 조절) ================= */
+// 저장된 값은 스크립트 속성 SETTINGS(JSON)에 남고, 요청마다 아래 변수들에 반영됩니다. (Games.gs 보다 먼저 읽혀도 되게 함수 안에서 만들습니다)
+function settingSpecs() {
+  return [
+    { key: 'solo_net_cap', label: '혼자 하는 게임 하루 순이익 한도(🪙)', hint: '블랙잭+슬롯으로 하루에 벌 수 있는 최대 🪙 (딴 돈 − 잃은 돈). 0이면 한도 없음', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.SOLO.DAILY_NET_CAP; }, set: function (v) { GAMES.SOLO.DAILY_NET_CAP = v; } },
+    { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: function () { return GAMES.SOLO.DAILY_PLAYS; }, set: function (v) { GAMES.SOLO.DAILY_PLAYS = v; } },
+    { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '🪙', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
+    { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '🪙', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
+    { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '🪙', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
+    { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
+    { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: function () { return !!CFG.APPROVAL; }, set: function (v) { CFG.APPROVAL = !!v; } },
+    { key: 'rename_open', label: '닉네임 변경 열기', hint: '꺼져 있으면 유저가 닉네임을 못 바꿉니다 (상점에 넣기 전까지 닫아 둠). 관리자 화면에서는 항상 바꿀 수 있습니다', type: 'bool', get: function () { return !!CFG.RENAME_OPEN; }, set: function (v) { CFG.RENAME_OPEN = !!v; } },
+    { key: 'gift_max', label: '돈뿌리기·구걸 최대 금액(🪙)', hint: '최소 ' + CFG.MIN_BET + '🪙', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return GIFT_MAX; }, set: function (v) { GIFT_MAX = v; } },
+    { key: 'lucky_percent', label: '럭키 보너스 확률(%)', hint: '도박에서 이긴 사람마다 이 확률로 보너스(받은 돈의 50%). 0이면 없음', type: 'int', min: 0, max: 100, get: function () { return Math.round(CFG.LUCKY_CHANCE * 100); }, set: function (v) { CFG.LUCKY_CHANCE = v / 100; } },
+    { key: 'shop_open', label: '상점 열기', hint: '꺼져 있으면 상점은 "준비 중"으로 보이고 구매·장착이 막힙니다', type: 'bool', get: function () { return !!CFG.SHOP_OPEN; }, set: function (v) { CFG.SHOP_OPEN = !!v; } }
+  ];
+}
+var SETTING_DEFAULTS = null;
+function loadSettings() { try { return JSON.parse(props().getProperty('SETTINGS') || '{}'); } catch (e) { return {}; } }
+/** 요청 시작할 때 호출: 저장된 값을 반영 (저장 안 된 항목은 코드 기본값 그대로) */
+function applySettings() {
+  var specs = settingSpecs(), saved = loadSettings();
+  if (!SETTING_DEFAULTS) { SETTING_DEFAULTS = {}; specs.forEach(function (sp) { SETTING_DEFAULTS[sp.key] = sp.get(); }); }
+  specs.forEach(function (sp) { if (saved.hasOwnProperty(sp.key)) sp.set(saved[sp.key]); });
+}
+function settingsView() {
+  return settingSpecs().map(function (sp) { return { key: sp.key, label: sp.label, hint: sp.hint, type: sp.type, min: sp.min === undefined ? null : sp.min, max: sp.max === undefined ? null : sp.max, value: sp.get(), 'default': SETTING_DEFAULTS[sp.key] }; });
+}
+
+/* ================= 관리자: 게임 방 / PIN 방 ================= */
+function adminRooms() {
+  var nm = function (id) { var u = userById(id); return u ? u.name : '(탈퇴)'; };
+  var gp = function (id) { return roomCodeOf(userById(id)); };
+  var out = [];
+  tbl('rps').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'rps', id: r.id, host: nm(r.host_id), stake: r.stake, players: [nm(r.host_id)], cap: 2, created_at: r.created_at, grp: gp(r.host_id) }); });   // 손은 안 보임
+  tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lun', id: r.id, host: nm(r.host_id), stake: r.stake, players: lunPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });   // 숫자는 안 보임
+  tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lad', id: r.id, host: nm(r.host_id), stake: r.stake, players: ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }).map(function (p) { return nm(p.user_id); }), cap: r.slots, created_at: r.created_at, grp: gp(r.host_id) }); });
+  return out.sort(function (a, b) { return b.created_at - a.created_at; });
+}
+function adminGroups() {
+  var by = {}, codes = {};
+  tbl('rooms').all().forEach(function (r) { codes[String(r.grp)] = r.code; by[String(r.grp)] = by[String(r.grp)] || []; });
+  tbl('users').all().forEach(function (u) { var g = grpOf(u); (by[g] = by[g] || []).push(u); });
+  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; });
+  return Object.keys(by).map(function (g) {
+    var ms = by[g], ids = {}; ms.forEach(function (m) { ids[m.id] = 1; });
+    return { id: g, label: codes[g] || '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
+      bets: bets.filter(function (b) { return ids[b.creator_id]; }).length, rooms: waiting.filter(function (r) { return ids[r.host_id]; }).length };
+  }).sort(function (a, b) { return b.count - a.count; });
+}
+function adminCloseRoom(kind, roomId) {
+  if (['rps', 'lun', 'lad'].indexOf(kind) < 0) fail(400, '알 수 없는 게임입니다.');
+  var r = byId(kind, roomId);
+  if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+  if (kind === 'rps') addPoints(r.host_id, r.stake);
+  else (kind === 'lun' ? lunPlayers(r) : ladPlayers(r)).forEach(function (p) { addPoints(p.user_id, r.stake); });
+  r.status = 'cancelled'; tbl(kind).save(r);
+}
+/** PIN 방 하나를 통째로 지움: 그 방 사람들과 그 사람들의 도박·채팅·게임 기록이 모두 사라집니다 */
+function adminDeleteGroup(grp) {
+  var g = grp ? String(grp) : '';
+  var ms = tbl('users').where(function (u) { return grpOf(u) === g; });
+  if (!ms.length && !roomRowOf(g)) fail(404, '그 방이 없습니다.');
+  var ids = {}, betIds = {};
+  ms.forEach(function (m) { ids[m.id] = 1; });
+  tbl('bets').where(function (b) { return ids[b.creator_id]; }).forEach(function (b) { betIds[b.id] = 1; });
+  tbl('messages').removeWhere(function (m) { return betIds[m.bet_id] || ids[m.user_id]; });
+  tbl('wagers').removeWhere(function (w) { return betIds[w.bet_id] || ids[w.user_id]; });
+  tbl('options').removeWhere(function (o) { return betIds[o.bet_id]; });
+  tbl('bets').removeWhere(function (b) { return betIds[b.id]; });
+  [['lun', 'lunp'], ['lad', 'ladp']].forEach(function (pair) {
+    var rooms = {}; tbl(pair[0]).where(function (r) { return ids[r.host_id]; }).forEach(function (r) { rooms[r.id] = 1; });
+    tbl(pair[1]).removeWhere(function (p) { return rooms[p.room_id] || ids[p.user_id]; });
+    tbl(pair[0]).removeWhere(function (r) { return rooms[r.id]; });
+  });
+  tbl('rps').removeWhere(function (r) { return ids[r.host_id] || ids[r.guest_id]; });
+  ['bj', 'slots', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
+  tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
+  tbl('users').removeWhere(function (u) { return ids[u.id]; });
+  tbl('rooms').removeWhere(function (r) { return String(r.grp) === g; });
+  return ms.length;
+}
+
+/* ================= 가위바위보 ================= */
+function withLock(fn) {
+  if (HOLDING) return fn();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+/** 12시간 동안 아무도 안 온 방은 닫고 판돈 환불 */
+function rpsSweep() {
+  var old = function () { return tbl('rps').where(function (r) { return r.status === 'waiting' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  if (!old().length) return;
+  withLock(function () {
+    TBL.rps = null; TBL.users = null;
+    old().forEach(function (r) { addPoints(r.host_id, r.stake); r.status = 'cancelled'; tbl('rps').save(r); });
+  });
+}
+function rpsPlayer(id) {
+  var u = userById(id), o = { name: u ? u.name : '(탈퇴)' };
+  if (u) { var d = deco(u); for (var k in d) o[k] = d[k]; }
+  return o;
+}
+function rpsNet(r, myId) {
+  if (r.host_id !== myId && r.guest_id !== myId) return null;
+  if (r.result === 'draw') return 0;
+  return (r.result === 'host') === (r.host_id === myId) ? r.stake : -r.stake;
+}
+function rpsView(u) {
+  rpsSweep();
+  var all = tbl('rps').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    return { id: r.id, stake: r.stake, created_at: r.created_at, host: rpsPlayer(r.host_id), mine: r.host_id === u.id,
+      my_hand: r.host_id === u.id ? r.host_hand : null }; // 방장의 손은 본인에게만 보임
+  });
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 15).map(function (r) {
+    return { id: r.id, stake: r.stake, host: rpsPlayer(r.host_id), guest: rpsPlayer(r.guest_id), host_hand: r.host_hand, guest_hand: r.guest_hand,
+      result: r.result, at: r.played_at, mine: r.host_id === u.id || r.guest_id === u.id, net: rpsNet(r, u.id) };
+  });
+  return { rooms: rooms, recent: recent };
+}
+
+/* ================= 🤫 최저 유일 숫자 / 🪜 사다리타기 (여러 명이 방에 모여서 하는 게임) ================= */
+// 게임 규칙(GAMES)은 Games.gs — Node 서버와 같은 파일
+var ROOM_STAKE_MAX = 1000;
+function playerView(id) { return rpsPlayer(id); }
+function checkStake(raw) {
+  var stake = Number(raw);
+  if (stake !== Math.floor(stake) || stake < CFG.MIN_BET || stake > ROOM_STAKE_MAX) fail(400, '판돈은 ' + CFG.MIN_BET + '~' + ROOM_STAKE_MAX + '🪙입니다.');
+  return stake;
+}
+var DUP_MS = 5000;   // 같은 사람이 같은 조건의 방/도박을 이 시간 안에 또 만들면 연타로 보고 거절
+function isDup(table, fn) { var t = now() - DUP_MS; return !!tbl(table).find(function (r) { return r.created_at > t && fn(r); }); }
+function openRooms(table, uid) { return tbl(table).where(function (r) { return r.host_id === uid && r.status === 'waiting'; }).length; }
+function byId(table, id) { id = Number(id); return tbl(table).find(function (r) { return r.id === id; }) || fail(404, '방이 없습니다.'); }
+
+/** 12시간 동안 다 안 모인 방은 닫고 모두에게 환불 */
+function roomsSweep() {
+  [['lun', 'lunp'], ['lad', 'ladp']].forEach(function (pair) {
+    var old = function () { return tbl(pair[0]).where(function (r) { return r.status === 'waiting' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+    if (!old().length) return;
+    withLock(function () {
+      TBL[pair[0]] = null; TBL[pair[1]] = null; TBL.users = null;
+      old().forEach(function (r) {
+        tbl(pair[1]).where(function (p) { return p.room_id === r.id; }).forEach(function (p) { addPoints(p.user_id, r.stake); });
+        r.status = 'cancelled'; tbl(pair[0]).save(r);
+      });
+    });
+  });
+}
+function lunPlayers(room) { return tbl('lunp').where(function (p) { return p.room_id === room.id; }); }
+function lunResolve(room) {
+  var ps = lunPlayers(room), w = GAMES.lunWinner(ps.map(function (p) { return p.num; }));
+  if (w < 0) ps.forEach(function (p) { addPoints(p.user_id, room.stake); });          // 전부 겹침 → 환불
+  else addPoints(ps[w].user_id, room.stake * ps.length);                                // 승자가 판돈 전체
+  room.status = 'done'; room.winner_id = w < 0 ? '' : ps[w].user_id; room.played_at = now(); tbl('lun').save(room);
+}
+/* ================= 💸 돈뿌리기 / 🙏 구걸하기 ================= */
+var GIFT_MAX = 1000;
+function giftSweep() {   // 12시간이 지나면 닫음 (뿌리기는 남은 돈을 돌려받음)
+  var oldD = function () { return tbl('drops').where(function (r) { return r.status === 'open' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  var oldB = function () { return tbl('begs').where(function (r) { return r.status === 'open' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  if (!oldD().length && !oldB().length) return;
+  withLock(function () {
+    TBL.drops = null; TBL.begs = null; TBL.users = null;
+    oldD().forEach(function (d) { addPoints(d.host_id, d.left_amt); d.status = 'expired'; tbl('drops').save(d); });
+    oldB().forEach(function (b) { b.status = 'closed'; tbl('begs').save(b); });
+  });
+}
+function withName(rows) { return rows.map(function (c) { var o = playerView(c.user_id); o.amount = c.amount; return o; }); }
+function giftView(u) {
+  giftSweep();
+  var dropRow = function (d) {
+    var cs = tbl('dropc').where(function (c) { return c.drop_id === d.id; }), me = cs.filter(function (c) { return c.user_id === u.id; })[0];
+    return { id: d.id, total: d.total, cnt: d.cnt, left_cnt: d.left_cnt, status: d.status, host: playerView(d.host_id), mine: d.host_id === u.id,
+      left_amt: d.host_id === u.id ? d.left_amt : null, claimed: !!me, my_amount: me ? me.amount : null, got: withName(cs) };
+  };
+  var begRow = function (b) {
+    var gs = tbl('begg').where(function (x) { return x.beg_id === b.id; });
+    return { id: b.id, want: b.want, got: b.got, msg: b.msg, status: b.status, user: playerView(b.user_id), mine: b.user_id === u.id,
+      my_given: gs.filter(function (x) { return x.user_id === u.id; }).reduce(function (s, x) { return s + x.amount; }, 0), donors: withName(gs) };
+  };
+  var pick = function (table, who, test, n) {
+    return tbl(table).all().filter(function (r) { return test(r.status) && sameRoom(r[who], u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, n);
+  };
+  return {
+    max: GIFT_MAX, min: CFG.MIN_BET, count: { min: GAMES.DROP.MIN_COUNT, max: GAMES.DROP.MAX_COUNT },
+    drops: pick('drops', 'host_id', function (s) { return s === 'open'; }, 30).map(dropRow),
+    drops_recent: pick('drops', 'host_id', function (s) { return s === 'done' || s === 'expired'; }, 8).map(dropRow),
+    begs: pick('begs', 'user_id', function (s) { return s === 'open'; }, 30).map(begRow),
+    begs_recent: pick('begs', 'user_id', function (s) { return s === 'done'; }, 8).map(begRow)
+  };
+}
+
+function lunView(u) {
+  roomsSweep();
+  var all = tbl('lun').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = lunPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0];
+    return { id: r.id, stake: r.stake, cap: r.cap, count: ps.length, host: playerView(r.host_id), players: ps.map(function (p) { return playerView(p.user_id); }),
+      mine: r.host_id === u.id, joined: !!me, my_num: me ? me.num : null };           // 다른 사람의 숫자는 절대 안 보냄
+  });
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 10).map(function (r) {
+    var ps = lunPlayers(r), cnt = {}, me = ps.some(function (p) { return p.user_id === u.id; });
+    ps.forEach(function (p) { cnt[p.num] = (cnt[p.num] || 0) + 1; });
+    return { id: r.id, stake: r.stake, at: r.played_at, winner: r.winner_id ? playerView(r.winner_id) : null,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.num = p.num; o.unique = cnt[p.num] === 1; return o; }), mine: me,
+      net: !me ? null : !r.winner_id ? 0 : r.winner_id === u.id ? r.stake * (ps.length - 1) : -r.stake };
+  });
+  return { rooms: rooms, recent: recent, rules: GAMES.LUN };
+}
+
+function ladPlayers(room) { return tbl('ladp').where(function (p) { return p.room_id === room.id; }); }
+function ladderResolve(room) {
+  var ps = ladPlayers(room), rungs = GAMES.ladderMake(room.slots), winEnd = GAMES.ladderWinEnd(room.slots);
+  var winner = ps.filter(function (p) { return GAMES.ladderEnd(rungs, p.slot) === winEnd; })[0];
+  addPoints(winner.user_id, room.stake * room.slots);
+  room.status = 'done'; room.rungs = JSON.stringify(rungs); room.win_end = winEnd; room.winner_id = winner.user_id; room.played_at = now(); tbl('lad').save(room);
+}
+function ladderView(u) {
+  roomsSweep();
+  var all = tbl('lad').all();
+  var rooms = all.filter(function (r) { return r.status === 'waiting' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = ladPlayers(r), bySlot = {};
+    ps.forEach(function (p) { bySlot[p.slot] = p.user_id; });
+    var seats = [];
+    for (var i = 0; i < r.slots; i++) {
+      if (bySlot[i] === undefined) seats.push(null); else { var o = playerView(bySlot[i]); o.mine = bySlot[i] === u.id; seats.push(o); }
+    }
+    return { id: r.id, stake: r.stake, slots: r.slots, host: playerView(r.host_id), mine: r.host_id === u.id, seats: seats, joined: ps.some(function (p) { return p.user_id === u.id; }) };
+  });
+  var recent = all.filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 10).map(function (r) {
+    var rungs = JSON.parse(r.rungs), ps = ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }), me = ps.some(function (p) { return p.user_id === u.id; });
+    return { id: r.id, stake: r.stake, slots: r.slots, at: r.played_at, win_end: r.win_end, rungs: rungs, winner: playerView(r.winner_id),
+      seats: ps.map(function (p) { var o = playerView(p.user_id); o.slot = p.slot; o.end = GAMES.ladderEnd(rungs, p.slot); o.path = GAMES.ladderPath(rungs, p.slot); o.mine = p.user_id === u.id; return o; }),
+      mine: me, net: !me ? null : r.winner_id === u.id ? r.stake * (r.slots - 1) : -r.stake };
+  });
+  return { rooms: rooms, recent: recent, rules: GAMES.LADDER };
+}
+
+/* ================= 🃏 블랙잭 / 🎰 슬롯머신 (서버 딜러와 하는 혼자 게임) ================= */
+function checkBet(raw, min, max) {
+  var bet = Number(raw);
+  if (bet !== Math.floor(bet) || bet < min || bet > max) fail(400, '건 돈은 ' + min + '~' + max + '🪙입니다.');
+  return bet;
+}
+/** 오늘(한국 시간) 혼자 하는 게임(블랙잭+슬롯)에서 번 순이익과 한 판 수 */
+function soloToday(uid) {
+  var ds = GAMES.dayStart(now()), net = 0, plays = 0;
+  tbl('slots').all().forEach(function (r) { if (r.user_id === uid && r.created_at >= ds) { net += r.payout - r.bet; plays++; } });
+  tbl('bj').all().forEach(function (r) {
+    if (r.user_id !== uid) return;
+    if (r.created_at >= ds) plays++;
+    if (r.status === 'done' && r.finished_at >= ds) { var st = JSON.parse(r.state); net += r.payout - st.bet * (st.doubled ? 2 : 1); }
+  });
+  return { net: net, plays: plays };
+}
+function soloLimits(uid) { var t = soloToday(uid); return GAMES.soloLimits(t.net, t.plays); }
+/** 새 판을 시작하기 전에: 오늘 한도에 닿았으면 막음 */
+function soloGuard(uid) { var l = soloLimits(uid); if (l.blocked) fail(400, GAMES.soloBlockedMessage(l)); }
+function bjActive(uid) { return tbl('bj').find(function (r) { return r.user_id === uid && r.status === 'playing'; }); }
+function bjSave(row, st) {
+  if (st.status === 'done') {   // 오늘 한도를 넘게 따면 한도까지만 지급
+    var w = st.bet * (st.doubled ? 2 : 1), net = st.payout - w;
+    if (net > 0) { var allowed = GAMES.soloClampWin(net, soloToday(row.user_id).net); if (allowed < net) { st.payout = w + allowed; st.capped = true; } }
+  }
+  row.state = JSON.stringify(st); row.status = st.status; row.outcome = st.outcome || ''; row.payout = st.payout;
+  row.finished_at = st.status === 'done' ? now() : '';
+  tbl('bj').save(row);
+  if (st.status === 'done') addPoints(row.user_id, st.payout);
+}
+function bjView(u) {
+  var mine = tbl('bj').where(function (r) { return r.user_id === u.id; });
+  var row = bjActive(u.id) || mine[mine.length - 1] || null;
+  var recent = mine.filter(function (r) { return r.status === 'done'; }).slice(-8).reverse().map(function (r) {
+    var st = JSON.parse(r.state), w = st.bet * (st.doubled ? 2 : 1);
+    return { outcome: r.outcome, wagered: w, net: r.payout - w };
+  });
+  var g = null;
+  if (row) { g = GAMES.bjView(JSON.parse(row.state)); g.id = row.id; }
+  return { game: g, recent: recent, rules: GAMES.BJ, limits: soloLimits(u.id) };
+}
+function slotView(u) {
+  var recent = tbl('slots').where(function (r) { return r.user_id === u.id; }).slice(-8).reverse().map(function (r) {
+    return { bet: r.bet, reels: JSON.parse(r.reels).map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), net: r.payout - r.bet };
+  });
+  return { recent: recent, symbols: GAMES.SLOT.SYMBOLS, triple: GAMES.SLOT.TRIPLE, cherry2: GAMES.SLOT.CHERRY2, cherry1: GAMES.SLOT.CHERRY1, min: GAMES.SLOT.MIN_BET, max: GAMES.SLOT.MAX_BET, limits: soloLimits(u.id) };
+}
+
+/* ================= API 경로 ================= */
+function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). 진행 중인 도박/게임에 걸려 있으면 거부
+  var active = {}; tbl('bets').all().forEach(function (b) { if (b.status === 'open' || b.status === 'closed') active[b.id] = 1; });
+  if (tbl('wagers').find(function (w) { return w.user_id === u.id && active[w.bet_id]; })) fail(400, '진행 중인 도박에 건 돈이 있어서 처리할 수 없습니다. 그 도박이 끝난 뒤에 하십시오.');
+  var waitingLun = {}, waitingLad = {};
+  tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
+  tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
+  if (tbl('lunp').find(function (p) { return p.user_id === u.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === u.id && waitingLad[p.room_id]; }) || bjActive(u.id)) fail(400, '진행 중인 게임이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
+  tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
+  tbl('sessions').removeWhere(function (s) { return s.user_id === u.id; });
+  tbl('messages').removeWhere(function (m) { return m.user_id === u.id; });
+  tbl('items').removeWhere(function (r) { return r.user_id === u.id; });
+  tbl('users').remove(u);
+  tbl('drops').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).forEach(function (r) { r.status = 'cancelled'; tbl('drops').save(r); });
+  tbl('begs').where(function (r) { return r.user_id === u.id && r.status === 'open'; }).forEach(function (r) { r.status = 'closed'; tbl('begs').save(r); });
+}
+var ROUTES = {
+  'GET /api/state': function (body, u) { sweep(); var ok = u && !isPending(u); return { me: u ? meView(u) : null, bets: ok ? betsList(u) : [], ranking: ok ? rankingView(u) : [], rps: ok ? rpsView(u) : (u ? { rooms: [], recent: [] } : null) }; },
+  'POST /api/kick': function (body, u) {   // 방장이 방 멤버를 추방: 계정 삭제 (다시 들어오는 건 막지 않음)
+    needLogin(u);
+    var t = userById(Number(body.user_id));
+    if (!t || t.approved === 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '추방할 수 있는 멤버가 아닙니다.');
+    if (t.id === u.id) fail(400, '자신은 추방할 수 없습니다.');
+    removeUser(t);
+    return { ok: true };
+  },
+  'POST /api/approve': function (body, u) {   // 방장이 가입 요청을 승인(칩 지급)하거나 거절(계정 삭제)
+    needLogin(u);
+    var t = userById(Number(body.user_id));
+    if (!t || t.approved !== 0 || grpOf(t) !== grpOf(u) || ownerIdOf(grpOf(u)) !== u.id) fail(404, '대기 중인 가입 요청이 없습니다.');
+    if (body.accept) { t.approved = 1; t.points = CFG.START_POINTS; tbl('users').save(t); }
+    else {
+      var keys = tbl('sessions').where(function (s) { return s.user_id === t.id; }).map(function (s) { return 's_' + s.token; });
+      if (keys.length) CacheService.getScriptCache().removeAll(keys);
+      tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
+      tbl('users').remove(t);
+    }
+    return { ok: true };
+  },
+
+  // (테스트/내부용) 방 코드를 안 주면 PIN을 방 코드로 씀. 방이 없으면 만들고 계정을 만듦
+  'POST /api/signup': function (body) {
+    var name = checkName(body.name), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin);
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');   // 방을 만들기 전에 값부터 검사 (실패했는데 빈 방이 남지 않게)
+    var grp = ensureRoom(String(body.room === undefined ? pin : body.room).trim());
+    if (userInRoom(grp, name)) fail(409, '이 방에 이미 있는 닉네임입니다.');
+    return { token: addAccount(grp, name, pin) };
+  },
+  'POST /api/login': function (body) {
+    var name = String(body.name || '').trim(), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin);
+    var code = String(body.room === undefined ? pin : body.room).trim();
+    throttle('login|' + code + '|' + name, 10);
+    var u = userInRoom(groupKey(code), name);
+    if (!u || hashPin(pin, u.salt) !== u.hash) fail(401, '방 코드, 닉네임, PIN을 확인해 주십시오.');
+    CacheService.getScriptCache().remove('login|' + code + '|' + name);
+    return { token: newSession(u.id) };
+  },
+  // 방 들어가기(mode:'join') / 방 만들기(mode:'create'). 들어갈 땐: 이 방에 닉네임이 있으면 로그인(PIN 확인), 없으면 (확인 후) 새 계정.
+  'POST /api/enter': function (body) {
+    var name = String(body.name || '').trim(), pin = String(body.pin === undefined || body.pin === null ? '' : body.pin), code = String(body.room === undefined ? '' : body.room).trim();
+    if (!ROOM_RE.test(code)) fail(400, '방 코드는 글자/숫자 4~12자입니다.');
+    var grp = groupKey(code), room = roomRowOf(grp);
+    if (body.mode === 'create') {
+      if (room) fail(409, '이미 있는 방 코드입니다. 그 방에 들어가려면 "방 들어가기"를 눌러주십시오.');
+      checkName(name);
+      if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');   // 방을 만들기 전에 값부터 검사
+      ensureRoom(code);
+      return { token: addAccount(grp, name, pin, devOf(body)), created_room: true };
+    }
+    if (!room) fail(404, '없는 방 코드입니다. 방을 새로 만들려면 "방 만들기"를 눌러주십시오.');
+    var u = userInRoom(grp, name);
+    if (u) {
+      throttle('login|' + code + '|' + name, 10);
+      if (hashPin(pin, u.salt) !== u.hash) fail(401, '이 방에 이미 있는 닉네임입니다. 내 계정이면 PIN이 다릅니다(다시 확인해 주십시오). 처음이라면 다른 닉네임을 써주십시오.');
+      CacheService.getScriptCache().remove('login|' + code + '|' + name);
+      if (devOf(body) && !u.dev) { u.dev = devOf(body); tbl('users').save(u); }   // 예전 계정도 처음 로그인한 기기에 묶음
+      return { token: newSession(u.id) };
+    }
+    checkName(name);
+    if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+    checkDevice(grp, devOf(body));   // 확인 창을 띄우기 전에 알려 줌
+    if (!body.create) return { new_user: true };
+    return { token: addAccount(grp, name, pin, devOf(body)) };
+  },
+  'POST /api/nickname': function (body, u) {
+    needLogin(u); if (!CFG.RENAME_OPEN) fail(403, '닉네임 변경은 아직 준비 중입니다. (나중에 상점에서 제공 예정)'); var name = checkName(body.name);
+    var other = tbl('users').find(function (x) { return x.name === name && grpOf(x) === grpOf(u); });
+    if (other && other.id !== u.id) fail(409, '이미 있는 닉네임입니다.');
+    u.name = name; tbl('users').save(u); return { ok: true };
+  },
+  'POST /api/bets': function (body, u) {
+    needLogin(u);
+    var title = String(body.title || '').trim();
+    var labels = (Array.isArray(body.options) ? body.options : []).map(function (s) { return String(s).trim(); }).filter(Boolean);
+    if (!title || title.length > 80) fail(400, '제목은 1~80자입니다.');
+    if (labels.length < 2 || labels.length > 6) fail(400, '선택지는 2~6개입니다.');
+    var uniq = {}; labels.forEach(function (l) { uniq[l] = 1; });
+    if (Object.keys(uniq).length !== labels.length || labels.some(function (l) { return l.length > 40; })) fail(400, '선택지는 서로 달라야 하고 40자 이내입니다.');
+    var mins = Number(body.closes_in_minutes), closes = mins > 0 ? now() + Math.min(mins, 60 * 24 * 30) * 6e4 : '';
+    if (isDup('bets', function (r) { return r.creator_id === u.id && r.title === title; })) fail(409, '연타');
+    var b = tbl('bets').insert({ title: title, creator_id: u.id, status: 'open', winner: '', closes_at: closes, created_at: now() });
+    labels.forEach(function (l) { tbl('options').insert({ bet_id: b.id, label: l }); });
+    return betViews([b], u)[0];
+  },
+  'POST /api/wager': function (body, u) {
+    needLogin(u); sweep(); TBL.bets = null; // 마감 처리 후 최신 상태로
+    var amount = Number(body.amount);
+    if (amount !== Math.floor(amount) || !(amount >= CFG.MIN_BET)) fail(400, '최소 ' + CFG.MIN_BET + '🪙부터 걸 수 있습니다.');
+    var oid = Number(body.option_id);
+    var opt = tbl('options').find(function (o) { return o.id === oid; }) || fail(404, '선택지가 없습니다.');
+    var bet = betById(opt.bet_id);
+    if (!sameRoom(bet.creator_id, u)) fail(404, '도박이 없습니다.');
+    if (bet.status !== 'open') fail(400, '이미 마감된 도박입니다.');
+    if (u.points < amount) fail(400, '칩이 부족합니다.');
+    if (tbl('wagers').find(function (w) { return w.bet_id === bet.id && w.user_id === u.id && w.option_id !== opt.id; })) fail(400, '이 도박에는 이미 다른 선택지에 걸었습니다.');
+    u.points -= amount; tbl('users').save(u);
+    tbl('wagers').insert({ bet_id: bet.id, option_id: opt.id, user_id: u.id, amount: amount, payout: '', lucky: 0, created_at: now() });
+    return { ok: true };
+  },
+  'POST /api/bets/action': function (body, u) {
+    needLogin(u); var bet = betById(body.bet_id);
+    if (bet.creator_id !== u.id) fail(403, '도박을 연 사람만 할 수 있습니다.');
+    return betAction(bet, body);
+  },
+  'POST /api/aid': function (body, u) {
+    needLogin(u);
+    if (u.points >= CFG.MIN_BET) fail(400, '아직 칩이 남아있습니다.');
+    if (now() - (u.last_aid || 0) < 864e5) fail(400, '구제금은 하루 한 번입니다.');
+    u.points += CFG.DAILY_AID; u.last_aid = now(); tbl('users').save(u); return { ok: true };
+  },
+
+  // 채팅은 도박마다 따로: 목록에서 도박에 들어가서 그 안에서만 이야기합니다
+  'GET /api/chat': function (body, u, ctx) {
+    needLogin(u);
+    var betId = Number(ctx.qs.bet) || 0, after = Number(ctx.qs.after) || 0, names = {};
+    if (!sameRoom(betById(betId).creator_id, u)) fail(404, '도박이 없습니다.');
+    tbl('users').all().forEach(function (x) { names[x.id] = x; });
+    var rows = tbl('messages').all().filter(function (m) { return m.bet_id === betId && m.id > after && names[m.user_id]; });
+    rows = after ? rows.slice(0, 100) : rows.slice(-60);
+    return rows.map(function (m) {
+      var o = { id: m.id, text: m.text, name: names[m.user_id].name, at: m.created_at, mine: m.user_id === u.id }, d = deco(names[m.user_id]);
+      for (var k in d) o[k] = d[k];
+      return o;
+    });
+  },
+  'POST /api/chat': function (body, u) {
+    needLogin(u);
+    var bet = betById(body.bet_id);
+    if (!sameRoom(bet.creator_id, u)) fail(404, '도박이 없습니다.');
+    var text = String(body.text || '').trim();
+    if (!text || text.length > 200) fail(400, '메시지는 1~200자입니다.');
+    var last = tbl('messages').all().filter(function (m) { return m.user_id === u.id; }).pop();
+    if (last && now() - last.created_at < 800) fail(429, '요청이 너무 빠릅니다. 잠시 후 다시 시도하십시오.');
+    tbl('messages').insert({ user_id: u.id, text: text, created_at: now(), bet_id: bet.id });
+    var all = tbl('messages').all();
+    if (all.length > 600) { tbl('messages').sheet.deleteRows(2, all.length - 400); TBL.messages = null; } // 오래된 건 정리
+    return { ok: true };
+  },
+
+  'GET /api/rps': function (body, u) { needLogin(u); return rpsView(u); },
+  'POST /api/rps/create': function (body, u) {
+    needLogin(u);
+    var hand = String(body.hand), stake = Number(body.stake);
+    if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주십시오.');
+    if (stake !== Math.floor(stake) || !(stake >= CFG.MIN_BET)) fail(400, '판돈은 ' + CFG.MIN_BET + '🪙 이상입니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
+    if (isDup('rps', function (r) { return r.host_id === u.id && r.stake === stake && r.status === 'waiting'; })) fail(409, '연타');
+    if (tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
+    u.points -= stake; tbl('users').save(u);   // 판돈은 방을 여는 순간 맡겨짐
+    var r = tbl('rps').insert({ host_id: u.id, stake: stake, host_hand: hand, guest_id: '', guest_hand: '', status: 'waiting', result: '', created_at: now(), played_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/rps/join': function (body, u) {
+    needLogin(u);
+    var hand = String(body.hand);
+    if (RPS.HANDS.indexOf(hand) < 0) fail(400, '가위·바위·보 중에 골라주십시오.');
+    var rid = Number(body.room_id);
+    var r = tbl('rps').find(function (x) { return x.id === rid; }) || fail(404, '방이 없습니다.');
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');   // 다른 PIN 방의 가위바위보에는 못 들어옴
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    if (r.host_id === u.id) fail(400, '내가 만든 방에는 들어갈 수 없습니다.');
+    if (u.points < r.stake) fail(400, '칩이 부족합니다.');
+    var result = r.host_hand === hand ? 'draw' : RPS.BEATS[r.host_hand] === hand ? 'host' : 'guest';
+    // 방장은 판돈을 이미 냈고, 도전자는 지금 낸다. 이긴 쪽이 2배, 비기면 각자 환불.
+    if (result === 'draw') addPoints(r.host_id, r.stake);
+    else if (result === 'host') { addPoints(r.host_id, r.stake * 2); u.points -= r.stake; tbl('users').save(u); }
+    else { u.points += r.stake; tbl('users').save(u); }
+    r.guest_id = u.id; r.guest_hand = hand; r.status = 'done'; r.result = result; r.played_at = now(); tbl('rps').save(r);
+    return { ok: true, id: r.id, host_hand: r.host_hand, guest_hand: hand, stake: r.stake, host: rpsPlayer(r.host_id),
+      outcome: result === 'draw' ? 'draw' : result === 'guest' ? 'win' : 'lose', net: result === 'draw' ? 0 : result === 'guest' ? r.stake : -r.stake };
+  },
+  'POST /api/rps/cancel': function (body, u) {
+    needLogin(u);
+    var rid = Number(body.room_id);
+    var r = tbl('rps').find(function (x) { return x.id === rid; }) || fail(404, '방이 없습니다.');
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    u.points += r.stake; tbl('users').save(u);
+    r.status = 'cancelled'; tbl('rps').save(r);
+    return { ok: true };
+  },
+
+  /* ---- 🤫 최저 유일 숫자 ---- */
+  'GET /api/lun': function (body, u) { needLogin(u); return lunView(u); },
+  'POST /api/lun/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), cap = Number(body.cap), num = Number(body.num), L = GAMES.LUN;
+    if (cap !== Math.floor(cap) || cap < L.MIN_PLAYERS || cap > L.MAX_PLAYERS) fail(400, '인원은 ' + L.MIN_PLAYERS + '~' + L.MAX_PLAYERS + '명입니다.');
+    if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주십시오.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
+    if (isDup('lun', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'waiting'; })) fail(409, '연타');
+    if (openRooms('lun', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
+    addPoints(u.id, -stake);
+    var r = tbl('lun').insert({ host_id: u.id, stake: stake, cap: cap, status: 'waiting', winner_id: '', created_at: now(), played_at: '' });
+    tbl('lunp').insert({ room_id: r.id, user_id: u.id, num: num, joined_at: now() });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/lun/join': function (body, u) {
+    needLogin(u);
+    var num = Number(body.num), L = GAMES.LUN;
+    if (num !== Math.floor(num) || num < L.MIN || num > L.MAX) fail(400, '숫자는 ' + L.MIN + '~' + L.MAX + ' 중에 골라주십시오.');
+    var r = byId('lun', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    var ps = lunPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
+    if (ps.length >= r.cap) fail(400, '자리가 다 찼습니다.');
+    if (userById(u.id).points < r.stake) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -r.stake);
+    tbl('lunp').insert({ room_id: r.id, user_id: u.id, num: num, joined_at: now() });
+    var full = ps.length + 1 >= r.cap;
+    if (full) lunResolve(r);
+    return { ok: true, id: r.id, resolved: full };
+  },
+  'POST /api/lun/start': function (body, u) {   // 방장이 모인 사람들(3명 이상)로 먼저 시작
+    needLogin(u);
+    var r = byId('lun', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 시작할 수 있습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    if (lunPlayers(r).length < GAMES.LUN.MIN_PLAYERS) fail(400, '최소 ' + GAMES.LUN.MIN_PLAYERS + '명이 모여야 시작할 수 있습니다.');
+    lunResolve(r);
+    return { ok: true, id: r.id, resolved: true };
+  },
+  'POST /api/lun/cancel': function (body, u) {
+    needLogin(u);
+    var r = byId('lun', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    lunPlayers(r).forEach(function (p) { addPoints(p.user_id, r.stake); });
+    r.status = 'cancelled'; tbl('lun').save(r);
+    return { ok: true };
+  },
+
+  /* ---- 🪜 사다리타기 ---- */
+  /* ---- 💸 돈뿌리기 / 🙏 구걸하기 ---- */
+  'GET /api/gifts': function (body, u) { needLogin(u); return giftView(u); },
+  'POST /api/drop/create': function (body, u) {
+    needLogin(u);
+    var total = Number(body.total), cnt = Number(body.cnt), D = GAMES.DROP;
+    if (total !== Math.floor(total) || total < CFG.MIN_BET || total > GIFT_MAX) fail(400, '뿌릴 금액은 ' + CFG.MIN_BET + '~' + GIFT_MAX + '🪙입니다.');
+    if (cnt !== Math.floor(cnt) || cnt < D.MIN_COUNT || cnt > D.MAX_COUNT || cnt > total) fail(400, '인원은 ' + D.MIN_COUNT + '~' + Math.min(D.MAX_COUNT, total) + '명입니다.');
+    if (u.points < total) fail(400, '칩이 부족합니다.');
+    if (isDup('drops', function (r) { return r.host_id === u.id && r.total === total && r.cnt === cnt && r.status === 'open'; })) fail(409, '연타');
+    if (tbl('drops').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 뿌릴 수 있는 건 ' + RPS.MAX_OPEN + '개까지입니다.');
+    addPoints(u.id, -total);
+    var d = tbl('drops').insert({ host_id: u.id, total: total, cnt: cnt, left_amt: total, left_cnt: cnt, status: 'open', created_at: now() });
+    return { ok: true, id: d.id };
+  },
+  'POST /api/drop/claim': function (body, u) {
+    needLogin(u);
+    var d = byId('drops', body.id);
+    if (!sameRoom(d.host_id, u)) fail(404, '없는 항목입니다.');
+    if (d.status !== 'open') fail(400, '이미 끝났습니다.');
+    if (d.host_id === u.id) fail(400, '직접 뿌린 돈은 받을 수 없습니다.');
+    if (tbl('dropc').find(function (c) { return c.drop_id === d.id && c.user_id === u.id; })) fail(400, '이미 받았습니다.');
+    var amount = GAMES.dropShare(d.left_amt, d.left_cnt);
+    addPoints(u.id, amount);
+    tbl('dropc').insert({ drop_id: d.id, user_id: u.id, amount: amount, at: now() });
+    d.left_amt -= amount; d.left_cnt -= 1; if (d.left_cnt <= 0) d.status = 'done';
+    tbl('drops').save(d);
+    return { ok: true, amount: amount };
+  },
+  'POST /api/drop/cancel': function (body, u) {
+    needLogin(u);
+    var d = byId('drops', body.id);
+    if (d.host_id !== u.id) fail(403, '뿌린 사람만 닫을 수 있습니다.');
+    if (d.status !== 'open') fail(400, '이미 끝났습니다.');
+    addPoints(u.id, d.left_amt);
+    d.status = 'cancelled'; tbl('drops').save(d);
+    return { ok: true, refund: d.left_amt };
+  },
+  'POST /api/beg/create': function (body, u) {
+    needLogin(u);
+    var want = Number(body.want), msg = String(body.msg || '').trim().slice(0, 40);
+    if (want !== Math.floor(want) || want < CFG.MIN_BET || want > GIFT_MAX) fail(400, '구걸 금액은 ' + CFG.MIN_BET + '~' + GIFT_MAX + '🪙입니다.');
+    var open = tbl('begs').find(function (r) { return r.user_id === u.id && r.status === 'open'; });
+    if (open) { var dup = open.created_at > now() - DUP_MS; fail(dup ? 409 : 400, dup ? '연타' : '이미 구걸 중입니다. 먼저 닫으십시오.'); }
+    var b = tbl('begs').insert({ user_id: u.id, want: want, got: 0, msg: msg, status: 'open', created_at: now() });
+    return { ok: true, id: b.id };
+  },
+  'POST /api/beg/give': function (body, u) {
+    needLogin(u);
+    var amount = Number(body.amount);
+    if (amount !== Math.floor(amount) || amount < 1) fail(400, '1🪙 이상 정수로 입력하십시오.');
+    var b = byId('begs', body.id);
+    if (!sameRoom(b.user_id, u)) fail(404, '없는 항목입니다.');
+    if (b.status !== 'open') fail(400, '이미 끝났습니다.');
+    if (b.user_id === u.id) fail(400, '자신에게는 줄 수 없습니다.');
+    if (amount > b.want - b.got) fail(400, '필요한 금액은 ' + (b.want - b.got) + '🪙 남았습니다.');
+    if (u.points < amount) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -amount); addPoints(b.user_id, amount);
+    tbl('begg').insert({ beg_id: b.id, user_id: u.id, amount: amount, at: now() });
+    b.got += amount; if (b.got >= b.want) b.status = 'done';
+    tbl('begs').save(b);
+    return { ok: true };
+  },
+  'POST /api/beg/cancel': function (body, u) {
+    needLogin(u);
+    var b = byId('begs', body.id);
+    if (b.user_id !== u.id) fail(403, '본인만 닫을 수 있습니다.');
+    if (b.status !== 'open') fail(400, '이미 끝났습니다.');
+    b.status = 'closed'; tbl('begs').save(b);
+    return { ok: true };
+  },
+  'GET /api/ladder': function (body, u) { needLogin(u); return ladderView(u); },
+  'POST /api/ladder/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), slots = Number(body.slots), slot = Number(body.slot), L = GAMES.LADDER;
+    if (slots !== Math.floor(slots) || slots < L.MIN_SLOTS || slots > L.MAX_SLOTS) fail(400, '인원은 ' + L.MIN_SLOTS + '~' + L.MAX_SLOTS + '명입니다.');
+    if (slot !== Math.floor(slot) || slot < 0 || slot >= slots) fail(400, '자리를 골라주십시오.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
+    if (isDup('lad', function (r) { return r.host_id === u.id && r.stake === stake && r.slots === slots && r.status === 'waiting'; })) fail(409, '연타');
+    if (openRooms('lad', u.id) >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
+    addPoints(u.id, -stake);
+    var r = tbl('lad').insert({ host_id: u.id, stake: stake, slots: slots, status: 'waiting', win_end: '', rungs: '', winner_id: '', created_at: now(), played_at: '' });
+    tbl('ladp').insert({ room_id: r.id, user_id: u.id, slot: slot, joined_at: now() });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/ladder/join': function (body, u) {
+    needLogin(u);
+    var slot = Number(body.slot), r = byId('lad', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    if (slot !== Math.floor(slot) || slot < 0 || slot >= r.slots) fail(400, '자리를 골라주십시오.');
+    var ps = ladPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
+    if (ps.some(function (p) { return p.slot === slot; })) fail(400, '이미 다른 사람이 앉은 자리입니다.');
+    if (userById(u.id).points < r.stake) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -r.stake);
+    tbl('ladp').insert({ room_id: r.id, user_id: u.id, slot: slot, joined_at: now() });
+    var full = ps.length + 1 >= r.slots;
+    if (full) ladderResolve(r);          // 자리가 다 차는 순간 사다리를 만들어서 결판 (그 전엔 사다리가 존재하지 않음)
+    return { ok: true, id: r.id, resolved: full };
+  },
+  'POST /api/ladder/cancel': function (body, u) {
+    needLogin(u);
+    var r = byId('lad', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 닫을 수 있습니다.');
+    if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    ladPlayers(r).forEach(function (p) { addPoints(p.user_id, r.stake); });
+    r.status = 'cancelled'; tbl('lad').save(r);
+    return { ok: true };
+  },
+
+  /* ---- 🃏 블랙잭 ---- */
+  'GET /api/blackjack': function (body, u) { needLogin(u); return bjView(u); },
+  'POST /api/blackjack/start': function (body, u) {
+    needLogin(u);
+    var bet = checkBet(body.bet, GAMES.BJ.MIN_BET, GAMES.BJ.MAX_BET);
+    if (bjActive(u.id)) fail(400, '진행 중인 판이 있습니다. 먼저 끝내주십시오.');
+    soloGuard(u.id);
+    if (u.points < bet) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -bet);
+    var st = GAMES.bjStart(bet);
+    var row = tbl('bj').insert({ user_id: u.id, bet: bet, state: JSON.stringify(st), status: 'playing', outcome: '', payout: '', created_at: now(), finished_at: '' });
+    bjSave(row, st);
+    return bjView(userById(u.id));
+  },
+
+  /* ---- 🎰 슬롯머신 ---- */
+  'GET /api/slots': function (body, u) { needLogin(u); return slotView(u); },
+  'POST /api/slots/spin': function (body, u) {
+    needLogin(u);
+    var bet = checkBet(body.bet, GAMES.SLOT.MIN_BET, GAMES.SLOT.MAX_BET);
+    if (u.points < bet) fail(400, '칩이 부족합니다.');
+    soloGuard(u.id);
+    var sp = GAMES.slotSpin(), payout = GAMES.slotPayout(bet, sp.mult), capped = false;
+    if (payout - bet > 0) { var allowed = GAMES.soloClampWin(payout - bet, soloToday(u.id).net); if (allowed < payout - bet) { payout = bet + allowed; capped = true; } }   // 오늘 한도까지만 지급
+    addPoints(u.id, payout - bet);
+    tbl('slots').insert({ user_id: u.id, bet: bet, reels: JSON.stringify(sp.reels), payout: payout, created_at: now() });
+    return { reels: sp.reels.map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), mult: sp.mult, bet: bet, payout: payout, net: payout - bet, capped: capped, points: userById(u.id).points, limits: soloLimits(u.id) };
+  },
+
+  'GET /api/shop': function (body, u) {
+    needLogin(u);
+    if (!CFG.SHOP_OPEN) return [];   // 닫혀 있으면 빈 목록 → 화면에 '준비 중' 표시
+    var owned = {}; tbl('items').where(function (r) { return r.user_id === u.id; }).forEach(function (r) { owned[r.item_id] = 1; });
+    return SHOP.map(function (i) { var o = {}; for (var k in i) o[k] = i[k]; o.owned = !!owned[i.id]; o.equipped = u[SLOT_COL[i.slot]] === i.id; return o; });
+  },
+  'POST /api/shop/buy': function (body, u) {
+    needLogin(u);
+    if (!CFG.SHOP_OPEN) fail(403, '상점은 아직 준비 중입니다.');
+    var item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품입니다.');
+    if (tbl('items').find(function (r) { return r.user_id === u.id && r.item_id === item.id; })) fail(400, '이미 가지고 있습니다.');
+    if (u.points < item.price) fail(400, '칩이 부족합니다.');
+    u.points -= item.price; u[SLOT_COL[item.slot]] = item.id; tbl('users').save(u); // 사면 바로 장착
+    tbl('items').insert({ user_id: u.id, item_id: item.id });
+    return { ok: true };
+  },
+  'POST /api/shop/equip': function (body, u) {
+    needLogin(u);
+    if (!CFG.SHOP_OPEN) fail(403, '상점은 아직 준비 중입니다.');
+    if (body.item_id === null) {
+      var col = SLOT_COL[String(body.slot)] || fail(400, '잘못된 칸입니다.');
+      u[col] = ''; tbl('users').save(u); return { ok: true };
+    }
+    var item = SHOP_BY_ID[String(body.item_id)] || fail(404, '없는 상품입니다.');
+    if (!tbl('items').find(function (r) { return r.user_id === u.id && r.item_id === item.id; })) fail(400, '먼저 구매해야 합니다.');
+    u[SLOT_COL[item.slot]] = item.id; tbl('users').save(u); return { ok: true };
+  },
+
+  /* ---- 관리자 ---- */
+  'GET /api/admin/overview': function (body, u, ctx) {
+    adminOnly(ctx); sweep();
+    var users = tbl('users').all().slice().sort(function (a, b) { return b.points - a.points; }).map(function (x) { return { id: x.id, name: x.name, points: x.points, created_at: x.created_at, approved: x.approved === 0 ? 0 : 1, grp: roomCodeOf(x) }; });
+    var wag = tbl('wagers').all(), names = {}; tbl('users').all().forEach(function (x) { names[x.id] = x.name; });
+    var bets = betViews(tbl('bets').all().slice().sort(function (a, b) { return b.id - a.id; }).slice(0, 200), null);
+    var titles = {}; tbl('bets').all().forEach(function (b) { titles[b.id] = b.title; });
+    var messages = tbl('messages').all().filter(function (m) { return names[m.user_id]; }).slice(-40).reverse().map(function (m) { return { id: m.id, text: m.text, created_at: m.created_at, name: names[m.user_id], bet_title: titles[m.bet_id] || null }; });
+    return { users: users, bets: bets, messages: messages, settings: settingsView(), rooms: adminRooms(), groups: adminGroups(), stats: {
+      users: users.length, points: users.reduce(function (s, x) { return s + x.points; }, 0), wagers: wag.length,
+      wagered: wag.reduce(function (s, w) { return s + w.amount; }, 0), lucky: wag.filter(function (w) { return Number(w.lucky) === 1; }).length } };
+  },
+  'POST /api/admin/settings': function (body, u, ctx) {
+    adminOnly(ctx);
+    var values = body.values && typeof body.values === 'object' ? body.values : {}, reset = Array.isArray(body.reset) ? body.reset : [];
+    var specs = settingSpecs(), byKey = {}; specs.forEach(function (sp) { byKey[sp.key] = sp; });
+    Object.keys(values).forEach(function (k) {
+      var sp = byKey[k] || fail(400, '알 수 없는 설정입니다: ' + k), v = values[k];
+      if (sp.type === 'bool' ? typeof v !== 'boolean' : (typeof v !== 'number' || v !== Math.floor(v) || v < sp.min || v > sp.max))
+        fail(400, sp.label + ': ' + (sp.type === 'bool' ? '켜기/끄기만 가능합니다' : sp.min + '~' + sp.max + ' 사이 정수를 넣어주십시오') + '.');
+    });
+    reset.forEach(function (k) { if (!byKey[k]) fail(400, '알 수 없는 설정입니다: ' + k); });
+    var saved = loadSettings();
+    Object.keys(values).forEach(function (k) { saved[k] = values[k]; byKey[k].set(values[k]); });
+    reset.forEach(function (k) { delete saved[k]; byKey[k].set(SETTING_DEFAULTS[k]); });
+    props().setProperty('SETTINGS', JSON.stringify(saved));
+    return { ok: true, settings: settingsView() };
+  },
+  'POST /api/admin/room': function (body, u, ctx) { adminOnly(ctx); adminCloseRoom(String(body.kind), body.room_id); return { ok: true }; },
+  'POST /api/admin/group': function (body, u, ctx) { adminOnly(ctx); return { ok: true, deleted_users: adminDeleteGroup(body.grp) }; },
+  'POST /api/admin/user': function (body, u, ctx) {
+    adminOnly(ctx);
+    var t = tbl('users').find(function (x) { return x.id === Number(body.user_id); }) || fail(404, '유저가 없습니다.');
+    var v = Number(body.value);
+    if (body.action === 'set_points' || body.action === 'add_points') {
+      if (v !== Math.floor(v)) fail(400, '숫자를 넣어주십시오.');
+      var next = body.action === 'set_points' ? v : t.points + v;
+      if (next < 0) fail(400, '0🪙 미만으로는 못 합니다.');
+      t.points = next; tbl('users').save(t);
+    } else if (body.action === 'rename') {
+      var name = checkName(body.value);
+      if (tbl('users').find(function (x) { return x.name === name && x.id !== t.id && grpOf(x) === grpOf(t); })) fail(409, '이미 있는 닉네임입니다.');
+      t.name = name; tbl('users').save(t);
+    } else if (body.action === 'move_room') {      // 방 변경: 방 코드로 옮김 (없는 코드면 방을 새로 만듦). 같은 방에 같은 닉네임이 있으면 거부
+      var g2 = ensureRoom(String(body.value || '').trim());
+      if (tbl('users').find(function (x) { return grpOf(x) === g2 && x.name === t.name && x.id !== t.id; })) fail(409, '그 방에 같은 닉네임이 이미 있습니다.');
+      t.grp = g2; tbl('users').save(t);
+    } else if (body.action === 'approve') {      // 가입 승인 (칩 지급)
+      if (t.approved !== 0) fail(400, '이미 승인된 계정입니다.');
+      t.approved = 1; t.points = CFG.START_POINTS; tbl('users').save(t);
+    } else if (body.action === 'clear_device') {   // 기기 묶음 해제 (그 기기에서 새 계정을 만들 수 있게)
+      t.dev = ''; tbl('users').save(t);
+    } else if (body.action === 'reset_pin') {      // PIN 초기화 (방은 그대로)
+      var pin = String(body.value || '');
+      if (!PIN_RE.test(pin)) fail(400, 'PIN은 공백 없이 4~16자입니다.');
+      var salt = Utilities.getUuid().slice(0, 8); t.salt = salt; t.hash = hashPin(pin, salt); tbl('users').save(t);
+      var keys = tbl('sessions').where(function (s) { return s.user_id === t.id; }).map(function (s) { return 's_' + s.token; });
+      if (keys.length) CacheService.getScriptCache().removeAll(keys);
+      tbl('sessions').removeWhere(function (s) { return s.user_id === t.id; });
+    } else if (body.action === 'delete') {
+      removeUser(t);
+    } else fail(400, '알 수 없는 동작입니다.');
+    return { ok: true };
+  },
+  'POST /api/admin/bet': function (body, u, ctx) {
+    adminOnly(ctx); var bet = betById(body.bet_id);
+    if (body.action === 'delete') {
+      if (bet.status === 'open' || bet.status === 'closed') tbl('wagers').where(function (w) { return w.bet_id === bet.id; }).forEach(refund);
+      tbl('wagers').removeWhere(function (w) { return w.bet_id === bet.id; });
+      tbl('options').removeWhere(function (o) { return o.bet_id === bet.id; });
+      tbl('messages').removeWhere(function (m) { return m.bet_id === bet.id; });
+      tbl('bets').remove(bet); return { ok: true };
+    }
+    return betAction(bet, body);
+  },
+  'POST /api/admin/gift': function (body, u, ctx) {
+    adminOnly(ctx); var v = Number(body.amount);
+    if (v !== Math.floor(v) || v <= 0 || v > 1e6) fail(400, '1~1000000 사이 정수를 넣어주십시오.');
+    tbl('users').all().forEach(function (x) { x.points += v; tbl('users').save(x); });
+    return { ok: true };
+  },
+  'POST /api/admin/chat': function (body, u, ctx) {
+    adminOnly(ctx);
+    var m = tbl('messages').find(function (x) { return x.id === Number(body.id); });
+    if (m) tbl('messages').remove(m);
+    return { ok: true };
+  }
+};
+
+['hit', 'stand', 'double'].forEach(function (act) {
+  ROUTES['POST /api/blackjack/' + act] = function (body, u) {
+    needLogin(u);
+    var row = bjActive(u.id) || fail(400, '진행 중인 판이 없습니다. 새로 시작하십시오.');
+    var st = JSON.parse(row.state);
+    if (act === 'double') {
+      if (!GAMES.bjCanDouble(st)) fail(400, '더블다운은 처음 카드 두 장일 때만 할 수 있습니다.');
+      if (userById(u.id).points < st.bet) fail(400, '더블다운할 칩이 부족합니다.');
+      addPoints(u.id, -st.bet);                                  // 추가로 같은 금액을 더 걸습니다
+      GAMES.bjDouble(st);
+    } else if (act === 'hit') GAMES.bjHit(st); else GAMES.bjStand(st);
+    bjSave(row, st);
+    return bjView(userById(u.id));
+  };
+});
+
+/* ================= 설치 도우미 ================= */
+/** 한 번 실행하십시오: 시트 탭을 만들고, '관리자' 탭에 관리자 링크를 적어줍니다. */
+function showAdminLink() {
+  Object.keys(SHEETS).forEach(function (n) { tbl(n); });
+  ensureAdminSheet();
+  var url = ''; try { url = ScriptApp.getService().getUrl(); } catch (e) {}
+  Logger.log("'관리자' 탭 B1 칸에 8자 이상의 비밀번호를 적으십시오. 관리자 링크: " + (url || '(웹 앱 주소)') + '?admin=비밀번호');
+}
+
+/* ===== 저장소를 시트 대신 아티팩트 DB(엔진)로 바꾸는 부분 ===== */
+Table = function (name) { this.name = name; this.cols = SHEETS[name]; this.sheet = { deleteRows: function () {} }; };
+Table.prototype.all = function () { return ENG.rows(this.name); };
+Table.prototype.find = function (fn) { return this.all().filter(fn)[0] || null; };
+Table.prototype.where = function (fn) { return this.all().filter(fn); };
+Table.prototype.insert = function (o) { if (this.cols[0] === 'id') o.id = ENG.nextId(this.name); ENG.add(this.name, o); return o; };
+Table.prototype.save = function (o) { ENG.touch(this.name, o); };
+Table.prototype.remove = function (o) { ENG.del(this.name, o); };
+Table.prototype.removeWhere = function (fn) { var self = this; this.where(fn).slice().forEach(function (o) { self.remove(o); }); };
+groupKey = function (code) { return 'g_' + String(code).toLowerCase(); };   // 방은 하나뿐이라 코드가 그대로 방 번호
+hashPin = function (pin, salt) { return 'h:' + pin + ':' + salt; };   // 로그인은 계정 번호로 자동. PIN 은 형식만 맞춤
+adminOnly = function () { if (!ENG.isOwner()) fail(403, '관리자만 사용할 수 있습니다. 아티팩트 소유자 계정으로 열어주십시오.'); };
+CFG.APPROVAL = false;   // 접근은 공유(초대)로 관리하므로 가입 승인은 끔
+__mem.SCHEMA_V = SCHEMA_V;
+return { handle: handle, reset: function () { HOLDING = false; }, CFG: CFG, GAMES: GAMES, tbl: tbl, SHEETS: SHEETS, ROUTES: ROUTES };
+
+};
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS = { // 앱스 스크립트 화면에서는 저장소가 막힐 수 있어 안전하게 감쌈
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* 무시 */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* 무시 */ } },
+};
+let token = null, user = null, tab = 'bets', bets = [], ranking = [], busy = false;
+
+async function api(method, url, body) {
+  if (!ENGINE) throw new Error(ENG_ERR || '연결 중입니다. 잠시 뒤 다시 해주십시오.');
+  const j = await ENGINE.call(token || '', method, url, body || {});
+  if (j.error) { if (j.code === 401 && token) logout(); const e = new Error(j.error); e.code = j.code; throw e; }
+  return j.data;
+}
+function toast(m) { if (m === '연타') return; const d = document.createElement('div'); d.className = 'msg'; d.textContent = m; document.body.append(d); setTimeout(() => d.remove(), 2600); }
+// 처리 중에 같은 버튼을 또 눌러도 무시 (연타해도 방/도박이 여러 개 생기지 않게)
+const DEV = (() => {   // 이 브라우저의 기기 번호 (한 기기에서 계정을 여러 개 못 만들게 서버에 같이 보냄)
+  let d = ''; try { d = LS.get('dev') || ''; } catch { /* 무시 */ }
+  if (!/^[A-Za-z0-9]{12,64}$/.test(d)) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); try { LS.set('dev', d); } catch { /* 무시 */ } }
+  return d;
+})();
+const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };
+function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false }; LS.del('token'); render(); }
+
+let chatMsgs = [], lastChatId = 0;
+let chatBet = null;
+let rps = { rooms: [], recent: [] }, listMode = 'all', createMode = 'bet', createHand = null;
+
+// 닉네임 꾸미기: 배지 + 호칭 + 색/효과 (모두 상점에서 구매)
+function nm(o, force = {}) {
+  const d = { ...o, ...force };
+  const cls = d.fx ? ' fx-' + d.fx : '';
+  const style = d.color && !d.fx ? ` style="color:${d.color}"` : '';
+  return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
+}
+function renderHeader() {
+  $('#who').innerHTML = user ? `${nm(user)} ${user.can_rename ? '<button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button>' : ''} · <span class="pts">${user.points.toLocaleString()}🪙</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> ${ENGINE && ENGINE.isOwner ? '<button onclick="openAdmin()" style="padding:2px 8px;font-size:12px">⚙️ 관리</button>' : ''}` : '';
+}
+let refreshP = null;
+function refresh() {   // 이미 진행 중이면 끝난 뒤 한 번 더 (동작 직후 호출이 옛 데이터로 끝나지 않게). 요청이 쌓이지는 않음
+  if (!token) return Promise.resolve();
+  if (refreshP) return refreshP = refreshP.then(refreshBody, refreshBody);
+  return refreshP = refreshBody().finally(() => { refreshP = null; });
+}
+async function refreshBody() {
+  if (!token) return;                     // 로그인 화면은 다시 그리지 않음 (입력 중 지워짐 방지)
+  try {
+    ({ me: user, bets, ranking, rps } = await api('GET', '/api/state'));
+    notifyRps();
+    const np = (user && user.pending_list ? user.pending_list.length : 0);
+    if (np > lastPending) toast('가입 승인 요청이 있습니다.');
+    lastPending = np;
+    await gamesTick();
+    const seen = JSON.parse(LS.get('luckySeen') || '[]');
+    const fresh = bets.filter((b) => b.my_lucky && !seen.includes(b.id));
+    if (fresh.length) { LS.set('luckySeen', JSON.stringify(seen.concat(fresh.map((b) => b.id)))); toast('🍀 럭키 보너스 당첨!!'); }
+    if (!$('#app').innerHTML || (tab !== 'new' && tab !== 'chat' && !(document.activeElement && document.activeElement.tagName === 'INPUT'))) render();
+    else renderHeader();
+  } catch (e) { /* 401 이면 logout 처리됨 */ }
+}
+
+function render() {
+  if (window.__adminMode) { renderHeader(); return; }
+  renderHeader();
+  $('#app').innerHTML = !token ? authView() : user && user.pending ? pendingView() : `
+    ${approveCard()}<div class="tabs">${[['bets','도박장'],['new','만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
+    ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
+    ${bodyView()}`;
+  if (token && tab === 'chat') { renderChat(); pollChat(); }
+}
+const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); loadGame(); };
+
+const pendingView = () => `<div class="card" style="text-align:center"><h2>⏳ 승인 대기 중</h2><div style="font-size:44px;margin:10px 0">🔒</div>
+  <p>방장의 승인을 기다리고 있습니다.</p><p class="mute">승인되면 1000🪙이 지급되고 모든 기능을 사용할 수 있습니다. 이 화면은 자동으로 갱신됩니다.</p></div>`;
+const approveCard = () => (user && user.pending_list && user.pending_list.length
+  ? `<div class="card"><h2>🙋 가입 승인 요청</h2>${user.pending_list.map((p) => `<div class="row" style="margin:6px 0"><b>${esc(p.name)}</b><span><button class="pri" onclick="approve(${p.id}, true)">승인</button> <button class="danger" onclick="approve(${p.id}, false)">거절</button></span></div>`).join('')}
+    <p class="mute">모르는 닉네임은 거절하십시오. 거절하면 그 계정은 삭제됩니다.</p></div>` : '');
+const approve = guard(async (id, accept) => {
+  if (!accept && !await ask('거절하면 이 계정이 삭제됩니다. 거절합니까?')) return;
+  await api('POST', '/api/approve', { user_id: id, accept }); toast(accept ? '승인했습니다.' : '거절했습니다.'); await refresh();
+});
+const kick = guard(async (id) => {
+  const r = ranking.find((x) => x.id === id);
+  if (!await ask(`'${r ? r.name : '이 멤버'}' 계정을 추방합니까?\n계정과 칩이 삭제됩니다.`)) return;
+  await api('POST', '/api/kick', { user_id: id }); toast('추방했습니다.'); await refresh();
+});
+let lastPending = 0;
+const loginForm = () => `
+  <input id="n" placeholder="사용할 닉네임 (12자 이내)" maxlength="12" autocomplete="off" onkeydown="if(event.key==='Enter')auth()">
+  <button class="pri" style="width:100%;margin-top:6px" onclick="auth()">입장하기</button>`;
+function authView() {
+  if (ENG_ERR) return `<div class="card"><h2>🔒 입장할 수 없습니다</h2><p class="mute">${esc(ENG_ERR)}</p></div>`;
+  if (!ENGINE) return '<div class="card"><p class="mute">불러오는 중…</p></div>';
+  return `<div class="card"><h2>들어가기</h2><p class="mute">초대받은 사람끼리 쓰는 도박장입니다. 사용할 닉네임을 정하면 1000🪙이 지급됩니다. 이기면 낮은 확률로 🍀 럭키 보너스가 발생합니다. (실제 돈과 무관한 사이트 전용 칩)</p>${loginForm()}</div>`;
+}
+const auth = guard(async () => {
+  const r = await ENGINE.enter($('#n').value);
+  if (r.error) throw new Error(r.error);
+  token = r.data.token; render(); await refresh();
+});
+const rename = guard(async () => {
+  const n = await askText('새 닉네임 (12자 이내)', user.name);
+  if (n === null || !n.trim() || n.trim() === user.name) return;
+  await api('POST', '/api/nickname', { name: n }); toast('닉네임이 바뀌었습니다!'); await refresh();
+});
+
+/* ---------- 채팅 ---------- */
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const openChat = (betId) => { chatBet = betId; chatMsgs = []; lastChatId = 0; tab = 'chat'; render(); window.scrollTo(0, 0); };
+function chatView() {
+  const b = bets.find((x) => x.id === chatBet);
+  if (!b) return `<div class="card"><p class="mute">이 도박을 찾을 수 없습니다.</p><button onclick="go('bets')">← 목록으로</button></div>`;
+  return `<div class="card"><div class="row"><button onclick="go('bets')">← 목록</button><span class="mute">${statusText(b)} · 총 ${b.total}🪙</span></div>
+  <h2 style="margin-top:8px">💬 ${esc(b.title)}</h2><div class="mute">이 도박을 보고 있는 사람들끼리 이야기합니다.</div><div id="chatbox"></div>
+  <div class="betrow"><input id="ci" maxlength="200" placeholder="메시지 입력…" autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()"><button class="pri" onclick="sendChat()">전송</button></div></div>`;
+}
+function renderChat() {
+  const box = $('#chatbox'); if (!box) return;
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.innerHTML = chatMsgs.map((m) => `<div class="cm ${m.mine ? 'me' : ''}"><div class="cn" style="color:${m.color || `hsl(${hue(m.name)} 90% 70%)`}">${nm(m)}</div><div class="cb">${esc(m.text)}</div></div>`).join('') || '<p class="mute">첫 메시지를 남겨보십시오 👋</p>';
+  if (near || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = 1; }
+}
+let chatPolling = false;
+async function pollChat() {
+  if (!token || tab !== 'chat' || !chatBet || chatPolling) return;
+  chatPolling = true;
+  try { await pollChatBody(); } finally { chatPolling = false; }
+}
+async function pollChatBody() {
+  if (!token || tab !== 'chat' || !chatBet) return;
+  const bid = chatBet;
+  try {
+    const rows = await api('GET', '/api/chat?bet=' + bid + '&after=' + lastChatId);
+    if (bid !== chatBet) return;   // 응답이 오는 사이 다른 방으로 옮겼으면 버림
+    if (!lastChatId) chatMsgs = []; // 처음 불러올 때는 최근 기록으로 교체
+    if (rows.length) { chatMsgs = chatMsgs.concat(rows).slice(-150); lastChatId = rows[rows.length - 1].id; renderChat(); }
+    else if (!chatMsgs.length) renderChat();
+  } catch (e) { /* 무시 */ }
+}
+const sendChat = guard(async () => {
+  const i = $('#ci'); const text = i.value.trim(); if (!text) return;
+  i.value = '';
+  await api('POST', '/api/chat', { bet_id: chatBet, text }); await pollChat();
+});
+setInterval(() => { if (!document.hidden) pollChat(); }, 1500);
+
+// 진행 중·마감 대기 도박은 위에, 끝난(확정/취소) 도박은 맨 아래로 (각 그룹 안에서는 서버가 준 순서 유지)
+const isDone = (b) => b.status === 'resolved' || b.status === 'cancelled';
+const sortBets = (list) => [...list.filter((b) => !isDone(b)), ...list.filter(isDone)];
+function statusText(b) {
+  if (b.status === 'open') return b.closes_at ? '마감 ' + new Date(b.closes_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '진행 중';
+  return { closed: '마감됨 (결과 대기)', resolved: '결과 확정', cancelled: '취소/환불' }[b.status];
+}
+function betView(b) {
+  const open = b.status === 'open';
+  const opts = b.options.map((o, oi) => `
+    <div style="--c:var(--c${oi % 6})" class="opt ${o.underdog && b.status !== 'resolved' ? 'dog' : ''} ${b.winner === o.id ? 'won' : ''}">
+      <div class="row"><span class="lbl">${b.winner === o.id ? '🏆 ' : ''}${esc(o.label)}${o.underdog && !b.winner ? '<span class="tag">역배</span>' : ''}${o.my_amount ? `<span class="tag s">내 ${o.my_amount}🪙</span>` : ''}</span>
+        <span class="mute">${o.pool}🪙 · ${o.bettors}명 · ${o.multiplier ? '×' + o.multiplier : '-'}</span></div>
+      <div class="bar"><i style="width:${Math.round(o.share * 100)}%"></i></div>
+      ${open ? `<div class="betrow"><input id="a${o.id}" type="number" min="10" step="10" placeholder="걸 금액" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}><button class="pri" onclick="wager(${o.id})" ${b.options.some(x => x.id !== o.id && x.my_amount) ? 'disabled' : ''}>걸기</button></div>` : ''}
+      ${b.status === 'closed' && b.mine_created ? `<button onclick="act(${b.id},'resolve',${o.id})">이게 정답!</button>` : ''}
+    </div>`).join('');
+  let result = '';
+  if (b.my_total && (b.status === 'resolved' || b.status === 'cancelled')) {
+    const net = b.my_payout - b.my_total;
+    result = b.status === 'cancelled' ? `<p class="mute">환불됨 (${b.my_total}🪙)</p>` : `<p class="${net >= 0 ? 'win' : 'lose'}">${net >= 0 ? '+' : ''}${net}🪙 (${b.my_total}🪙 걸고 ${b.my_payout}🪙 받음)${b.my_lucky ? '<span class="lucky">🍀 럭키 보너스!</span>' : ''}</p>`;
+  }
+  const mgr = b.mine_created && (b.status === 'open' || b.status === 'closed') ? `<div class="betrow">
+    ${open ? `<button onclick="act(${b.id},'close')">지금 마감</button>` : ''}<button onclick="askThen('취소하고 전부 환불합니까?',()=>act(${b.id},'cancel'))">취소(환불)</button></div>` : '';
+  const chat = `<div class="betrow"><button style="flex:1" onclick="openChat(${b.id})">💬 채팅방 들어가기${b.chat_count ? ' (' + b.chat_count + ')' : ''}</button></div>`;
+  const done = b.status === 'resolved' || b.status === 'cancelled';
+  return `<div class="card${done ? ' done' : ''}"><h2>${esc(b.title)}</h2><div class="mute">${esc(b.creator)} 개설 · ${statusText(b)} · 총 ${b.total}🪙</div>${opts}${result}${chat}${mgr}</div>`;
+}
+const wager = guard(async (optionId) => {
+  const amount = Number($('#a' + optionId).value);
+  await api('POST', '/api/wager', { option_id: optionId, amount });
+  toast('걸었습니다! 🎲'); await refresh();
+});
+const act = guard(async (bet_id, action, option_id) => {
+  if (action === 'resolve' && !await ask('정답을 확정하면 되돌릴 수 없습니다. 맞납니까?')) return;
+  await api('POST', '/api/bets/action', { bet_id, action, option_id });
+  await refresh();
+});
+const aid = guard(async () => { await api('POST', '/api/aid'); toast('+100🪙!'); await refresh(); });
+
+function newView() {
+  return `<div class="card"><h2>도박 열기</h2>
+  <input id="t" placeholder="예) 오늘 점심 메뉴는?" maxlength="80">
+  <div id="os"><input class="o" placeholder="선택지 1"><input class="o" placeholder="선택지 2"></div>
+  <button onclick="addOpt()">+ 선택지 추가</button>
+  <input id="m" type="number" min="0" placeholder="몇 분 뒤 마감? (비우면 직접 마감)">
+  <p class="mute">도박을 연 사람이 마감 후 정답을 확정합니다. 공정하게 부탁합니다 🤝</p>
+  <button class="pri" onclick="create()">열기</button></div>`;
+}
+function addOpt() { if (document.querySelectorAll('.o').length < 6) $('#os').insertAdjacentHTML('beforeend', `<input class="o" placeholder="선택지 ${document.querySelectorAll('.o').length + 1}">`); }
+const create = guard(async () => {
+  await api('POST', '/api/bets', { title: $('#t').value, options: [...document.querySelectorAll('.o')].map((i) => i.value), closes_in_minutes: $('#m').value });
+  tab = 'bets'; toast('도박이 열렸습니다!'); await refresh();
+});
+/* ---------- 가위바위보 ---------- */
+const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { rock: '바위', paper: '보', scissors: '가위' };
+const setListMode = (m) => { listMode = m; render(); loadGame(); };
+const setCreateMode = (m) => { createMode = m; render(); };
+function modeToggle(mode, fn) {
+  const items = fn === 'setListMode' ? [['all', '📋 전체'], ['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기']]
+    : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
+    : fn === 'setGiftMode' ? [['drop', '💸 돈뿌리기'], ['beg', '🙏 구걸하기']]
+    : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
+  return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
+}
+const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
+function allView() {   // 도박장 기본 화면: 열려 있는 방을 종류별로 한꺼번에
+  const bs = bets.filter((b) => !isDone(b)).map(betView).join(''), r = rpsRooms(), l = lunRooms(), d = ladRooms();
+  const sec = (title, n, html) => (html ? `<h2 class="sec">${title} <span class="mute">${n}</span></h2>${html}` : '');
+  return sec('🎲 도박', bets.filter((b) => !isDone(b)).length, bs) + sec('✊ 가위바위보', rps.rooms.length, r) + sec('🤫 최저 유일 숫자', lun.rooms.length, l) + sec('🪜 사다리타기', lad.rooms.length, d)
+    || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>';
+}
+function rpsRooms() {
+  return rps.rooms.map((r) => r.mine
+    ? `<div class="room mine"><div class="row"><span>${nm(r.host)} <span class="tag s">내 방 · 대기 중</span></span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
+        <div class="mute">내가 낸 패: ${HAND[r.my_hand]} ${HAND_NAME[r.my_hand]} (상대에겐 보이지 않습니다)</div>
+        <button onclick="cancelRps(${r.id})">방 닫고 판돈 돌려받기</button></div>`
+    : `<div class="room"><div class="row"><span>${nm(r.host)}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
+        <div class="mute">하나 내면 바로 결판! 이기면 +${r.stake}, 지면 -${r.stake}, 비기면 그대로</div>
+        <div class="hands">${handBtns(r.id)}</div></div>`).join('');
+}
+function rpsLobby() {
+  const rooms = rpsRooms();
+  const rec = rps.recent.map((r) => {
+    const w = r.result === 'draw' ? '무승부' : esc(r.result === 'host' ? r.host.name : r.guest.name) + ' 승';
+    const mine = r.mine ? `<b class="${r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute'}">${r.net > 0 ? '+' : ''}${r.net}🪙</b>` : '';
+    return `<div class="rec ${r.mine ? 'me' : ''}"><span>${esc(r.host.name)} ${HAND[r.host_hand]} vs ${HAND[r.guest_hand]} ${esc(r.guest.name)}</span><span class="mute">${w} · ${r.stake}🪙</span>${mine}</div>`;
+  }).join('');
+  return `<div class="card"><h2>✊ 가위바위보</h2><div class="mute">한 명이 방을 열고 패를 정해 두면, 다른 사람이 들어와 하나 내는 순간 결판납니다. 판돈은 방을 열 때 맡겨집니다.</div></div>
+    ${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>'}
+    <div class="card"><h2>최근 결과</h2>${rec || '<p class="mute">아직 결과가 없습니다.</p>'}</div>`;
+}
+function rpsCreateView() {
+  return `<div class="card"><h2>가위바위보 방 만들기</h2>
+    <div class="mute">패를 먼저 골라 두고 기다리면, 다른 사람이 들어와 하나 내는 순간 결판납니다. 내 패는 결과가 나올 때까지 아무에게도 보이지 않습니다.</div>
+    <div class="hands pick">${['scissors', 'rock', 'paper'].map((h) => `<button class="hand ${createHand === h ? 'sel' : ''}" onclick="pickHand('${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('')}</div>
+    <input id="rs" type="number" min="10" step="10" placeholder="판돈 (10🪙 이상)">
+    <p class="mute">이기면 판돈의 2배를 받고, 지면 판돈을 잃고, 비기면 돌려받습니다. 12시간 동안 아무도 안 오면 자동으로 닫히고 돌려받습니다.</p>
+    <button class="pri" style="width:100%" onclick="createRps()">방 열기</button></div>`;
+}
+const pickHand = (h) => { const v = $('#rs') && $('#rs').value; createHand = h; render(); if (v && $('#rs')) $('#rs').value = v; };
+const createRps = guard(async () => {
+  if (!createHand) throw new Error('먼저 가위·바위·보 중에 하나를 골라주십시오.');
+  const stake = Number($('#rs').value);
+  await api('POST', '/api/rps/create', { hand: createHand, stake });
+  createHand = null; listMode = 'rps'; tab = 'bets'; toast('방을 열었습니다! 상대를 기다립니다 ✊'); await refresh();
+});
+const joinRps = guard(async (roomId, hand) => {
+  const room = rps.rooms.find((r) => r.id === roomId);
+  if (!await ask(`${room.stake}🪙 걸고 ${HAND[hand]} ${HAND_NAME[hand]}를 내시겠습니까?\n(이기면 +${room.stake}, 지면 -${room.stake}, 비기면 그대로)`)) return;
+  const r = await api('POST', '/api/rps/join', { room_id: roomId, hand });
+  markRpsSeen(r.id);
+  const head = `${HAND[hand]} vs ${HAND[r.host_hand]}`;
+  if (r.outcome === 'win') { toast(`${head}  이겼습니다! +${r.net}🪙 🎉`); }
+  else if (r.outcome === 'lose') toast(`${head}  졌습니다… ${r.net}🪙`);
+  else toast(`${head}  비겼습니다! 판돈은 그대로`);
+  await refresh();
+});
+const cancelRps = guard(async (id) => { await api('POST', '/api/rps/cancel', { room_id: id }); toast('방을 닫고 판돈을 돌려받았습니다'); await refresh(); });
+function markRpsSeen(id) { try { const a = JSON.parse(LS.get('rpsSeen') || '[]'); if (!a.includes(id)) LS.set('rpsSeen', JSON.stringify(a.concat(id))); } catch { /* 무시 */ } }
+function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으면 알려줌
+  const mine = rps.recent.filter((r) => r.mine);
+  const raw = LS.get('rpsSeen');
+  if (raw === null) { LS.set('rpsSeen', JSON.stringify(mine.map((r) => r.id))); return; }   // 첫 접속엔 알림 폭탄 방지
+  const seen = JSON.parse(raw), fresh = mine.filter((r) => !seen.includes(r.id));
+  if (!fresh.length) return;
+  LS.set('rpsSeen', JSON.stringify(seen.concat(fresh.map((r) => r.id))));
+  const f = fresh[0], other = f.host.name === user.name ? f.guest.name : f.host.name;
+  toast(`✊ ${other}님과 가위바위보: ${f.net > 0 ? '이겼습니다! +' + f.net + '🪙' : f.net < 0 ? '졌습니다 ' + f.net + '🪙' : '비겼습니다'}`);
+}
+
+/* ---------- 새 게임: 최저 유일 숫자 · 사다리타기 · 블랙잭 · 슬롯머신 ---------- */
+let lun = { rooms: [], recent: [] }, lad = { rooms: [], recent: [] }, bj = { game: null, recent: [], rules: { MIN_BET: 10, MAX_BET: 500 } }, slotData = null;
+let casinoMode = 'bj', createNum = null, createCap = 3, createSlots = 3, createSeat = null, watch = { lun: false, lad: false }, gamesInit = false;
+let slotUi = { reels: ['❔', '❔', '❔'], msg: '', busy: false };
+const curView = () => (tab === 'bets' ? listMode : tab === 'casino' ? casinoMode : tab === 'gift' ? giftMode : null);
+const setCasinoMode = (m) => { casinoMode = m; render(); loadGame(); };
+const rerenderKeep = () => { const v = {}; document.querySelectorAll('#app input').forEach((i) => { if (i.id) v[i.id] = i.value; }); render(); Object.keys(v).forEach((id) => { const e = document.getElementById(id); if (e) e.value = v[id]; }); };
+const NUMS = (fn, sel) => `<div class="nums">${Array.from({ length: 10 }, (_, i) => `<button class="num ${sel === i + 1 ? 'sel' : ''}" onclick="${fn}(${i + 1})">${i + 1}</button>`).join('')}</div>`;
+const netText = (n) => (n > 0 ? `+${n}🪙` : n < 0 ? `${n}🪙` : '±0');
+const netCls = (n) => (n > 0 ? 'win' : n < 0 ? 'lose' : 'mute');
+
+async function fetchLun() { lun = await api('GET', '/api/lun'); watch.lun = lun.rooms.some((r) => r.joined); notifyMulti('lun', lun.recent, '🤫 최저 유일 숫자'); }
+async function fetchLad() { lad = await api('GET', '/api/ladder'); watch.lad = lad.rooms.some((r) => r.joined); notifyMulti('lad', lad.recent, '🪜 사다리타기'); }
+function notifyMulti(kind, recent, label) {   // 내가 낀 방이 내가 없는 사이 결판났으면 알려줌
+  const key = 'seen_' + kind, mine = recent.filter((r) => r.mine), raw = LS.get(key);
+  if (raw === null) { LS.set(key, JSON.stringify(mine.map((r) => r.id))); return; }
+  const seen = JSON.parse(raw), fresh = mine.filter((r) => !seen.includes(r.id));
+  if (!fresh.length) return;
+  LS.set(key, JSON.stringify(seen.concat(fresh.map((r) => r.id))));
+  const f = fresh[0];
+  toast(`${label} 결과: ${f.net > 0 ? '이겼습니다! ' : f.net < 0 ? '졌습니다 ' : ''}${f.net === 0 ? '승자 없음, 판돈은 그대로' : netText(f.net)}`);
+}
+function markSeen(kind, id) { try { const k = 'seen_' + kind, a = JSON.parse(LS.get(k) || '[]'); if (!a.includes(id)) LS.set(k, JSON.stringify(a.concat(id))); } catch { /* 무시 */ } }
+async function loadGame() {
+  if (!token) return;
+  const view = curView();
+  try {
+    if (view === 'lun') await fetchLun();
+    else if (view === 'lad') await fetchLad();
+    else if (view === 'drop' || view === 'beg') { const d = await api('GET', '/api/gifts'); if (curView() !== view) return; gift = d; }
+    else if (view === 'all') await Promise.all([fetchLun(), fetchLad()]);
+    else if (view === 'bj') { const d = await api('GET', '/api/blackjack'); if (curView() !== 'bj') return; bj = d; }
+    else if (view === 'slots') { const d = await api('GET', '/api/slots'); if (curView() !== 'slots') return; slotData = d; }
+    else return;
+  } catch (e) { return; }
+  if (curView() === view && !(document.activeElement && document.activeElement.tagName === 'INPUT') && !slotUi.busy) render();
+}
+async function gamesTick() {
+  const view = curView();
+  if (!gamesInit) { gamesInit = true; try { await Promise.all([fetchLun(), fetchLad()]); } catch (e) { /* 무시 */ } }
+  else {
+    if (watch.lun && view !== 'lun' && view !== 'all') { try { await fetchLun(); } catch (e) { /* 무시 */ } }
+    if (watch.lad && view !== 'lad' && view !== 'all') { try { await fetchLad(); } catch (e) { /* 무시 */ } }
+  }
+  await loadGame();
+}
+
+/* ---- 🤫 최저 유일 숫자 ---- */
+const LUN_RULES = `<details %OPEN% class="rules"><summary><b>🤫 최저 유일 숫자란 무엇입니까?</b></summary>
+  <p>모두가 <b>1~10 중 숫자 하나를 몰래</b> 냅니다. 다 모이면 한꺼번에 공개됩니다.</p>
+  <p>같은 숫자를 낸 사람이 둘 이상이면 그 숫자는 <b>무효</b>입니다. 남은 숫자 중 <b>가장 작은 숫자</b>를 낸 사람이 <b>판돈 전부</b>를 가져갑니다.</p>
+  <p class="mute">예) A 1, B 1, C 3, D 7 → 1은 겹쳐서 무효 → 안 겹친 3·7 중 작은 3을 낸 <b>C 승</b></p>
+  <p class="mute">작은 숫자가 유리하지만 다들 그렇게 생각하니까 겹치기 쉽습니다. 상대의 속마음을 읽어보십시오. 전부 겹치면 승자가 없고 판돈은 돌려받습니다.</p></details>`;
+function lunRooms() {
+  return lun.rooms.map((r) => {
+    const seats = `<div class="seats">${Array.from({ length: r.cap }, (_, i) => `<span class="seat ${r.players[i] ? 'on' : ''}">${r.players[i] ? esc(r.players[i].name) : '빈자리'}</span>`).join('')}</div>`;
+    const body = r.joined
+      ? `<div class="mute">내가 낸 숫자: <b style="color:var(--cyan)">${r.my_num}</b> (다른 사람에겐 보이지 않습니다)</div>` + (r.mine ? `<div class="betrow"><button class="pri" onclick="startLun(${r.id})" ${r.count < LUN_MIN ? 'disabled' : ''}>지금 시작 (${r.count}명으로)</button><button onclick="cancelLun(${r.id})">방 닫고 환불</button></div>` : '')
+      : `<div class="mute">숫자를 눌러 참가하십시오 (${r.stake}🪙이 빠져나갑니다)</div>${NUMS('joinLun.bind(null,' + r.id + ')')}`;
+    return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
+      <div class="mute">${r.count}/${r.cap}명 · 다 모이면 바로 결과가 나옵니다</div>${seats}${body}</div>`;
+  }).join('');
+}
+function lunLobby() {
+  const rooms = lunRooms();
+  const rec = lun.recent.map((r) => `<div class="rec ${r.mine ? 'me' : ''}"><div>${r.players.map((p) => `<span class="pn ${p.unique ? 'uq' : ''} ${r.winner && p.name === r.winner.name ? 'win' : ''}">${esc(p.name)} ${p.num}</span>`).join('')}</div>
+    <span class="mute">${r.winner ? '🏆 ' + esc(r.winner.name) + ' 승 · 판돈 ' + (r.stake * r.players.length) + '🪙' : '겹쳐서 승자 없음 · 환불'}</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>`).join('');
+  return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>'}
+    <div class="card"><h2>최근 결과</h2><div class="mute">파란 테두리 = 안 겹친 숫자, 초록 = 승자</div>${rec || '<p class="mute">아직 결과가 없습니다.</p>'}</div>`;
+}
+const LUN_MIN = 3;
+const joinLun = guard(async (roomId, num) => {
+  const r = lun.rooms.find((x) => x.id === roomId);
+  if (!await ask(`${r.stake}🪙을 내고 숫자 ${num}으로 참가합니까?\n(숫자는 결과가 나올 때까지 아무에게도 보이지 않습니다)`)) return;
+  const res = await api('POST', '/api/lun/join', { room_id: roomId, num });
+  toast(res.resolved ? '자리가 다 차서 결과가 나왔습니다! 최근 결과를 확인하십시오' : '참가했습니다. 다른 사람들을 기다립니다');
+  await refresh(); await loadGame(); if (res.resolved) markSeen('lun', roomId);
+});
+const startLun = guard(async (id) => { await api('POST', '/api/lun/start', { room_id: id }); markSeen('lun', id); toast('시작했습니다! 최근 결과를 확인하십시오'); await refresh(); await loadGame(); });
+const cancelLun = guard(async (id) => { if (!await ask('방을 닫으면 참가자 모두에게 판돈이 환불됩니다. 닫습니까?')) return; await api('POST', '/api/lun/cancel', { room_id: id }); toast('방을 닫고 환불했습니다'); await refresh(); await loadGame(); });
+function lunCreateView() {
+  return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div><div class="card"><h2>🤫 최저 유일 숫자 방 만들기</h2>
+    <input id="lstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000🪙)">
+    <div class="mute" style="margin-top:8px">몇 명이 모이면 시작합니까? (방장이 3명 이상이면 먼저 시작할 수도 있습니다)</div>
+    <div class="nums n4">${[3, 4, 5, 6].map((n) => `<button class="num ${createCap === n ? 'sel' : ''}" onclick="pickCap(${n})">${n}명</button>`).join('')}</div>
+    <div class="mute">내 숫자 (비공개)</div>${NUMS('pickNum', createNum)}
+    <button class="pri" style="width:100%" onclick="createLun()">방 열기</button></div>`;
+}
+const pickCap = (n) => { createCap = n; rerenderKeep(); };
+const pickNum = (n) => { createNum = n; rerenderKeep(); };
+const createLun = guard(async () => {
+  if (!createNum) throw new Error('내 숫자를 먼저 골라주십시오.');
+  await api('POST', '/api/lun/create', { stake: Number($('#lstake').value), cap: createCap, num: createNum });
+  createNum = null; listMode = 'lun'; tab = 'bets'; toast('방을 열었습니다! 사람들을 기다립니다'); await refresh(); await loadGame();
+});
+
+/* ---- 🪜 사다리타기 ---- */
+const LAD_RULES = `<details %OPEN% class="rules"><summary><b>🪜 사다리타기란 무엇입니까?</b></summary>
+  <p>방장이 <b>인원(2~6명)과 판돈</b>을 정하고 방을 열습니다. 사람들이 <b>자리(번호)를 골라 앉습니다.</b> 모두 같은 판돈을 냅니다.</p>
+  <p><b>자리가 다 차는 순간</b> 사다리가 만들어지고, 아래쪽에서 <b>딱 한 칸이 당첨</b>으로 정해집니다. 그 칸에 도착한 사람이 <b>판돈 전부</b>를 가져갑니다.</p>
+  <p class="mute">사다리는 자리가 다 찬 뒤에야 만들어지니까 미리 알고 고를 수는 없습니다. 어느 자리든 당첨 확률은 똑같이 1/인원수입니다.</p></details>`;
+const LCOL = ['#22d3ee', '#ff2d95', '#ffb800', '#34f5a0', '#a855f7', '#ff6b3d'];
+function ladderSvg(r) {
+  const N = r.slots, R = r.rungs.length, W = Math.max(240, N * 62), H = 250, top = 38, bot = H - 40, gap = (bot - top) / R;
+  const x = (i) => 28 + i * (W - 56) / Math.max(1, N - 1), yy = (ri) => top + (ri + 0.5) * gap;
+  let g = '';
+  for (let i = 0; i < N; i++) g += `<line class="lv" x1="${x(i)}" y1="${top}" x2="${x(i)}" y2="${bot}"/>`;
+  r.rungs.forEach((row, ri) => row.forEach((i) => { g += `<line class="lr" x1="${x(i)}" y1="${yy(ri)}" x2="${x(i + 1)}" y2="${yy(ri)}"/>`; }));
+  r.seats.forEach((s) => {
+    const win = s.end === r.win_end, pts = [[x(s.path[0]), top]];
+    for (let ri = 0; ri < R; ri++) { pts.push([x(s.path[ri]), yy(ri)]); pts.push([x(s.path[ri + 1]), yy(ri)]); }
+    pts.push([x(s.path[R]), bot]);
+    g += `<polyline fill="none" stroke="${LCOL[s.slot % 6]}" stroke-width="${win ? 5 : 3}" stroke-opacity="${win ? 1 : .55}" stroke-linecap="round" stroke-linejoin="round" points="${pts.map((p) => p.join(',')).join(' ')}"/>`;
+    g += `<text x="${x(s.slot)}" y="${top - 14}" text-anchor="middle" font-size="11" fill="${LCOL[s.slot % 6]}">${esc(s.name.length > 4 ? s.name.slice(0, 4) + '…' : s.name)}</text>`;
+  });
+  for (let i = 0; i < N; i++) g += `<text x="${x(i)}" y="${bot + 22}" text-anchor="middle" font-size="${i === r.win_end ? 18 : 12}" fill="${i === r.win_end ? '#ffb800' : '#8d8aa8'}">${i === r.win_end ? '🏆' : '꽝'}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W + 40}px;display:block;margin:6px auto">${g}</svg>`;
+}
+function ladRooms() {
+  return lad.rooms.map((r) => {
+    const taken = r.seats.filter(Boolean).length;
+    const seats = `<div class="seats">${r.seats.map((s, i) => s ? `<span class="seat on ${s.mine ? 'mine' : ''}">${i + 1}번 ${esc(s.name)}</span>`
+      : r.joined ? `<span class="seat">${i + 1}번 빈자리</span>` : `<button class="seat free" onclick="joinLad(${r.id},${i})">${i + 1}번 앉기</button>`).join('')}</div>`;
+    return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.joined ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
+      <div class="mute">${taken}/${r.slots}명 · 자리가 다 차면 바로 사다리를 탑니다 ${r.joined ? '' : '· 앉으면 ' + r.stake + '🪙이 빠져나갑니다'}</div>${seats}
+      ${r.mine ? `<button onclick="cancelLad(${r.id})">방 닫고 환불</button>` : ''}</div>`;
+  }).join('');
+}
+function ladLobby() {
+  const rooms = ladRooms();
+  const rec = lad.recent.map((r) => `<div class="card sub ${r.mine ? 'me' : ''}"><div class="row"><span class="mute">🏆 ${esc(r.winner.name)} 당첨 · 판돈 ${r.stake * r.slots}🪙</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div>${ladderSvg(r)}</div>`).join('');
+  return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div>${rooms || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>'}
+    <h2 style="margin:16px 4px 0">최근 결과</h2>${rec || '<p class="mute">아직 결과가 없습니다.</p>'}`;
+}
+const joinLad = guard(async (roomId, slot) => {
+  const r = lad.rooms.find((x) => x.id === roomId);
+  if (!await ask(`${slot + 1}번 자리에 앉습니까? (${r.stake}🪙이 빠져나갑니다)\n자리가 다 차면 바로 결과가 나옵니다.`)) return;
+  const res = await api('POST', '/api/ladder/join', { room_id: roomId, slot });
+  toast(res.resolved ? '자리가 다 차서 사다리를 탔습니다! 결과를 확인하십시오' : '앉았습니다. 다른 사람들을 기다립니다');
+  await refresh(); await loadGame(); if (res.resolved) markSeen('lad', roomId);
+});
+const cancelLad = guard(async (id) => { if (!await ask('방을 닫으면 앉은 사람 모두에게 판돈이 환불됩니다. 닫습니까?')) return; await api('POST', '/api/ladder/cancel', { room_id: id }); toast('방을 닫고 환불했습니다'); await refresh(); await loadGame(); });
+function ladCreateView() {
+  return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div><div class="card"><h2>🪜 사다리타기 방 만들기</h2>
+    <input id="dstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000🪙)">
+    <div class="mute" style="margin-top:8px">몇 명이 합니까?</div>
+    <div class="nums n5">${[2, 3, 4, 5, 6].map((n) => `<button class="num ${createSlots === n ? 'sel' : ''}" onclick="pickSlots(${n})">${n}명</button>`).join('')}</div>
+    <div class="mute">내가 앉을 자리</div>
+    <div class="nums n6">${Array.from({ length: createSlots }, (_, i) => `<button class="num ${createSeat === i ? 'sel' : ''}" onclick="pickSeat(${i})">${i + 1}번</button>`).join('')}</div>
+    <button class="pri" style="width:100%" onclick="createLad()">방 열기</button></div>`;
+}
+const pickSlots = (n) => { createSlots = n; if (createSeat !== null && createSeat >= n) createSeat = null; rerenderKeep(); };
+const pickSeat = (i) => { createSeat = i; rerenderKeep(); };
+const createLad = guard(async () => {
+  if (createSeat === null) throw new Error('내가 앉을 자리를 먼저 골라주십시오.');
+  await api('POST', '/api/ladder/create', { stake: Number($('#dstake').value), slots: createSlots, slot: createSeat });
+  createSeat = null; listMode = 'lad'; tab = 'bets'; toast('방을 열었습니다! 사람들을 기다립니다'); await refresh(); await loadGame();
+});
+
+/* ---- 혼자 하는 게임 하루 한도 안내 ---- */
+function soloBar(l) {
+  if (!l || (!(l.net_cap > 0) && !(l.plays_cap > 0))) return '';
+  const parts = [];
+  if (l.net_cap > 0) parts.push(`오늘 번 🪙 <b class="${netCls(l.net_today)}">${netText(l.net_today)}</b> / 하루 최대 +${l.net_cap}🪙 <span class="mute">(남은 한도 ${l.remaining}🪙)</span>`);
+  if (l.plays_cap > 0) parts.push(`오늘 한 판 ${l.plays_today} / ${l.plays_cap}번`);
+  const warn = l.blocked === 'net' ? '오늘 번 🪙이 한도에 도달했습니다! 내일 한국 시간 자정 이후에 다시 할 수 있습니다.' : l.blocked === 'plays' ? '오늘 할 수 있는 횟수를 다 썼습니다. 내일 다시 합니다.' : '';
+  return `<div class="limit">${parts.join('<br>')}${warn ? `<div class="lose" style="margin-top:4px">${warn}</div>` : ''}<div class="mute">블랙잭과 슬롯을 합쳐서 계산하고, 매일 한국 시간 자정에 초기화됩니다.</div></div>`;
+}
+
+/* ---- 🃏 블랙잭 ---- */
+const BJ_RULES = `<details %OPEN% class="rules"><summary><b>🃏 블랙잭 하는 법</b></summary>
+  <p><b>목표</b>: 카드 숫자의 합을 <b>21에 최대한 가깝게</b> 만들어서 딜러(컴퓨터)를 이기는 게임입니다. <b>21을 넘으면(버스트) 바로 집니다.</b></p>
+  <p><b>카드 점수</b>: 2~10은 적힌 숫자 그대로, <b>J·Q·K는 10</b>, <b>A는 1 또는 11</b>입니다(터지지 않는 쪽으로 자동 계산).</p>
+  <p><b>진행 순서</b></p>
+  <ol>
+    <li>건 돈(10~500🪙)을 정하고 시작하면, 나와 딜러가 카드를 2장씩 받습니다. <b>딜러의 카드 한 장은 뒤집혀서 보이지 않습니다.</b></li>
+    <li>내 차례에 고를 수 있는 것:
+      <ul><li><b>✋ 히트</b>: 카드 한 장 더 받기 (합이 21을 넘으면 패배, 정확히 21이면 자동으로 멈춥니다)</li>
+      <li><b>🛑 스탠드</b>: 더 안 받고 멈추기</li>
+      <li><b>✌️ 더블다운</b>: 건 돈을 <b>2배로 올리고 카드를 딱 한 장만</b> 받고 끝내기 (처음 받은 2장일 때만, 🪙이 모자라면 못 합니다)</li></ul></li>
+    <li>내가 멈추면 딜러가 카드를 공개합니다. 딜러는 <b>합이 16 이하면 계속 받고, 17 이상이면 멈춰야</b> 합니다. (딜러에게는 선택권이 없습니다)</li>
+  </ol>
+  <p><b>결과와 받는 돈</b></p>
+  <ul><li>내 합이 딜러보다 높거나 딜러가 21을 넘으면 <b>승리 → 건 돈의 2배</b>를 돌려받습니다 (순이익 +1배)</li>
+    <li>합이 같으면 <b>무승부 → 건 돈 그대로</b></li>
+    <li>내 합이 낮거나 21을 넘으면 <b>패배 → 건 돈을 잃습니다</b></li>
+    <li><b>🃏 블랙잭</b>: 처음 받은 2장이 <b>A + 10 카드(10·J·Q·K) = 21</b>이면 <b>건 돈의 2.5배</b>를 받습니다 (순이익 +1.5배, 3:2). 딜러도 블랙잭이면 무승부, 딜러만 블랙잭이면 바로 패배입니다.</li></ul>
+  <p class="mute"><b>예시</b> 100🪙을 걸었는데 나는 10 + 7 = 17, 딜러는 9(공개) + ?. 스탠드하니 딜러가 9 + 6 = 15 → 한 장 더 받아 K → 25로 버스트! → <b>승리, 200🪙 돌려받습니다 (+100)</b>.</p>
+  <p class="mute"><b>팁</b> 내 합이 11 이하면 히트해도 터지지 않습니다. 합이 17 이상이면 보통 스탠드. 딜러의 공개 카드가 2~6이면 딜러가 터지기 쉬우니 12~16에서도 멈추는 게 유리할 때가 많습니다.</p>
+  <p class="mute">※ 카드 나누기(스플릿)와 보험은 없습니다. 판마다 카드 한 벌(52장)을 새로 섞습니다. 서버가 카드를 정하고, 딜러의 뒤집힌 카드는 결과가 나오기 전까지 내 화면으로 보내지지도 않습니다.</p></details>`;
+const cardHtml = (c) => (c ? `<span class="pc ${c.red ? 'red' : ''}">${c.rank}${c.suit}</span>` : '<span class="pc back">?</span>');
+const BJ_MSG = { blackjack: ['🃏 블랙잭! 3:2로 받습니다', 'win'], win: ['이겼습니다!', 'win'], lose: ['졌습니다', 'lose'], push: ['무승부 · 건 돈을 돌려받습니다', 'mute'], bust: ['버스트! 21을 넘었습니다', 'lose'] };
+const OUT_TXT = { blackjack: '블랙잭', win: '승', lose: '패', push: '무', bust: '버스트' };
+function bjTable() {
+  const g = bj.game, active = g && g.status === 'playing', last = (g && g.bet) || 50;
+  let table = '';
+  if (g) {
+    const [msg, cls] = g.status === 'done' ? BJ_MSG[g.outcome] : ['', ''];
+    table = `<div class="mute">딜러 ${g.status === 'done' ? g.dv.total : g.dv.total + ' + ?'}${g.status === 'done' && g.dv.total > 21 ? ' (버스트)' : ''}</div><div class="hand-row">${g.dealer.map(cardHtml).join('')}</div>
+      <div class="mute" style="margin-top:8px">나 ${g.pv.total}${g.pv.soft && g.pv.total <= 21 ? ' (A를 11로 계산 중)' : ''} · 건 돈 ${g.wagered}🪙${g.doubled ? ' (더블다운)' : ''}</div><div class="hand-row">${g.player.map(cardHtml).join('')}</div>
+      ${g.status === 'done' ? `<p class="${cls}" style="font-size:18px;margin:10px 0 4px">${msg} <b>${netText(g.net)}</b></p>${g.capped ? '<div class="mute">⚠️ 오늘 한도에 도달해서 당첨금이 일부만 지급됐습니다.</div>' : ''}` : ''}`;
+  }
+  const actions = active
+    ? `<div class="betrow"><button class="pri" onclick="bjAct('hit')">✋ 히트</button><button class="pri" onclick="bjAct('stand')">🛑 스탠드</button>${g.can_double ? `<button onclick="bjAct('double')">✌️ 더블다운 (+${g.bet}🪙)</button>` : ''}</div>`
+    : `<div class="betrow" style="margin-top:10px"><input id="bjbet" type="number" min="${bj.rules.MIN_BET}" max="${bj.rules.MAX_BET}" step="10" value="${last}"><button class="pri" onclick="bjStart()" ${bj.limits && bj.limits.blocked ? 'disabled' : ''}>${g ? '새 판 시작' : '시작'}</button></div><div class="mute">건 돈 ${bj.rules.MIN_BET}~${bj.rules.MAX_BET}🪙</div>`;
+  const rec = bj.recent.length ? bj.recent.map((r) => `<div class="rec"><span>${OUT_TXT[r.outcome]}</span><span class="mute">${r.wagered}🪙 걸고</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없습니다.</p>';
+  return `<div class="card"><h2>🃏 블랙잭</h2>${soloBar(bj.limits)}${table || '<div class="mute">딜러와 21에 가까운 쪽이 이기는 카드 게임입니다. 처음이면 아래 설명을 먼저 읽어보십시오!</div>'}${actions}</div><div class="card">${BJ_RULES.replace('%OPEN%', bj.recent.length ? '' : 'open')}</div><div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
+}
+const bjStart = guard(async () => { bj = await api('POST', '/api/blackjack/start', { bet: Number($('#bjbet').value) }); bjAfter(); });
+const bjAct = guard(async (act) => {
+  if (act === 'double' && !await ask('건 돈을 2배로 올리고 카드 한 장만 받고 끝냅니다. 합니까?')) return;
+  bj = await api('POST', '/api/blackjack/' + act, {}); bjAfter();
+});
+async function bjAfter() { if (bj.game && bj.game.status === 'done') { const [m] = BJ_MSG[bj.game.outcome]; toast(`${m} ${netText(bj.game.net)}${bj.game.capped ? ' (오늘 한도까지만 지급)' : ''}`); } render(); await refresh(); }
+
+/* ---- 🎰 슬롯머신 ---- */
+function slotTable() {
+  if (!slotData) return '<p class="mute">불러오는 중…</p>';
+  const d = slotData, pay = d.symbols.map((s, i) => `<div class="row"><span style="font-size:20px">${s}${s}${s}</span><b class="pts">×${d.triple[i]}</b></div>`).join('');
+  const rec = d.recent.length ? d.recent.map((r) => `<div class="rec"><span>${r.reels.join(' ')}</span><span class="mute">${r.bet}🪙</span><b class="${netCls(r.net)}">${netText(r.net)}</b></div>`).join('') : '<p class="mute">아직 기록이 없습니다.</p>';
+  return `<div class="card"><h2>🎰 슬롯머신</h2><div class="mute">버튼을 누르면 릴 3개가 돌아갑니다. 건 돈 ${d.min}~${d.max}🪙.</div>
+    ${soloBar(d.limits)}<div class="reels">${slotUi.reels.map((s) => `<div class="reel">${s}</div>`).join('')}</div>
+    ${slotUi.msg ? `<p class="${slotUi.cls}" style="text-align:center;font-size:18px;margin:4px 0 10px">${slotUi.msg}</p>` : ''}
+    <div class="betrow"><input id="sbet" type="number" min="${d.min}" max="${d.max}" step="10" value="${slotUi.bet || 50}"><button class="pri" onclick="spinSlots()" ${slotUi.busy || (d.limits && d.limits.blocked) ? 'disabled' : ''}>🎰 돌리기</button></div></div>
+    <div class="card"><h2>배당표 <span class="mute">(건 돈의 몇 배를 돌려받는지)</span></h2>${pay}
+    <div class="row"><span style="font-size:20px">🍒🍒 <span class="mute" style="font-size:13px">(🍒 정확히 2개)</span></span><b class="pts">×${d.cherry2}</b></div>
+    <div class="row"><span style="font-size:20px">🍒 <span class="mute" style="font-size:13px">(🍒 정확히 1개)</span></span><b class="pts">×${d.cherry1}</b></div>
+    <p class="mute">그 외 조합은 꽝입니다. 그림이 나올 가능성은 🍒가 가장 높고 7️⃣이 가장 낮습니다. 오래 하면 평균적으로 건 돈의 약 91%를 돌려받습니다(딜러가 조금 유리합니다). 당첨금은 소수점 이하를 버립니다.</p></div>
+    <div class="card"><h2>내 최근 기록</h2>${rec}</div>`;
+}
+const spinSlots = guard(async () => {
+  if (slotUi.busy) return;
+  const bet = Number($('#sbet').value), syms = slotData.symbols;
+  slotUi.busy = true; slotUi.msg = ''; slotUi.bet = bet;
+  const t = setInterval(() => { document.querySelectorAll('.reel').forEach((e) => { e.textContent = syms[Math.floor(Math.random() * syms.length)]; }); }, 70);
+  try {
+    const [r] = await Promise.all([api('POST', '/api/slots/spin', { bet }), new Promise((res) => setTimeout(res, 800))]);
+    slotUi.reels = r.reels;
+    slotUi.msg = (r.mult > 0 ? `당첨! ×${r.mult} ${netText(r.net)}` : `아쉽습니다 ${netText(r.net)}`) + (r.capped ? ' · 오늘 한도까지만 지급' : ''); slotUi.cls = r.net > 0 ? 'win' : r.net < 0 ? 'lose' : 'mute';
+  } finally { clearInterval(t); slotUi.busy = false; }
+  await refresh(); try { slotData = await api('GET', '/api/slots'); } catch (e) { /* 무시 */ } render();
+});
+
+/* ---- 💸 돈뿌리기 / 🙏 구걸하기 ---- */
+let gift = { drops: [], drops_recent: [], begs: [], begs_recent: [], max: 1000, min: 10, count: { min: 2, max: 20 } }, giftMode = 'drop';
+const setGiftMode = (m) => { giftMode = m; render(); loadGame(); };
+const nameAmt = (rows) => rows.map((g) => `${nm(g)} ${g.amount.toLocaleString()}🪙`).join(' · ');
+function dropView() {
+  const open = gift.drops.map((d) => `<div class="room ${d.mine ? 'mine' : ''}"><div class="row"><span>${nm(d.host)} ${d.mine ? '<span class="tag s">내가 뿌림</span>' : ''}</span><b class="pts">${d.total.toLocaleString()}🪙</b></div>
+    <div class="mute">${d.cnt - d.left_cnt}/${d.cnt}명 수령${d.mine ? ` · 남은 금액 ${d.left_amt.toLocaleString()}🪙` : ''}</div>
+    ${d.got.length ? `<div class="mute">${nameAmt(d.got)}</div>` : ''}
+    ${d.mine ? `<button onclick="cancelDrop(${d.id})">닫고 남은 금액 회수</button>` : d.claimed ? `<b class="win">수령 +${d.my_amount.toLocaleString()}🪙</b>` : `<button class="pri" style="width:100%" onclick="claimDrop(${d.id})">받기</button>`}</div>`).join('') || '<p class="mute">뿌려진 돈이 없습니다.</p>';
+  const rec = gift.drops_recent.map((d) => `<div class="card sub"><div class="row"><span>${nm(d.host)}</span><b class="mute">${d.total.toLocaleString()}🪙 · ${d.cnt - d.left_cnt}/${d.cnt}명${d.status === 'expired' ? ' · 기간 만료' : ''}</b></div>
+    <div class="mute">${nameAmt(d.got)}</div></div>`).join('');
+  return `<div class="card"><h2>💸 돈뿌리기</h2>
+    <p class="mute">내 🪙을 지정한 인원에게 무작위로 나눠 뿌립니다. 먼저 받는 순서대로 가져가며 금액은 무작위입니다. 뿌리는 즉시 차감되고, 12시간 안에 남은 금액은 회수됩니다. 본인은 받을 수 없습니다.</p>
+    <input id="dtotal" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="뿌릴 금액 (${gift.min}~${gift.max}🪙)">
+    <input id="dcnt" type="number" min="${gift.count.min}" max="${gift.count.max}" placeholder="받을 인원 (${gift.count.min}~${gift.count.max}명)">
+    <button class="pri" style="width:100%" onclick="createDrop()">뿌리기</button></div>
+    ${open}${rec ? `<h2 style="margin:14px 2px 6px">최근 종료</h2>${rec}` : ''}`;
+}
+const createDrop = guard(async () => {
+  await api('POST', '/api/drop/create', { total: Number($('#dtotal').value), cnt: Number($('#dcnt').value) });
+  toast('뿌렸습니다.'); await refresh(); await loadGame();
+});
+const claimDrop = guard(async (id) => { const r = await api('POST', '/api/drop/claim', { id }); toast(`+${r.amount.toLocaleString()}🪙`); await refresh(); await loadGame(); });
+const cancelDrop = guard(async (id) => { if (!await ask('닫고 남은 금액을 회수합니까?')) return; const r = await api('POST', '/api/drop/cancel', { id }); toast(`${r.refund.toLocaleString()}🪙 회수`); await refresh(); await loadGame(); });
+function begView() {
+  const mineOpen = gift.begs.some((b) => b.mine);
+  const open = gift.begs.map((b) => `<div class="room ${b.mine ? 'mine' : ''}"><div class="row"><span>${nm(b.user)} ${b.mine ? '<span class="tag s">내 구걸</span>' : ''}</span><b class="pts">${b.got.toLocaleString()} / ${b.want.toLocaleString()}🪙</b></div>
+    ${b.msg ? `<div>${esc(b.msg)}</div>` : ''}
+    ${b.donors.length ? `<div class="mute">${nameAmt(b.donors)}</div>` : ''}
+    ${b.mine ? `<button onclick="cancelBeg(${b.id})">구걸 닫기</button>`
+      : `<div class="betrow"><input id="bg${b.id}" type="number" min="1" max="${b.want - b.got}" placeholder="줄 금액 (최대 ${b.want - b.got}🪙)"><button class="pri" onclick="giveBeg(${b.id})">주기</button></div>`}</div>`).join('') || '<p class="mute">구걸 중인 사람이 없습니다.</p>';
+  const rec = gift.begs_recent.map((b) => `<div class="card sub"><div class="row"><span>${nm(b.user)}</span><b class="mute">${b.want.toLocaleString()}🪙 달성</b></div><div class="mute">${nameAmt(b.donors)}</div></div>`).join('');
+  return `<div class="card"><h2>🙏 구걸하기</h2>
+    <p class="mute">필요한 금액을 올려 상대에게 🪙을 받습니다. 상대가 원하는 만큼 줄 수 있고, 목표 금액이 차면 자동으로 종료됩니다. 12시간이 지나면 닫힙니다. 동시에 하나만 올릴 수 있습니다.</p>
+    ${mineOpen ? '<p class="mute">구걸이 진행 중입니다.</p>' : `<input id="bwant" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="필요한 금액 (${gift.min}~${gift.max}🪙)">
+    <input id="bmsg" maxlength="40" placeholder="한마디 (선택, 40자 이내)">
+    <button class="pri" style="width:100%" onclick="createBeg()">구걸하기</button>`}</div>
+    ${open}${rec ? `<h2 style="margin:14px 2px 6px">최근 달성</h2>${rec}` : ''}`;
+}
+const createBeg = guard(async () => {
+  await api('POST', '/api/beg/create', { want: Number($('#bwant').value), msg: $('#bmsg').value });
+  toast('올렸습니다.'); await refresh(); await loadGame();
+});
+const giveBeg = guard(async (id) => {
+  const amount = Number($('#bg' + id).value);
+  if (!await ask(`${amount.toLocaleString()}🪙을 줍니까?`)) return;
+  await api('POST', '/api/beg/give', { id, amount }); toast(`-${amount.toLocaleString()}🪙`); await refresh(); await loadGame();
+});
+const cancelBeg = guard(async (id) => { await api('POST', '/api/beg/cancel', { id }); await refresh(); await loadGame(); });
+
+/* ---- 화면 조립 ---- */
+function bodyView() {
+  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
+  if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView }[createMode] || newView)();
+  if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
+  if (tab === 'gift') return modeToggle(giftMode, 'setGiftMode') + (giftMode === 'beg' ? begView() : dropView());
+  if (tab === 'chat') return chatView();
+  if (tab === 'shop') return shopView();
+  return rankView();
+}
+
+let shop = [], shopLoaded = false;
+const loadShop = guard(async () => { shop = await api('GET', '/api/shop'); shopLoaded = true; if (tab === 'shop') render(); });
+const SLOTS = [['title', '호칭', '이름 앞에 붙는 칭호'], ['color', '닉네임 색', '글자 색'], ['fx', '닉네임 효과', '효과가 있으면 색보다 우선'], ['badge', '배지', '이름 앞 이모지']];
+function shopView() {
+  if (!shopLoaded) return '<p class="mute">불러오는 중…</p>';
+  if (!shop.length) return `<div class="card" style="text-align:center"><h2>🛍 상점</h2><div style="font-size:44px;margin:10px 0">🔒</div><p>상점은 지금 <b>준비 중</b>입니다.</p><p class="mute">호칭, 닉네임 색, 배지 같은 꾸미기 아이템을 곧 열 거입니다. 조금만 기다려주십시오!</p></div>`;
+  const preview = (i) => nm(user, { [i.slot]: i.value });
+  return `<div class="card"><h2>🛍 상점</h2><div class="mute">내 모습: ${nm(user)} · 보유 <span class="pts">${user.points.toLocaleString()}🪙</span></div>
+  <p class="mute">사면 바로 장착됩니다. 칸마다 하나씩 장착할 수 있고, 한 번 산 건 언제든 바꿔 낄 수 있습니다.</p></div>` +
+  SLOTS.map(([slot, label, hint]) => `<div class="card"><h2>${label}</h2><div class="mute">${hint}</div>
+    <div class="items">${shop.filter((i) => i.slot === slot).map((i) => `<div class="item ${i.equipped ? 'eq' : ''}">
+      <div class="pv">${preview(i)}</div><div class="mute">${esc(i.name)}</div>
+      ${i.equipped ? `<button onclick="unequip('${slot}')">해제</button>`
+        : i.owned ? `<button class="pri" onclick="equip('${i.id}')">장착</button>`
+        : `<button class="pri" ${user.points < i.price ? 'disabled' : ''} onclick="buy('${i.id}')">${i.price.toLocaleString()}🪙</button>`}</div>`).join('')}</div></div>`).join('');
+}
+const afterShop = async () => { await loadShop(); await refresh(); };
+const buy = guard(async (id) => { await api('POST', '/api/shop/buy', { item_id: id }); toast('구매 완료! ✨'); await afterShop(); });
+const equip = guard(async (id) => { await api('POST', '/api/shop/equip', { item_id: id }); await afterShop(); });
+const unequip = guard(async (slot) => { await api('POST', '/api/shop/equip', { item_id: null, slot }); await afterShop(); });
+
+function rankView() {
+  return `${user && user.room ? `<div class="card"><div class="row"><span>🚪 도박장</span><span class="mute">${user.group_size}명 · 초대는 아티팩트의 공유 메뉴에서 합니다</span></div>
+    <div class="mute" style="margin-top:8px">👥 멤버</div><div class="members">${ranking.map((r) => `<span class="member ${r.name === user.name ? 'me' : ''}">${nm(r)}${user.is_owner && r.name !== user.name ? ` <button class="kick" title="추방" onclick="kick(${r.id})">✕</button>` : ''}</span>`).join('') || '<span class="mute">아직 나뿐입니다</span>'}</div></div>` : ''}<div class="card"><h2>랭킹</h2><table><tr><th>#</th><th>이름</th><th>승</th><th>패</th><th>🪙</th></tr>${ranking.map((r, i) =>
+    `<tr><td>${i + 1}</td><td>${nm(r)}</td><td>${r.wins}</td><td>${r.losses}</td><td><b>${r.points.toLocaleString()}🪙</b></td></tr>`).join('')}</table></div>`;
+}
+
+/* ===== 시작: 아티팩트 저장소 연결 ===== */
+let ENGINE = null, ENG_ERR = '';
+async function boot() {
+  try {
+    const c = window.claude;
+    if (!c || !c.use) throw new Error('Claude에서 열어야 합니다. 아티팩트 링크로 들어오십시오.');
+    const [db, userNs] = await Promise.all([c.use('db'), c.use('user')]);
+    if (!db || !userNs) throw new Error('이 페이지는 Claude에 로그인한 상태에서만 열립니다. 로그인한 뒤 다시 열어주십시오.');
+    const uid = await userNs.id();
+    if (!uid) throw new Error('계정 정보를 확인할 수 없습니다. 로그인한 뒤 다시 열어주십시오.');
+    const canWrite = await userNs.can('data.write');
+    if (canWrite === false) throw new Error('읽기 전용 권한입니다. 도박장 주인에게 "Contributor(참여자)" 권한으로 초대해 달라고 요청하십시오.');
+    const eng = new ArtifactEngine({ db, uid, isOwner: await userNs.isOwner(), makeGS });
+    await eng.start();
+    ENGINE = eng;
+    ENGINE.onChange(() => { if (!document.hidden) refresh(); });
+    if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
+  } catch (e) { ENG_ERR = e.message || '연결하지 못했습니다.'; }
+  render(); refresh();
+  setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+}
+boot();
+
+/* ===== 화면 안의 확인·입력 창 ===== */
+let modalQ = Promise.resolve();
+function showModal(opts) {
+  return new Promise((resolve) => {
+    modalQ = modalQ.then(() => new Promise((done) => {
+      const m = document.getElementById('modal');
+      m.innerHTML = `<div class="mbox"><div class="mmsg"></div>${opts.input ? '<input id="minput" autocomplete="off">' : ''}<div class="mbtn"><button id="mno">취소</button><button class="pri" id="myes">확인</button></div></div>`;
+      m.querySelector('.mmsg').textContent = opts.msg;
+      const inp = m.querySelector('#minput'); if (inp) inp.value = opts.def || '';
+      m.hidden = false;
+      const close = (v) => { m.hidden = true; m.innerHTML = ''; document.removeEventListener('keydown', onKey); resolve(v); done(); };
+      const onKey = (e) => { if (e.key === 'Escape') close(opts.input ? null : false); if (e.key === 'Enter' && inp) close(inp.value); };
+      document.addEventListener('keydown', onKey);
+      m.querySelector('#myes').onclick = () => close(opts.input ? inp.value : true);
+      m.querySelector('#mno').onclick = () => close(opts.input ? null : false);
+      (inp || m.querySelector('#myes')).focus();
+    }));
+  });
+}
+const ask = (msg) => showModal({ msg });
+const askText = (msg, def) => showModal({ msg, input: true, def });
+const askThen = async (msg, fn) => { if (await ask(msg)) fn(); };
+window.ask = ask; window.askText = askText; window.askThen = askThen;
+const openAdmin = () => { window.__adminMode = true; ADM.open(); };
+const closeAdmin = () => { window.__adminMode = false; ADM.close(); render(); };
+window.openAdmin = openAdmin; window.closeAdmin = closeAdmin;
+
+// 글자 🪙 → 게임칩 (화면에 새로 들어오는 글자마다 바꿈)
+(function () {
+  const walk = (root) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName)) hits.push(n);
+    for (const n of hits) {
+      const parts = n.nodeValue.split('🪙'), f = document.createDocumentFragment();
+      parts.forEach((t, i) => { if (i) { const c = document.createElement('i'); c.className = 'chip'; f.append(c); } if (t) f.append(t); });
+      n.replaceWith(f);
+    }
+  };
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
+})();
+
+const ADM = (function () {
+let timer = null;
+let data = null;
+
+async function api(method, url, body) {
+  const j = await ENGINE.call('', method, url, body || {});
+  if (j.error) { const e = new Error(j.error); e.code = j.code; throw e; }
+  return j.data;
+}
+const load = async () => { try { data = await api('GET', '/api/admin/overview'); render(); } catch (e) { $('#app').innerHTML = `<div class="row"><h1>🔒 관리자</h1><button onclick="closeAdmin()">← 도박장</button></div><div class="card">${esc(e.message)}<br><span class="mute">관리자 시트는 다른 사람에게 공유하지 마십시오.</span></div>`; } };
+
+const userAct = guard(async (user_id, action, value) => {
+  if (action === 'delete' && !await ask('이 유저를 삭제합니까?')) return;
+  await api('POST', '/api/admin/user', { user_id, action, value }); toast('완료'); await load();
+});
+const askPoints = async (id, action) => { const v = await askText(action === 'set_points' ? '새 칩?' : '더할 칩? (빼려면 -100)'); if (v !== null && v !== '') userAct(id, action, Number(v)); };
+const askName = async (id) => { const v = await askText('새 닉네임?'); if (v) userAct(id, 'rename', v); };
+const askPin = async (id) => { const v = await askText('새 PIN (공백 없이 4~16자). 방은 그대로입니다.'); if (v) userAct(id, 'reset_pin', v); };
+const askRoom = async (id) => { const v = await askText('옮길 방 코드 (글자/숫자 4~12자). 없는 코드면 방이 새로 만들어집니다.'); if (v) userAct(id, 'move_room', v); };
+const betAct = guard(async (bet_id, action, option_id) => {
+  const msg = { delete: '도박을 삭제합니까? (진행 중이면 환불)', cancel: '취소하고 전액 환불합니까?', resolve: '이 선택지를 정답으로 확정합니까?' }[action];
+  if (msg && !await ask(msg)) return;
+  await api('POST', '/api/admin/bet', { bet_id, action, option_id }); toast('완료'); await load();
+});
+const delMsg = guard(async (id) => { await api('POST', '/api/admin/chat', { id }); await load(); });
+const saveSettings = guard(async () => {
+  const values = {};
+  for (const sp of data.settings) {
+    const el = document.getElementById('st_' + sp.key);
+    if (sp.type === 'bool') values[sp.key] = el.checked;
+    else { const n = Number(el.value); if (el.value.trim() === '' || !Number.isInteger(n)) throw new Error(`${sp.label}: 정수를 넣어주십시오.`); values[sp.key] = n; }
+  }
+  await api('POST', '/api/admin/settings', { values }); toast('⚙️ 저장했습니다. 바로 적용됩니다'); await load();
+});
+const resetSetting = guard(async (key) => { await api('POST', '/api/admin/settings', { reset: [key] }); toast('기본값으로 되돌렸습니다'); await load(); });
+const resetAllSettings = guard(async () => {
+  if (!await ask('모든 설정을 기본값으로 되돌리시겠습니까?')) return;
+  await api('POST', '/api/admin/settings', { reset: data.settings.map((x) => x.key) }); toast('모두 기본값으로 되돌렸습니다'); await load();
+});
+const closeRoom = guard(async (kind, id) => {
+  if (!await ask('이 방을 닫습니까? 참가자 모두에게 판돈이 환불됩니다.')) return;
+  await api('POST', '/api/admin/room', { kind, room_id: id }); toast('방을 닫고 환불했습니다'); await load();
+});
+const delGroup = guard(async (i) => {
+  const g = data.groups[i];
+  const t = await askText(`⚠️ 방 "${g.label}"(${g.members.join(', ') || '비어 있음'})을 통째로 지웁니다.\n그 방의 계정·칩·도박·채팅·게임 기록이 전부 사라지고 되돌릴 수 없습니다.\n\n정말 지우려면 "삭제"라고 입력하십시오.`);
+  if (t !== '삭제') return;
+  const r = await api('POST', '/api/admin/group', { grp: g.id }); toast(`방을 지웠습니다 (계정 ${r.deleted_users}개)`); await load();
+});
+const gift = guard(async () => {
+  const v = Number($('#gift').value);
+  if (!await ask(`모든 유저에게 ${v}🪙을 지급하시겠습니까?`)) return;
+  await api('POST', '/api/admin/gift', { amount: v }); toast('🎁 지급 완료'); await load();
+});
+
+function render() {
+  const st = data.stats;
+  const S = { open: '진행', closed: '마감', resolved: '확정', cancelled: '취소' };
+  $('#app').innerHTML = `<div class="row"><h1 style="margin:0">🛠 관리자 콘솔</h1><button onclick="closeAdmin()">← 도박장</button></div>
+  <div class="stats">
+    <div class="stat">유저<b>${st.users}</b></div><div class="stat">유통 🪙<b>${st.points.toLocaleString()}</b></div>
+    <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}🪙</b></div>
+    <div class="stat">🍀 럭키 당첨<b>${st.lucky}</b></div></div>
+  <div class="card"><h2>⚙️ 설정 <span class="mute">(저장하면 바로 적용됩니다)</span></h2>
+    ${data.settings.map((sp) => `<div class="set"><div><b>${esc(sp.label)}</b><div class="mute">${esc(sp.hint || '')} · 기본값 ${sp.type === 'bool' ? (sp.default ? '켜짐' : '꺼짐') : sp.default}</div></div>
+      <div class="acts">${sp.type === 'bool' ? `<label class="sw"><input id="st_${sp.key}" type="checkbox" ${sp.value ? 'checked' : ''}> ${'켜기'}</label>` : `<input id="st_${sp.key}" type="number" min="${sp.min}" max="${sp.max}" value="${sp.value}">`}
+      ${sp.value !== sp.default ? `<button onclick="ADM.resetSetting('${sp.key}')" title="기본값으로">↺</button>` : ''}</div></div>`).join('')}
+    <div class="acts" style="margin-top:10px"><button class="pri" onclick="ADM.saveSettings()">저장</button><button onclick="ADM.resetAllSettings()">전부 기본값으로</button></div></div>
+  <div class="card"><h2>🚪 방 <span class="mute">(방 코드가 같은 사람들끼리)</span></h2>${data.groups.map((g, i) => `<div class="item2"><div><span class="tag">방 ${esc(g.label)}</span> <b>${g.count}명</b> <span class="mute">· 칩 합 ${g.points.toLocaleString()} · 도박 ${g.bets}개 · 열린 게임 방 ${g.rooms}개</span>
+      <div class="mute">${g.members.map(esc).join(', ')}</div></div><button class="danger" onclick="ADM.delGroup(${i})">방 삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>
+  <div class="card"><h2>🎮 열려 있는 게임 방 <span class="mute">(참가자를 기다리는 중 · 낸 패/숫자는 보이지 않습니다)</span></h2>${data.rooms.map((r) => `<div class="item2"><div><span class="tag">${{ rps: '✊ 가위바위보', lun: '🤫 최저 유일 숫자', lad: '🪜 사다리' }[r.kind]}</span> <b>${esc(r.host)}</b> <span class="mute">· 판돈 ${r.stake}🪙 · ${r.players.length}/${r.cap}명 · 방 ${esc(r.grp || '없음')} · ${new Date(r.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+      <div class="mute">${r.players.map(esc).join(', ')}</div></div><button class="danger" onclick="ADM.closeRoom('${r.kind}',${r.id})">닫기(환불)</button></div>`).join('') || '<p class="mute">열려 있는 게임 방이 없습니다.</p>'}</div>
+  <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="지급할 🪙"> <button class="pri" onclick="ADM.gift()">모두에게 주기</button></div>
+  <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b> ${u.approved === 0 ? '<span class="tag" style="color:var(--dog)">승인 대기</span> <button class="pri" onclick="ADM.userAct(' + u.id + ',\'approve\')">승인</button>' : ''} ${u.grp ? `<span class="tag" title="방 코드">방 ${esc(u.grp)}</span>` : '<span class="tag">방 없음</span>'}</td><td>${u.points.toLocaleString()}🪙</td><td><div class="acts">
+    <button onclick="ADM.askPoints(${u.id},'add_points')">± 더하기</button><button onclick="ADM.askPoints(${u.id},'set_points')">= 설정</button>
+    <button onclick="ADM.askName(${u.id})">닉네임</button><button onclick="ADM.userAct(${u.id},'clear_device')" title="이 계정에 묶인 기기를 풀어, 그 기기에서 새 계정을 만들 수 있게 합니다">기기 해제</button><button onclick="ADM.askPin(${u.id})">PIN 초기화</button><button onclick="ADM.askRoom(${u.id})">방 변경</button><button class="danger" onclick="ADM.userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>
+  <div class="card"><h2>💬 최근 채팅</h2>${data.messages.map((m) => `<div class="mute"><b style="color:var(--cyan)">${esc(m.name)}</b>${m.bet_title ? ` <span class="tag">${esc(m.bet_title)}</span>` : ''}: ${esc(m.text)} <button class="danger" style="padding:0 6px" onclick="ADM.delMsg(${m.id})">삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>
+  <div class="card"><h2>도박</h2>${data.bets.map((b) => `<div style="border-bottom:1px solid var(--line);padding:8px 0">
+    <b>${esc(b.title)}</b> <span class="tag">${S[b.status]}</span> <span class="mute">by ${esc(b.creator)} · 총 ${b.total}🪙</span>
+    <div class="opts mute">${b.options.map((o) => `${b.winner === o.id ? '🏆' : ''}${esc(o.label)} (${o.pool}🪙/${o.bettors}명) ${b.status === 'open' || b.status === 'closed' ? `<button onclick="ADM.betAct(${b.id},'resolve',${o.id})">정답</button>` : ''}`).join(' · ')}</div>
+    <div class="acts" style="margin-top:4px">${b.status === 'open' ? `<button onclick="ADM.betAct(${b.id},'close')">마감</button>` : ''}${b.status === 'open' || b.status === 'closed' ? `<button onclick="ADM.betAct(${b.id},'cancel')">취소(환불)</button>` : ''}<button class="danger" onclick="ADM.betAct(${b.id},'delete')">삭제</button></div></div>`).join('') || '<p class="mute">도박이 없습니다.</p>'}</div>`;
+}
+
+
+
+return { resetSetting, saveSettings, resetAllSettings, delGroup, closeRoom, gift, userAct, askPoints, askName, askPin, askRoom, delMsg, betAct, open() { load(); timer = setInterval(() => { if (document.activeElement?.tagName !== 'INPUT' && !document.hidden) load(); }, 5000); }, close() { clearInterval(timer); } };
+})();
+</script>
