@@ -75,10 +75,8 @@ srv.listen(3140, async () => {
     for (const tabName of ['🎲 게임', '➕ 만들기', '🎰 카지노', '💸 나눔', '🛍 상점', '랭킹']) { await A.click('button:has-text("' + tabName + '")'); await A.waitForTimeout(300); leftovers.push(...await scan(A)); }
     await A.click('button:has-text("💸 나눔")'); await A.click('button:has-text("🙏 구걸하기")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
     await A.click('button:has-text("🎲 게임")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
-    await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔'); await A.waitForTimeout(500); leftovers.push(...await scan(A)); await A.click('button:has-text("← 도박장")');
     console.log('남은 🪙 글자:', JSON.stringify(leftovers));
-    await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
-    await A.screenshot({ path: process.env.SC + '/art_admin.png' });
+    console.log('소유자에게도 관리 버튼 없음:', (await A.$('button:has-text("⚙️ 관리")')) === null);
     console.log('B 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null);
     console.log('오류:', errs);
   } catch (e) { console.error('실패:', e.message, errs); process.exitCode = 1; }

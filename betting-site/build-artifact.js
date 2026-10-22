@@ -51,6 +51,7 @@ script = rep(script, 'function render() {\n', 'function render() {\n  if (window
 script = rep(script, '}, 4000); // 앱스 스크립트는 호출이 느려서 간격을 넉넉히', '}, 1500);');
 script = cut(script, '(async () => {\n  render(); refresh();', '// 글자 🪙 → 게임칩', `/* ===== 시작: 아티팩트 저장소 연결 ===== */
 let ENGINE = null, ENG_ERR = '';
+const ADMIN_ENABLED = ${process.env.ADMIN_ENABLED === '1' ? 'true' : 'false'};   // false: 소유자 계정도 관리자 기능(관리 버튼·설정·유저 관리)을 쓰지 않음
 async function boot() {
   try {
     const c = window.claude;
@@ -61,7 +62,7 @@ async function boot() {
     if (!uid) throw new Error('계정 정보를 확인할 수 없습니다. 로그인한 뒤 다시 열어주십시오.');
     const canWrite = await userNs.can('data.write');
     if (canWrite === false) throw new Error('읽기 전용 권한입니다. 도박장 주인에게 "Contributor(참여자)" 권한으로 초대해 달라고 요청하십시오.');
-    const eng = new ArtifactEngine({ db, uid, isOwner: await userNs.isOwner(), makeGS });
+    const eng = new ArtifactEngine({ db, uid, isOwner: ADMIN_ENABLED && (await userNs.isOwner()), makeGS });
     await eng.start();
     ENGINE = eng;
     ENGINE.onChange(() => { if (!document.hidden) refresh(); });
