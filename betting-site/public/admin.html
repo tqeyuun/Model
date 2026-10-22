@@ -136,6 +136,7 @@ load(); setInterval(() => { if (document.activeElement?.tagName !== 'INPUT') loa
 // 글자 🪙 → 게임칩 (화면에 새로 들어오는 글자마다 바꿈)
 (function () {
   const walk = (root) => {
+    if (!root || !root.textContent || !root.textContent.includes('🪙')) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [];
     for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName)) hits.push(n);
     for (const n of hits) {

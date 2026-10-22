@@ -66,13 +66,13 @@ async function boot() {
     const eng = new ArtifactEngine({ db, uid, isOwner: ADMIN_ENABLED && (await userNs.isOwner()), makeGS });
     await eng.start();
     ENGINE = eng;
-    ENGINE.onChange(() => { if (!document.hidden) refresh(); });
+    let soon = null; ENGINE.onChange(() => { if (document.hidden || soon) return; soon = setTimeout(() => { soon = null; refresh(); }, 250); });   // 바뀔 때 바로 반영하되 너무 자주는 그리지 않음
     if (ENGINE.isOwner) { window.__adminOnly = true; window.__adminMode = true; }   // 소유자는 게임에 참가하지 않고 관리만 함
     else if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
   } catch (e) { ENG_ERR = e.message || '연결하지 못했습니다.'; }
   if (window.__adminOnly) { renderHeader(); ADM.open(); } else render();
   refresh();
-  setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  setInterval(() => { if (!document.hidden) refresh(); }, 10000);   // 실시간 반영이 주고, 이건 놓친 것을 채우는 보험
 }
 boot();
 
@@ -99,8 +99,8 @@ const ask = (msg) => showModal({ msg });
 const askText = (msg, def) => showModal({ msg, input: true, def });
 const askThen = async (msg, fn) => { if (await ask(msg)) fn(); };
 window.ask = ask; window.askText = askText; window.askThen = askThen;
-const openAdmin = () => { window.__adminMode = true; ADM.open(); };
-const closeAdmin = () => { window.__adminMode = false; ADM.close(); render(); };
+const openAdmin = () => { window.__adminMode = true; lastHtml = null; ADM.open(); };
+const closeAdmin = () => { window.__adminMode = false; lastHtml = null; ADM.close(); render(); };
 window.openAdmin = openAdmin; window.closeAdmin = closeAdmin;
 
 `);

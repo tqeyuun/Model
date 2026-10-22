@@ -2069,14 +2069,17 @@ async function refreshBody() {
   } catch (e) { /* 401 이면 logout 처리됨 */ }
 }
 
+let lastHtml = null, betsLimit = 20;
 function render() {
   if (window.__adminMode) { renderHeader(); return; }
   if (window.__bbPlaying && tab === 'bets' && listMode === 'bb') { renderHeader(); return; }   // 블록 블라스트를 하는 중에는 화면을 다시 그리지 않음 (끌던 블록이 사라지지 않게)
   renderHeader();
-  $('#app').innerHTML = !token ? authView() : user && user.pending ? pendingView() : `
+  const html = !token ? authView() : user && user.pending ? pendingView() : `
     ${approveCard()}<div class="tabs">${[['bets','🎲 게임'],['new','➕ 만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
     ${bodyView()}`;
+  if (html === lastHtml && document.getElementById('app').firstChild) return;   // 그릴 내용이 그대로면 건드리지 않음 (끊김·입력 지워짐 방지)
+  lastHtml = html; $('#app').innerHTML = html;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
   if (token && tab === 'bets' && listMode === 'bb') bbAttach();
 }
@@ -2663,7 +2666,7 @@ const BB = (function () {
     e.preventDefault();
     const p = pieces[i], size = cellPx(), g = pieceEl(p, size, 3);
     ghostEl.innerHTML = ''; ghostEl.appendChild(g); ghostEl.style.display = 'block';
-    drag = { i, p, w: g.offsetWidth, h: g.offsetHeight, lift: e.pointerType === 'mouse' ? 0 : Math.round(size * 1.6), target: null };
+    drag = { i, p, w: g.offsetWidth, h: g.offsetHeight, lift: e.pointerType === 'mouse' ? 0 : Math.round(size * 1.6), target: null, br: boardEl.getBoundingClientRect(), cs: size + 3, key: null };
     moveDrag(e);
     document.addEventListener('pointermove', moveDrag); document.addEventListener('pointerup', endDrag); document.addEventListener('pointercancel', cancelDrag);
   }
@@ -2672,9 +2675,10 @@ const BB = (function () {
     if (!drag) return;
     const cx = e.clientX, cy = e.clientY - drag.lift;
     ghostEl.style.transform = `translate(${Math.round(cx - drag.w / 2)}px,${Math.round(cy - drag.h / 2)}px)`;
-    const br = boardEl.getBoundingClientRect(), cs = cellPx() + 3;
+    const br = drag.br, cs = drag.cs;
     const c = Math.round((cx - drag.w / 2 - br.left - 8) / cs), r = Math.round((cy - drag.h / 2 - br.top - 8) / cs);
-    clearPreview(); drag.target = null;
+    if (drag.key === r + ',' + c) return;   // 같은 칸 위에서는 미리보기를 다시 계산하지 않음
+    drag.key = r + ',' + c; clearPreview(); drag.target = null;
     if (r < -1 || c < -1 || r > N || c > N) return;
     const s = drag.p.shape, ok = fits(board, s, r, c);
     s.cells.forEach(([dy, dx]) => { const y = r + dy, x = c + dx; if (y >= 0 && x >= 0 && y < N && x < N) { const el = cells[y * N + x]; el.classList.add(ok ? 'ok' : 'bad'); if (ok) el.style.setProperty('--k', `var(--b${drag.p.color})`); } });
@@ -2820,7 +2824,7 @@ function bbAttach() {
 
 /* ---- 화면 조립 ---- */
 function bodyView() {
-  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'bb' ? bbView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
+  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'bb' ? bbView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).slice(0, betsLimit).map(betView).join('') + (bets.length > betsLimit ? `<button style="width:100%" onclick="betsLimit += 20; render()">더 보기 (${bets.length - betsLimit}개 남음)</button>` : '') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
   if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView, bb: bbwCreateView }[createMode] || newView)();
   if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
   if (tab === 'gift') return modeToggle(giftMode, 'setGiftMode') + (giftMode === 'beg' ? begView() : dropView());
@@ -2872,13 +2876,13 @@ async function boot() {
     const eng = new ArtifactEngine({ db, uid, isOwner: ADMIN_ENABLED && (await userNs.isOwner()), makeGS });
     await eng.start();
     ENGINE = eng;
-    ENGINE.onChange(() => { if (!document.hidden) refresh(); });
+    let soon = null; ENGINE.onChange(() => { if (document.hidden || soon) return; soon = setTimeout(() => { soon = null; refresh(); }, 250); });   // 바뀔 때 바로 반영하되 너무 자주는 그리지 않음
     if (ENGINE.isOwner) { window.__adminOnly = true; window.__adminMode = true; }   // 소유자는 게임에 참가하지 않고 관리만 함
     else if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
   } catch (e) { ENG_ERR = e.message || '연결하지 못했습니다.'; }
   if (window.__adminOnly) { renderHeader(); ADM.open(); } else render();
   refresh();
-  setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  setInterval(() => { if (!document.hidden) refresh(); }, 10000);   // 실시간 반영이 주고, 이건 놓친 것을 채우는 보험
 }
 boot();
 
@@ -2905,13 +2909,14 @@ const ask = (msg) => showModal({ msg });
 const askText = (msg, def) => showModal({ msg, input: true, def });
 const askThen = async (msg, fn) => { if (await ask(msg)) fn(); };
 window.ask = ask; window.askText = askText; window.askThen = askThen;
-const openAdmin = () => { window.__adminMode = true; ADM.open(); };
-const closeAdmin = () => { window.__adminMode = false; ADM.close(); render(); };
+const openAdmin = () => { window.__adminMode = true; lastHtml = null; ADM.open(); };
+const closeAdmin = () => { window.__adminMode = false; lastHtml = null; ADM.close(); render(); };
 window.openAdmin = openAdmin; window.closeAdmin = closeAdmin;
 
 // 글자 🪙 → 게임칩 (화면에 새로 들어오는 글자마다 바꿈)
 (function () {
   const walk = (root) => {
+    if (!root || !root.textContent || !root.textContent.includes('🪙')) return;   // 바꿀 글자가 없으면 건너뜀
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null), hits = [];
     for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName)) hits.push(n);
     for (const n of hits) {
