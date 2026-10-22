@@ -132,7 +132,7 @@ const have = new Set(rules(css).map(([s]) => s));
 const extra = rules(admCss).filter(([s]) => !have.has(s) && !/^(:root|\*|body|main|html)$/.test(s)).map(([, r]) => r).join('\n');
 css += `\n:root{color-scheme:dark}
 /* 위쪽 배너 */
-.banner{display:block;max-width:640px;margin:12px auto 0;padding:0 14px}.banner img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+.banner{display:block;max-width:640px;margin:12px auto 0;padding:0 14px}.banner img{display:block;width:100%;height:auto;border-radius:0;border:0}
 /* 관리자 화면 */
 ${extra}
 /* 화면 안의 확인·입력 창 */
