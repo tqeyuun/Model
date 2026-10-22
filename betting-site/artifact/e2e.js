@@ -43,11 +43,12 @@ srv.listen(3140, async () => {
     await A.click('.bbover.on button:has-text("게임 시작")'); await A.waitForSelector('.bbslot .bbpc', { timeout: 20000 });
     const slot = await A.$('.bbslot:nth-child(1) .bbpc'), sb = await slot.boundingBox(), bb = await (await A.$('.bbboard')).boundingBox();
     await A.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2); await A.mouse.down(); await A.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2, { steps: 8 }); await A.mouse.up(); await A.waitForTimeout(3800);
+    console.log('시작하면 전체 화면:', await A.evaluate(() => document.getElementById('bbfull').classList.contains('on') && document.getElementById('bbfhost').contains(BB.root)));
     console.log('블록 놓은 뒤 판 유지:', await A.evaluate(() => document.querySelectorAll('.bbc.f').length), '칸, 점수', await A.textContent('.bbscore'));
     await A.screenshot({ path: process.env.SC + '/art_bb.png' });
     await A.evaluate(() => { BB.score = () => 1234; bbFinish(); }); await A.waitForSelector('.bbover.on .bbbig', { timeout: 20000 });
     await A.waitForFunction((c) => user.points === c + 123, chips0, { timeout: 20000 }); console.log('보상 지급:', chips0, '→', await A.evaluate(() => user.points), '|', (await A.textContent('.bbcard')).replace(/\s+/g, ' '));
-    await A.evaluate(() => BB.reset());   // 시험용 종료 흉내를 낸 뒤 판을 비움
+    await A.click('.bbcard button:has-text("나가기")'); console.log('전체 화면 닫힘:', await A.evaluate(() => !document.getElementById('bbfull').classList.contains('on')));
     await A.click('button:has-text("🎲 게임")');
     // 블록 블라스트 대결: A 가 방을 열고 B 가 참가 → 같은 블록 순서 → 점수 제출 → 높은 쪽이 판돈 전부
     const chipsA0 = await A.evaluate(() => user.points), chipsB0 = await B.evaluate(() => user.points);
@@ -67,6 +68,7 @@ srv.listen(3140, async () => {
     await B.evaluate(() => { BB.score = () => 700; bbFinish(); });
     await B.waitForSelector('.bbover.on:has-text("제출 완료")', { timeout: 20000 }).catch(async (e) => { console.log('B 카드:', (await B.textContent('.bbcard')).replace(/\s+/g, ' ')); throw e; });
     await A.evaluate(() => { BB.score = () => 300; bbFinish(); }); await A.waitForSelector('.bbover.on:has-text("제출 완료")', { timeout: 20000 });
+    await A.click('.bbcard button:has-text("나가기")'); await B.click('.bbcard button:has-text("나가기")');
     await B.waitForFunction((c) => user.points === c + 100, chipsB0 - 0, { timeout: 25000 }).catch(() => {});
     await A.waitForFunction((c) => user.points === c - 100, chipsA0, { timeout: 25000 }).catch(() => {});
     console.log('대결 결과 칩:', 'A', chipsA0, '→', await A.evaluate(() => user.points), '| B', chipsB0, '→', await B.evaluate(() => user.points), '(기대 A -100, B +100)');

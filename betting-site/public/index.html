@@ -113,6 +113,9 @@ button.seat.free{border-style:solid;border-color:var(--blue);color:var(--blue);c
 .bbfloat{position:absolute;left:50%;top:40%;font-weight:900;font-size:28px;color:var(--gold);text-shadow:0 2px 0 rgba(0,0,0,.6);pointer-events:none;animation:bbup .9s ease-out forwards;white-space:nowrap;z-index:6}.bbfloat.big{font-size:36px;color:#fff}
 @keyframes bbup{0%{opacity:0;transform:translate(-50%,10px) scale(.7)}15%{opacity:1;transform:translate(-50%,0) scale(1.1)}100%{opacity:0;transform:translate(-50%,-60px)}}
 .bbover{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,11,20,.85);border-radius:12px;z-index:8}.bbover.on{display:flex}
+ #bbfull{position:fixed;inset:0;z-index:8;background:var(--bg);display:none;flex-direction:column;overflow:auto;padding:env(safe-area-inset-top,0px) 14px env(safe-area-inset-bottom,0px)}
+#bbfull.on{display:flex}.bbfbar{display:flex;align-items:center;gap:10px;padding:10px 0}.bbfbar b{flex:1;text-align:center;font-size:17px}
+#bbfhost{flex:1;display:flex;align-items:center;justify-content:center}#bbfull .bbx{--cs:min(calc((100vw - 28px - 39px) / 8),52px);width:100%}
 .bbcard{background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:18px 20px;text-align:center;max-width:90%}.bbbig{font-size:38px;font-weight:900;line-height:1.1}
 /* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
 .chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
@@ -863,12 +866,12 @@ const BB = (function () {
   function begin(sd) { seed = sd == null ? null : sd >>> 0; setNo = 0; board = newBoard(); score = 0; combo = 0; busy = false; running = true; pieces = newPieces(); hideCard(); setScore(); paintBoard(); paintTray(); }
   buildBoard(); reset();
   window.addEventListener('resize', () => { if (!drag && pieces) paintTray(); });
-  return { root, begin, reset, showCard, hideCard, isRunning: () => running, setOnOver: (f) => { onOver = f; }, score: () => score, setScore };
+  return { root, begin, reset, showCard, hideCard, relayout: () => paintTray(), quit: () => { if (running) finish(); }, isRunning: () => running, setOnOver: (f) => { onOver = f; }, score: () => score, setScore };
 })();
 const bbHome = () => `<h2 style="margin:0 0 6px">혼자 하기</h2><p class="mute" style="margin:0 0 10px">끝나면 <b>점수 × ${bbData ? bbData.rate_pct / 100 : 0.1}</b>만큼 🪙을 받습니다. 시작하면 한 판으로 계산됩니다.</p><button class="pri" onclick="bbStart()">게임 시작</button>`;
 const bbStart = guard(async () => {
   const r = await api('POST', '/api/blockblast/start');
-  bbCur = { kind: 'solo', id: r.id }; window.__bbPlaying = true; BB.begin();
+  bbCur = { kind: 'solo', id: r.id }; window.__bbPlaying = true; BB.begin(); bbShowFull('혼자 하기');
 });
 const bbFinish = guard(async () => {
   const s = BB.score();
@@ -876,7 +879,7 @@ const bbFinish = guard(async () => {
   try {
     const r = await api('POST', '/api/blockblast/finish', { id: bbCur.id, score: s });
     window.__bbPlaying = false; bbCur = null;
-    BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.reward > 0 ? `<b class="win">+${r.reward.toLocaleString()}🪙</b> 지급${r.capped ? ' (오늘 한도까지만 지급)' : ''}` : '받은 🪙이 없습니다.'}</p><button class="pri" onclick="bbStart()">다시 하기</button>`);
+    BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.reward > 0 ? `<b class="win">+${r.reward.toLocaleString()}🪙</b> 지급${r.capped ? ' (오늘 한도까지만 지급)' : ''}` : '받은 🪙이 없습니다.'}</p><button class="pri" onclick="bbStart()">다시 하기</button> <button onclick="bbLeave()">나가기</button>`);
     toast(r.reward > 0 ? `블록 블라스트 +${r.reward.toLocaleString()}🪙` : '블록 블라스트 종료');
     await refresh(); bbData = await api('GET', '/api/blockblast'); if (tab === 'bets' && listMode === 'bb') render();
   } catch (e) {
@@ -936,21 +939,18 @@ const bbwStart = guard(async (id) => {
   if (window.__bbPlaying) throw new Error('이미 게임을 하는 중입니다.');
   if (!(await ask('시작하면 되돌릴 수 없고, 한 판만 할 수 있습니다. 모두 같은 블록 순서로 시작합니다. 시작합니까?'))) return;
   const r = await api('POST', '/api/bbwar/start', { room_id: id });
-  bbCur = { kind: 'war', id }; listMode = 'bb'; tab = 'bets'; render();
-  window.__bbPlaying = true; BB.begin(r.seed);
-  const h = document.getElementById('bbhost'); if (h && h.scrollIntoView) h.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  bbCur = { kind: 'war', id }; window.__bbPlaying = true; BB.begin(r.seed); bbShowFull('대결');
 });
 async function bbwSubmit(s) {
   try {
     const r = await api('POST', '/api/bbwar/submit', { room_id: bbCur.id, score: s });
     window.__bbPlaying = false; bbCur = null;
-    BB.showCard(`<h2 style="margin:0 0 4px">제출 완료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.resolved ? '모두 끝나서 결과가 나왔습니다. 아래 최근 결과를 확인하십시오.' : '다른 사람이 끝나면 결과가 나옵니다.'}</p><button class="pri" onclick="bbIdle()">확인</button>`);
+    BB.showCard(`<h2 style="margin:0 0 4px">제출 완료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.resolved ? '모두 끝나서 결과가 나왔습니다. 아래 최근 결과를 확인하십시오.' : '다른 사람이 끝나면 결과가 나옵니다.'}</p><button class="pri" onclick="bbLeave()">나가기</button>`);
     await refresh(); await fetchBbw(); if (tab === 'bets' && listMode === 'bb') render();
   } catch (e) {
     BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="lose" style="margin:4px 0 10px">점수를 제출하지 못했습니다: ${esc(e.message)}</p><button class="pri" onclick="bbFinish()">다시 시도</button>`);
   }
 }
-const bbIdle = () => { BB.reset(); BB.showCard(bbHome()); };
 const bbwForfeit = guard(async (id) => {
   if (!(await ask('이 판을 포기하고 0점으로 제출합니까?'))) return;
   await api('POST', '/api/bbwar/submit', { room_id: id, score: 0 }); await refresh(); await fetchBbw(); render();
@@ -959,7 +959,23 @@ const bbwClose = guard(async (id) => {
   if (!(await ask('지금 마감하면 점수를 내지 않은 사람은 판돈을 잃습니다. 마감합니까?'))) return;
   await api('POST', '/api/bbwar/close', { room_id: id }); toast('마감했습니다'); await refresh(); await fetchBbw(); render();
 });
+const bbFull = document.createElement('div'); bbFull.id = 'bbfull';
+bbFull.innerHTML = '<div class="bbfbar"><button onclick="bbQuit()">← 그만하기</button><b>🧱 블록 블라스트</b><span class="mute" id="bbfmode"></span></div><div id="bbfhost"></div>';
+document.body.appendChild(bbFull);
+function bbShowFull(label) {   // 시작하면 게임만 보이는 전체 화면으로
+  document.getElementById('bbfhost').appendChild(BB.root); document.getElementById('bbfmode').textContent = label;
+  bbFull.classList.add('on'); bbFull.scrollTop = 0; BB.relayout();
+}
+function bbLeave() {
+  bbFull.classList.remove('on'); window.__bbPlaying = false; BB.hideCard(); BB.reset(); bbCur = null;
+  render(); loadGame();
+}
+const bbQuit = guard(async () => {
+  if (BB.isRunning()) { if (await ask('지금까지의 점수로 끝냅니까?\n(끝낸 판은 이어서 할 수 없습니다)')) BB.quit(); }
+  else bbLeave();
+});
 function bbAttach() {
+  if (bbFull.classList.contains('on')) return;   // 전체 화면에서 게임 중이면 판을 가져오지 않음
   const h = document.getElementById('bbhost'); if (!h) return;
   h.appendChild(BB.root);
   if (!BB.isRunning() && !window.__bbPlaying && !document.querySelector('.bbover.on')) BB.showCard(bbHome());
