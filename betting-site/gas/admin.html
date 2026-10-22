@@ -36,8 +36,8 @@ h1,h2{font-family:var(--display);font-weight:400;letter-spacing:.3px}
 h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-spacing:0}
 /* 🪙 → 게임칩: 글자 🪙 가 화면에 들어오면 아래 스크립트가 이 칩 모양으로 바꿔 끼움 */
 .chip{display:inline-block;width:1.1em;height:1.1em;border-radius:50%;vertical-align:-.2em;margin:0 .1em;box-sizing:border-box;
-  background:radial-gradient(circle,#ff2d95 0 30%,#fff 31% 38%,#ff2d95 39% 47%,transparent 48%),repeating-conic-gradient(#fff 0 16deg,#b3125f 16deg 45deg);
-  border:.07em solid #fff;box-shadow:0 0 .5em rgba(255,45,149,.75),inset 0 0 .15em rgba(0,0,0,.45)}
+  background:radial-gradient(circle,#d62839 0 30%,#fff 31% 38%,#d62839 39% 47%,transparent 48%),repeating-conic-gradient(#fff 0 16deg,#a31621 16deg 45deg);
+  border:.07em solid #fff}
 </style>
 </head>
 <body>
@@ -125,7 +125,7 @@ function render() {
       <div class="mute">${g.members.map(esc).join(', ')}</div></div><button class="danger" onclick="delGroup(${i})">방 삭제</button></div>`).join('') || '<p class="mute">없음</p>'}</div>
   <div class="card"><h2>🎮 열려 있는 게임 방 <span class="mute">(참가자를 기다리는 중 · 낸 패/숫자는 보이지 않습니다)</span></h2>${data.rooms.map((r) => `<div class="item2"><div><span class="tag">${{ rps: '✊ 가위바위보', lun: '🤫 최저 유일 숫자', lad: '🪜 사다리' }[r.kind]}</span> <b>${esc(r.host)}</b> <span class="mute">· 판돈 ${r.stake}🪙 · ${r.players.length}/${r.cap}명 · 방 ${esc(r.grp || '없음')} · ${new Date(r.created_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
       <div class="mute">${r.players.map(esc).join(', ')}</div></div><button class="danger" onclick="closeRoom('${r.kind}',${r.id})">닫기(환불)</button></div>`).join('') || '<p class="mute">열려 있는 게임 방이 없습니다.</p>'}</div>
-  <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="지급할 🪙"> <button class="pri" onclick="gift()">모두에게 주기</button></div>
+  <div class="card"><h2>🎁 전체 지급</h2><input id="gift" type="number" placeholder="지급할 칩"> <button class="pri" onclick="gift()">모두에게 주기</button></div>
   <div class="card"><h2>유저</h2><table>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b> ${u.approved === 0 ? '<span class="tag" style="color:var(--dog)">승인 대기</span> <button class="pri" onclick="userAct(' + u.id + ',\'approve\')">승인</button>' : ''} ${u.grp ? `<span class="tag" title="방 코드">방 ${esc(u.grp)}</span>` : '<span class="tag">방 없음</span>'}</td><td>${u.points.toLocaleString()}🪙</td><td><div class="acts">
     <button onclick="askPoints(${u.id},'add_points')">± 더하기</button><button onclick="askPoints(${u.id},'set_points')">= 설정</button>
     <button onclick="askName(${u.id})">닉네임</button><button onclick="userAct(${u.id},'clear_device')" title="이 계정에 묶인 기기를 풀어, 그 기기에서 새 계정을 만들 수 있게 합니다">기기 해제</button><button onclick="askPin(${u.id})">PIN 초기화</button><button onclick="askRoom(${u.id})">방 변경</button><button class="danger" onclick="userAct(${u.id},'delete')">삭제</button></div></td></tr>`).join('')}</table></div>

@@ -380,7 +380,7 @@ function rpsCreateView() {
   return `<div class="card"><h2>가위바위보 방 만들기</h2>
     <div class="mute">패를 먼저 골라 두고 기다리면, 다른 사람이 들어와 하나 내는 순간 결판납니다. 내 패는 결과가 나올 때까지 아무에게도 보이지 않습니다.</div>
     <div class="hands pick">${['scissors', 'rock', 'paper'].map((h) => `<button class="hand ${createHand === h ? 'sel' : ''}" onclick="pickHand('${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('')}</div>
-    <input id="rs" type="number" min="10" step="10" placeholder="판돈 (10🪙 이상)">
+    <input id="rs" type="number" min="10" step="10" placeholder="판돈 (10칩 이상)">
     <p class="mute">이기면 판돈의 2배를 받고, 지면 판돈을 잃고, 비기면 돌려받습니다. 12시간 동안 아무도 안 오면 자동으로 닫히고 돌려받습니다.</p>
     <button class="pri" style="width:100%" onclick="createRps()">방 열기</button></div>`;
 }
@@ -500,7 +500,7 @@ const startLun = guard(async (id) => { await api('POST', '/api/lun/start', { roo
 const cancelLun = guard(async (id) => { if (!confirm('방을 닫으면 참가자 모두에게 판돈이 환불됩니다. 닫습니까?')) return; await api('POST', '/api/lun/cancel', { room_id: id }); toast('방을 닫고 환불했습니다'); await refresh(); await loadGame(); });
 function lunCreateView() {
   return `<div class="card">${LUN_RULES.replace('%OPEN%', lun.recent.length ? '' : 'open')}</div><div class="card"><h2>🤫 최저 유일 숫자 방 만들기</h2>
-    <input id="lstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000🪙)">
+    <input id="lstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000칩)">
     <div class="mute" style="margin-top:8px">몇 명이 모이면 시작합니까? (방장이 3명 이상이면 먼저 시작할 수도 있습니다)</div>
     <div class="nums n4">${[3, 4, 5, 6].map((n) => `<button class="num ${createCap === n ? 'sel' : ''}" onclick="pickCap(${n})">${n}명</button>`).join('')}</div>
     <div class="mute">내 숫자 (비공개)</div>${NUMS('pickNum', createNum)}
@@ -562,7 +562,7 @@ const joinLad = guard(async (roomId, slot) => {
 const cancelLad = guard(async (id) => { if (!confirm('방을 닫으면 앉은 사람 모두에게 판돈이 환불됩니다. 닫습니까?')) return; await api('POST', '/api/ladder/cancel', { room_id: id }); toast('방을 닫고 환불했습니다'); await refresh(); await loadGame(); });
 function ladCreateView() {
   return `<div class="card">${LAD_RULES.replace('%OPEN%', lad.recent.length ? '' : 'open')}</div><div class="card"><h2>🪜 사다리타기 방 만들기</h2>
-    <input id="dstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000🪙)">
+    <input id="dstake" type="number" min="10" max="1000" step="10" placeholder="판돈 (참가자 모두 같은 금액, 10~1000칩)">
     <div class="mute" style="margin-top:8px">몇 명이 합니까?</div>
     <div class="nums n5">${[2, 3, 4, 5, 6].map((n) => `<button class="num ${createSlots === n ? 'sel' : ''}" onclick="pickSlots(${n})">${n}명</button>`).join('')}</div>
     <div class="mute">내가 앉을 자리</div>
@@ -674,7 +674,7 @@ function dropView() {
     <div class="mute">${nameAmt(d.got)}</div></div>`).join('');
   return `<div class="card"><h2>💸 돈뿌리기</h2>
     <p class="mute">내 🪙을 지정한 인원에게 무작위로 나눠 뿌립니다. 먼저 받는 순서대로 가져가며 금액은 무작위입니다. 뿌리는 즉시 차감되고, 12시간 안에 남은 금액은 회수됩니다. 본인은 받을 수 없습니다.</p>
-    <input id="dtotal" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="뿌릴 금액 (${gift.min}~${gift.max}🪙)">
+    <input id="dtotal" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="뿌릴 금액 (${gift.min}~${gift.max}칩)">
     <input id="dcnt" type="number" min="${gift.count.min}" max="${gift.count.max}" placeholder="받을 인원 (${gift.count.min}~${gift.count.max}명)">
     <button class="pri" style="width:100%" onclick="createDrop()">뿌리기</button></div>
     ${open}${rec ? `<h2 style="margin:14px 2px 6px">최근 종료</h2>${rec}` : ''}`;
@@ -691,11 +691,11 @@ function begView() {
     ${b.msg ? `<div>${esc(b.msg)}</div>` : ''}
     ${b.donors.length ? `<div class="mute">${nameAmt(b.donors)}</div>` : ''}
     ${b.mine ? `<button onclick="cancelBeg(${b.id})">구걸 닫기</button>`
-      : `<div class="betrow"><input id="bg${b.id}" type="number" min="1" max="${b.want - b.got}" placeholder="줄 금액 (최대 ${b.want - b.got}🪙)"><button class="pri" onclick="giveBeg(${b.id})">주기</button></div>`}</div>`).join('') || '<p class="mute">구걸 중인 사람이 없습니다.</p>';
+      : `<div class="betrow"><input id="bg${b.id}" type="number" min="1" max="${b.want - b.got}" placeholder="줄 금액 (최대 ${b.want - b.got}칩)"><button class="pri" onclick="giveBeg(${b.id})">주기</button></div>`}</div>`).join('') || '<p class="mute">구걸 중인 사람이 없습니다.</p>';
   const rec = gift.begs_recent.map((b) => `<div class="card sub"><div class="row"><span>${nm(b.user)}</span><b class="mute">${b.want.toLocaleString()}🪙 달성</b></div><div class="mute">${nameAmt(b.donors)}</div></div>`).join('');
   return `<div class="card"><h2>🙏 구걸하기</h2>
     <p class="mute">필요한 금액을 올려 상대에게 🪙을 받습니다. 상대가 원하는 만큼 줄 수 있고, 목표 금액이 차면 자동으로 종료됩니다. 12시간이 지나면 닫힙니다. 동시에 하나만 올릴 수 있습니다.</p>
-    ${mineOpen ? '<p class="mute">구걸이 진행 중입니다.</p>' : `<input id="bwant" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="필요한 금액 (${gift.min}~${gift.max}🪙)">
+    ${mineOpen ? '<p class="mute">구걸이 진행 중입니다.</p>' : `<input id="bwant" type="number" min="${gift.min}" max="${gift.max}" step="10" placeholder="필요한 금액 (${gift.min}~${gift.max}칩)">
     <input id="bmsg" maxlength="40" placeholder="한마디 (선택, 40자 이내)">
     <button class="pri" style="width:100%" onclick="createBeg()">구걸하기</button>`}</div>
     ${open}${rec ? `<h2 style="margin:14px 2px 6px">최근 달성</h2>${rec}` : ''}`;

@@ -69,6 +69,14 @@ srv.listen(3140, async () => {
     await A.waitForFunction((c) => user.points === c - 100, chipsA0, { timeout: 25000 }).catch(() => {});
     console.log('대결 결과 칩:', 'A', chipsA0, '→', await A.evaluate(() => user.points), '| B', chipsB0, '→', await B.evaluate(() => user.points), '(기대 A -100, B +100)');
     await A.screenshot({ path: process.env.SC + '/art_bbwar.png', fullPage: true });
+    // 남은 🪙 글자(칩 이미지로 안 바뀐 곳) 검사: 여러 화면을 돌며 글자와 속성에서 찾음
+    const scan = (pg) => pg.evaluate(() => { const bad = []; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) if (n.nodeValue.includes('🪙') && !/^(SCRIPT|STYLE)$/.test(n.parentNode.nodeName)) bad.push('text:' + n.nodeValue.trim().slice(0, 40)); document.querySelectorAll('*').forEach((e) => { for (const a of e.attributes) if (a.value.includes('🪙')) bad.push(a.name + ':' + a.value.slice(0, 40)); }); return bad; });
+    const leftovers = [];
+    for (const tabName of ['🎲 게임', '➕ 만들기', '🎰 카지노', '💸 나눔', '🛍 상점', '랭킹']) { await A.click('button:has-text("' + tabName + '")'); await A.waitForTimeout(300); leftovers.push(...await scan(A)); }
+    await A.click('button:has-text("💸 나눔")'); await A.click('button:has-text("🙏 구걸하기")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
+    await A.click('button:has-text("🎲 게임")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
+    await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔'); await A.waitForTimeout(500); leftovers.push(...await scan(A)); await A.click('button:has-text("← 도박장")');
+    console.log('남은 🪙 글자:', JSON.stringify(leftovers));
     await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
     await A.screenshot({ path: process.env.SC + '/art_admin.png' });
     console.log('B 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null);
