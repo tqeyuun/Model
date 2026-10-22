@@ -131,6 +131,8 @@ const rules = (c) => [...c.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [m[1].t
 const have = new Set(rules(css).map(([s]) => s));
 const extra = rules(admCss).filter(([s]) => !have.has(s) && !/^(:root|\*|body|main|html)$/.test(s)).map(([, r]) => r).join('\n');
 css += `\n:root{color-scheme:dark}
+/* 위쪽 배너 */
+.banner{display:block;max-width:640px;margin:12px auto 0;padding:0 14px}.banner img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
 /* 관리자 화면 */
 ${extra}
 /* 화면 안의 확인·입력 창 */
@@ -145,7 +147,10 @@ const engine = read('artifact/engine.js');
 const gsFn = `const makeGS = function (ctx) {\n${read('artifact/shims-pre.js')}\n${read('gas/Games.gs')}\n${read('gas/Code.gs')}\n${read('artifact/shims-post.js')}\n};`;
 for (const [name, text] of [['engine', engine], ['규칙 코드', gsFn], ['화면', script], ['관리자', admBlock]]) if (/<\/script/i.test(text)) throw new Error(name + ' 에 </script 가 있음');
 const head = idx.slice(idx.indexOf('<title>'), idx.indexOf('<style>'));
-const body = between(idx, '<body>\n', '<script>', false);
+const BANNER_URL = 'https://claude.ai/artifact/EPoaLBLN6h2rqPzivb7HnH';
+const banner = `<a class="banner" href="${BANNER_URL}" target="_blank" rel="noopener noreferrer" aria-label="오리파 바로가기"><img alt="오리파 바로가기" src="data:image/jpeg;base64,${fs.readFileSync(path.join(__dirname, 'artifact/banner.jpg')).toString('base64')}"></a>\n`;
+const body = between(idx, '<body>\n', '<script>', false).replace('</header>\n', '</header>\n' + banner);
+if (!body.includes('class="banner"')) throw new Error('배너를 넣을 자리를 못 찾음');
 const out = `${head}<style>\n${css}\n</style>\n${body}<div id="modal" hidden></div>\n<script>\n${engine}\n${gsFn}\n${script}\n${admBlock}\n</script>\n`;
 // 문법 검사 (브라우저에서 실행할 스크립트 전체)
 new Function(engine + '\n' + gsFn + '\n' + script + '\n' + admBlock);
