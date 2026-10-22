@@ -659,7 +659,7 @@ var GAMES = (function () {
   };
 
   /* ================= 🧱 블록 블라스트 (혼자 하는 퍼즐: 점수에 비례해 칩을 받음) ================= */
-  G.BB = { RATE_PCT: 10, MAX_REWARD: 300, MAX_SCORE: 100000 };   // 보상 = 점수 × RATE_PCT% (최대 MAX_REWARD)
+  G.BB = { RATE_PCT: 10, MAX_REWARD: 1000, MAX_SCORE: 100000 };   // 보상 = 점수 × RATE_PCT% (최대 MAX_REWARD)
   G.BBWAR = { MIN_PLAYERS: 2, MAX_PLAYERS: 6 };   // 대결: 같은 블록 순서로 각자 한 판, 최고 점수가 판돈 전부
   G.bbReward = function (score) {
     score = Math.floor(Number(score));
@@ -2631,7 +2631,7 @@ const BB = (function () {
     return { rows, cols };
   }
   const points = (placed, lines, comboNow) => Math.round((placed + (lines > 0 ? 10 * lines * lines : 0)) * (comboNow >= 2 ? 1 + 0.5 * (comboNow - 1) : 1));
-  const rewardOf = (s) => (bbCur && bbCur.kind === 'war') ? 0 : Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 300);
+  const rewardOf = (s) => (bbCur && bbCur.kind === 'war') ? 0 : Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 1000);
 
   function buildBoard() { boardEl.innerHTML = ''; cells = []; for (let i = 0; i < N * N; i++) { const d = document.createElement('div'); d.className = 'bbc'; boardEl.appendChild(d); cells.push(d); } }
   function paintBoard() { for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const el = cells[y * N + x], v = board[y][x]; el.className = 'bbc' + (v >= 0 ? ' f' : ''); el.style.setProperty('--k', v >= 0 ? `var(--b${v})` : 'transparent'); } }

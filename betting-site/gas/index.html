@@ -760,7 +760,7 @@ const BB = (function () {
     return { rows, cols };
   }
   const points = (placed, lines, comboNow) => Math.round((placed + (lines > 0 ? 10 * lines * lines : 0)) * (comboNow >= 2 ? 1 + 0.5 * (comboNow - 1) : 1));
-  const rewardOf = (s) => (bbCur && bbCur.kind === 'war') ? 0 : Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 300);
+  const rewardOf = (s) => (bbCur && bbCur.kind === 'war') ? 0 : Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 1000);
 
   function buildBoard() { boardEl.innerHTML = ''; cells = []; for (let i = 0; i < N * N; i++) { const d = document.createElement('div'); d.className = 'bbc'; boardEl.appendChild(d); cells.push(d); } }
   function paintBoard() { for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const el = cells[y * N + x], v = board[y][x]; el.className = 'bbc' + (v >= 0 ? ' f' : ''); el.style.setProperty('--k', v >= 0 ? `var(--b${v})` : 'transparent'); } }
