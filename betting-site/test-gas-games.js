@@ -220,3 +220,51 @@ console.log('GAS 새 게임 테스트 통과');
   assert.equal(ok(call(b, 'POST', '/api/blockblast/finish', { id: s6.id, score: 200 })).reward, 100); G.BB.RATE_PCT = 10;
   console.log('블록 블라스트 서버 테스트 통과');
 }
+
+/* ===== 🧱 블록 블라스트 대결 ===== */
+{
+  const T = () => [a, b, c, d, x].map(pts).reduce((p, q) => p + q);
+  const t0 = T(), [pa, pb, pc] = [pts(a), pts(b), pts(c)];
+  err(call(a, 'POST', '/api/bbwar/create', { stake: 100, cap: 1 }), 400);
+  err(call(a, 'POST', '/api/bbwar/create', { stake: 5, cap: 3 }), 400);
+  const w1 = ok(call(a, 'POST', '/api/bbwar/create', { stake: 100, cap: 3 }));
+  assert.equal(pts(a), pa - 100);
+  err(call(a, 'POST', '/api/bbwar/create', { stake: 100, cap: 3 }), 409);                  // 연타
+  err(call(x, 'POST', '/api/bbwar/join', { room_id: w1.id }), 404);                         // 다른 방 사람은 못 들어옴
+  err(call(a, 'POST', '/api/bbwar/join', { room_id: w1.id }), 400);                         // 이미 들어감
+  ok(call(b, 'POST', '/api/bbwar/join', { room_id: w1.id })); ok(call(c, 'POST', '/api/bbwar/join', { room_id: w1.id }));
+  err(call(d, 'POST', '/api/bbwar/join', { room_id: w1.id }), 400);                         // 자리 없음
+  err(call(b, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: 100 }), 400);           // 시작 전엔 점수를 낼 수 없음
+  const s1 = ok(call(a, 'POST', '/api/bbwar/start', { room_id: w1.id })), s1b = ok(call(b, 'POST', '/api/bbwar/start', { room_id: w1.id }));
+  assert.equal(s1.seed, s1b.seed); assert.ok(Number.isInteger(s1.seed) && s1.seed > 0);    // 모두 같은 블록 순서
+  err(call(a, 'POST', '/api/bbwar/start', { room_id: w1.id }), 400);                         // 두 번 시작할 수 없음
+  const view = ok(call(c, 'GET', '/api/bbwar')).rooms.find((r) => r.id === w1.id);
+  assert.equal(view.players.length, 3); assert.ok(view.players.every((p) => p.score === undefined), '진행 중에는 점수가 안 보임');
+  err(call(a, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: -1 }), 400);
+  ok(call(a, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: 500 }));
+  err(call(a, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: 900 }), 400);           // 한 번만 낼 수 있음
+  ok(call(b, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: 800 }));
+  ok(call(c, 'POST', '/api/bbwar/start', { room_id: w1.id }));
+  assert.equal(ok(call(c, 'POST', '/api/bbwar/submit', { room_id: w1.id, score: 800 })).resolved, true);
+  assert.deepEqual([pts(a), pts(b), pts(c)], [pa - 100, pb + 50, pc + 50]);                // 동점이면 나눔
+  const rec = ok(call(a, 'GET', '/api/bbwar')).recent[0];
+  assert.equal(rec.net, -100); assert.equal(rec.winner, null); assert.deepEqual(rec.players.map((p) => p.score), [800, 800, 500]);
+  assert.equal(T(), t0);
+  // 방장이 마감: 못 낸 사람은 판돈을 잃음
+  const w2 = ok(call(a, 'POST', '/api/bbwar/create', { stake: 50, cap: 4 })); ok(call(b, 'POST', '/api/bbwar/join', { room_id: w2.id }));
+  ok(call(a, 'POST', '/api/bbwar/start', { room_id: w2.id })); ok(call(a, 'POST', '/api/bbwar/submit', { room_id: w2.id, score: 100 }));
+  err(call(b, 'POST', '/api/bbwar/close', { room_id: w2.id }), 403);
+  ok(call(a, 'POST', '/api/bbwar/close', { room_id: w2.id }));
+  const r2 = ok(call(a, 'GET', '/api/bbwar')).recent[0]; assert.equal(r2.net, 50); assert.equal(r2.winner.name, '에이');
+  assert.equal(T(), t0);
+  // 혼자뿐이면 환불, 12시간이 지나면 자동 마감
+  const w3 = ok(call(c, 'POST', '/api/bbwar/create', { stake: 70, cap: 2 })); const pc3 = pts(c);
+  ok(call(c, 'POST', '/api/bbwar/close', { room_id: w3.id })); assert.equal(pts(c), pc3 + 70);
+  const w4 = ok(call(c, 'POST', '/api/bbwar/create', { stake: 30, cap: 2 })); ok(call(d, 'POST', '/api/bbwar/join', { room_id: w4.id }));
+  ok(call(c, 'POST', '/api/bbwar/start', { room_id: w4.id })); ok(call(c, 'POST', '/api/bbwar/submit', { room_id: w4.id, score: 40 }));
+  vm.runInContext(`var o = tbl('bbr').find(function(r){return r.id===${w4.id}}); o.created_at = Date.now() - 13*3600e3; tbl('bbr').save(o);`, sb);
+  const pd4 = pts(d); ok(call(a, 'GET', '/api/bbwar'));
+  assert.equal(pts(d), pd4); assert.equal(ok(call(a, 'GET', '/api/bbwar')).rooms.some((r) => r.id === w4.id), false);
+  assert.equal(T(), t0);
+  console.log('블록 블라스트 대결 서버 테스트 통과');
+}

@@ -144,7 +144,7 @@ load(); setInterval(() => { if (document.activeElement?.tagName !== 'INPUT') loa
       n.replaceWith(f);
     }
   };
-  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.parentNode && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>

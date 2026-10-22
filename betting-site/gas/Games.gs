@@ -217,6 +217,7 @@ var GAMES = (function () {
 
   /* ================= 🧱 블록 블라스트 (혼자 하는 퍼즐: 점수에 비례해 칩을 받음) ================= */
   G.BB = { RATE_PCT: 10, MAX_REWARD: 300, MAX_SCORE: 100000 };   // 보상 = 점수 × RATE_PCT% (최대 MAX_REWARD)
+  G.BBWAR = { MIN_PLAYERS: 2, MAX_PLAYERS: 6 };   // 대결: 같은 블록 순서로 각자 한 판, 최고 점수가 판돈 전부
   G.bbReward = function (score) {
     score = Math.floor(Number(score));
     if (!(score > 0)) return 0;

@@ -167,7 +167,7 @@ h2 .mute{font-family:'Noto Sans KR',system-ui,sans-serif;font-weight:400;letter-
  */
 (function (root) {
   'use strict';
-  var PERSIST = ['users', 'bets', 'options', 'wagers', 'items', 'rooms', 'rps', 'lun', 'lunp', 'lad', 'ladp', 'bj', 'slots', 'bb', 'drops', 'dropc', 'begs', 'begg'];
+  var PERSIST = ['users', 'bets', 'options', 'wagers', 'items', 'rooms', 'rps', 'lun', 'lunp', 'lad', 'ladp', 'bj', 'slots', 'bb', 'bbr', 'bbrp', 'drops', 'dropc', 'begs', 'begg'];
   var LOCAL = ['sessions'];                       // 이 브라우저에만 있는 표 (로그인 표시)
   var MESSAGES = 'messages';                      // 채팅: 최근 것만 구독, 임대 없이 추가
   var MSG_LIMIT = 400;
@@ -660,6 +660,7 @@ var GAMES = (function () {
 
   /* ================= 🧱 블록 블라스트 (혼자 하는 퍼즐: 점수에 비례해 칩을 받음) ================= */
   G.BB = { RATE_PCT: 10, MAX_REWARD: 300, MAX_SCORE: 100000 };   // 보상 = 점수 × RATE_PCT% (최대 MAX_REWARD)
+  G.BBWAR = { MIN_PLAYERS: 2, MAX_PLAYERS: 6 };   // 대결: 같은 블록 순서로 각자 한 판, 최고 점수가 판돈 전부
   G.bbReward = function (score) {
     score = Math.floor(Number(score));
     if (!(score > 0)) return 0;
@@ -696,6 +697,8 @@ var SHEETS = {
   bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
   slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
   bb: ['id', 'user_id', 'status', 'score', 'reward', 'created_at', 'finished_at'],
+  bbr: ['id', 'host_id', 'stake', 'cap', 'seed', 'status', 'winner_id', 'created_at', 'played_at'],
+  bbrp: ['id', 'room_id', 'user_id', 'status', 'score', 'started_at', 'finished_at'],
   drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
   dropc: ['id', 'drop_id', 'user_id', 'amount', 'at'],
   begs: ['id', 'user_id', 'want', 'got', 'msg', 'status', 'created_at'],
@@ -1064,13 +1067,14 @@ function adminRooms() {
   tbl('rps').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'rps', id: r.id, host: nm(r.host_id), stake: r.stake, players: [nm(r.host_id)], cap: 2, created_at: r.created_at, grp: gp(r.host_id) }); });   // 손은 안 보임
   tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lun', id: r.id, host: nm(r.host_id), stake: r.stake, players: lunPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });   // 숫자는 안 보임
   tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lad', id: r.id, host: nm(r.host_id), stake: r.stake, players: ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }).map(function (p) { return nm(p.user_id); }), cap: r.slots, created_at: r.created_at, grp: gp(r.host_id) }); });
+  tbl('bbr').all().forEach(function (r) { if (r.status === 'open') out.push({ kind: 'bb', id: r.id, host: nm(r.host_id), stake: r.stake, players: bbwPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });
   return out.sort(function (a, b) { return b.created_at - a.created_at; });
 }
 function adminGroups() {
   var by = {}, codes = {};
   tbl('rooms').all().forEach(function (r) { codes[String(r.grp)] = r.code; by[String(r.grp)] = by[String(r.grp)] || []; });
   tbl('users').all().forEach(function (u) { var g = grpOf(u); (by[g] = by[g] || []).push(u); });
-  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; });
+  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; }).concat(tbl('bbr').all().filter(function (r) { return r.status === 'open'; }));
   return Object.keys(by).map(function (g) {
     var ms = by[g], ids = {}; ms.forEach(function (m) { ids[m.id] = 1; });
     return { id: g, label: codes[g] || '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
@@ -1078,7 +1082,13 @@ function adminGroups() {
   }).sort(function (a, b) { return b.count - a.count; });
 }
 function adminCloseRoom(kind, roomId) {
-  if (['rps', 'lun', 'lad'].indexOf(kind) < 0) fail(400, '알 수 없는 게임입니다.');
+  if (['rps', 'lun', 'lad', 'bb'].indexOf(kind) < 0) fail(400, '알 수 없는 게임입니다.');
+  if (kind === 'bb') {
+    var br = byId('bbr', roomId);
+    if (br.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    bbwPlayers(br).forEach(function (p) { addPoints(p.user_id, br.stake); });
+    br.status = 'cancelled'; tbl('bbr').save(br); return;
+  }
   var r = byId(kind, roomId);
   if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
   if (kind === 'rps') addPoints(r.host_id, r.stake);
@@ -1103,6 +1113,9 @@ function adminDeleteGroup(grp) {
     tbl(pair[0]).removeWhere(function (r) { return rooms[r.id]; });
   });
   tbl('rps').removeWhere(function (r) { return ids[r.host_id] || ids[r.guest_id]; });
+  var bbRooms = {}; tbl('bbr').where(function (r) { return ids[r.host_id]; }).forEach(function (r) { bbRooms[r.id] = 1; });
+  tbl('bbrp').removeWhere(function (p) { return bbRooms[p.room_id] || ids[p.user_id]; });
+  tbl('bbr').removeWhere(function (r) { return bbRooms[r.id]; });
   ['bj', 'slots', 'bb', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
   tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
   tbl('users').removeWhere(function (u) { return ids[u.id]; });
@@ -1184,6 +1197,45 @@ function lunResolve(room) {
   else addPoints(ps[w].user_id, room.stake * ps.length);                                // 승자가 판돈 전체
   room.status = 'done'; room.winner_id = w < 0 ? '' : ps[w].user_id; room.played_at = now(); tbl('lun').save(room);
 }
+/* ================= 🧱 블록 블라스트 대결 (모두가 같은 블록 순서로 각자 한 판씩 → 최고 점수가 판돈 전부) ================= */
+function bbwPlayers(room) { return tbl('bbrp').where(function (p) { return p.room_id === room.id; }); }
+/** 점수를 낸 사람 중 최고 점수가 판돈 전부 (동점이면 나눔). 못 낸 사람은 판돈을 잃고, 아무도 못 냈거나 혼자뿐이면 환불 */
+function bbwResolve(room) {
+  var ps = bbwPlayers(room), done = ps.filter(function (p) { return p.status === 'done'; });
+  if (!done.length || ps.length < 2) { ps.forEach(function (p) { addPoints(p.user_id, room.stake); }); room.status = 'cancelled'; room.winner_id = ''; }
+  else {
+    var top = Math.max.apply(null, done.map(function (p) { return p.score; }));
+    var winners = done.filter(function (p) { return p.score === top; }).sort(function (a, b) { return a.finished_at - b.finished_at; });
+    var pot = room.stake * ps.length, share = Math.floor(pot / winners.length);
+    winners.forEach(function (w, i) { addPoints(w.user_id, share + (i === 0 ? pot - share * winners.length : 0)); });
+    room.status = 'done'; room.winner_id = winners.length === 1 ? winners[0].user_id : '';
+  }
+  room.played_at = now(); tbl('bbr').save(room);
+}
+function bbwSweep() {   // 12시간이 지난 방은 그 시점의 점수로 마감
+  var old = function () { return tbl('bbr').where(function (r) { return r.status === 'open' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  if (!old().length) return;
+  withLock(function () { TBL.bbr = null; TBL.bbrp = null; TBL.users = null; old().forEach(bbwResolve); });
+}
+function bbwView(u) {
+  bbwSweep();
+  var rooms = tbl('bbr').all().filter(function (r) { return r.status === 'open' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = bbwPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0];
+    return { id: r.id, stake: r.stake, cap: r.cap, count: ps.length, host: playerView(r.host_id), mine: r.host_id === u.id,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.status = p.status; return o; }),     // 점수는 끝나기 전까지 숨김
+      my_status: me ? me.status : 'none', my_score: me && me.status === 'done' ? me.score : null };
+  });
+  var recent = tbl('bbr').all().filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 8).map(function (r) {
+    var ps = bbwPlayers(r), me = ps.some(function (p) { return p.user_id === u.id; }), pot = r.stake * ps.length;
+    var done = ps.filter(function (p) { return p.status === 'done'; }), top = Math.max.apply(null, done.map(function (p) { return p.score; }));
+    var winners = done.filter(function (p) { return p.score === top; }), mine = winners.some(function (p) { return p.user_id === u.id; });
+    var net = !me ? null : mine ? Math.floor(pot / winners.length) - r.stake + (winners.sort(function (a, b) { return a.finished_at - b.finished_at; })[0].user_id === u.id ? pot - Math.floor(pot / winners.length) * winners.length : 0) : -r.stake;
+    return { id: r.id, stake: r.stake, at: r.played_at, mine: me, net: net, winner: r.winner_id ? playerView(r.winner_id) : null,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.score = p.status === 'done' ? p.score : null; return o; }).sort(function (a, b) { return (b.score === null ? -1 : b.score) - (a.score === null ? -1 : a.score); }) };
+  });
+  return { rooms: rooms, recent: recent, min: GAMES.BBWAR.MIN_PLAYERS, max: GAMES.BBWAR.MAX_PLAYERS };
+}
+
 /* ================= 💸 돈뿌리기 / 🙏 구걸하기 ================= */
 var GIFT_MAX = 1000;
 function giftSweep() {   // 12시간이 지나면 닫음 (뿌리기는 남은 돈을 돌려받음)
@@ -1325,6 +1377,8 @@ function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). �
   tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
   tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
   if (tbl('lunp').find(function (p) { return p.user_id === u.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === u.id && waitingLad[p.room_id]; }) || bjActive(u.id)) fail(400, '진행 중인 게임이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
+  var openBb = {}; tbl('bbr').all().forEach(function (r) { if (r.status === 'open') openBb[r.id] = 1; });
+  if (tbl('bbrp').find(function (p) { return p.user_id === u.id && openBb[p.room_id]; })) fail(400, '진행 중인 블록 블라스트 대결이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
   tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
   tbl('sessions').removeWhere(function (s) { return s.user_id === u.id; });
   tbl('messages').removeWhere(function (m) { return m.user_id === u.id; });
@@ -1571,6 +1625,63 @@ var ROUTES = {
   },
 
   /* ---- 🪜 사다리타기 ---- */
+  /* ---- 🧱 블록 블라스트 대결 ---- */
+  'GET /api/bbwar': function (body, u) { needLogin(u); return bbwView(u); },
+  'POST /api/bbwar/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), cap = Number(body.cap), W = GAMES.BBWAR;
+    if (cap !== Math.floor(cap) || cap < W.MIN_PLAYERS || cap > W.MAX_PLAYERS) fail(400, '인원은 ' + W.MIN_PLAYERS + '~' + W.MAX_PLAYERS + '명입니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
+    if (isDup('bbr', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'open'; })) fail(409, '연타');
+    if (tbl('bbr').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
+    addPoints(u.id, -stake);
+    var r = tbl('bbr').insert({ host_id: u.id, stake: stake, cap: cap, seed: 1 + Math.floor(Math.random() * 2147483646), status: 'open', winner_id: '', created_at: now(), played_at: '' });
+    tbl('bbrp').insert({ room_id: r.id, user_id: u.id, status: 'joined', score: 0, started_at: '', finished_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/bbwar/join': function (body, u) {
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    var ps = bbwPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
+    if (ps.length >= r.cap) fail(400, '자리가 다 찼습니다.');
+    if (u.points < r.stake) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -r.stake);
+    tbl('bbrp').insert({ room_id: r.id, user_id: u.id, status: 'joined', score: 0, started_at: '', finished_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/bbwar/start': function (body, u) {   // 내 판 시작: 한 번만 (다시 시작해서 같은 블록을 연습할 수 없음)
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    var me = bbwPlayers(r).filter(function (p) { return p.user_id === u.id; })[0] || fail(400, '이 방에 들어가 있지 않습니다.');
+    if (me.status !== 'joined') fail(400, '이미 시작했거나 끝낸 판입니다.');
+    me.status = 'playing'; me.started_at = now(); tbl('bbrp').save(me);
+    return { ok: true, seed: r.seed, id: r.id };
+  },
+  'POST /api/bbwar/submit': function (body, u) {
+    needLogin(u);
+    var r = byId('bbr', body.room_id), score = Number(body.score);
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    if (score !== Math.floor(score) || score < 0 || score > GAMES.BB.MAX_SCORE) fail(400, '점수가 올바르지 않습니다.');
+    var ps = bbwPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0] || fail(400, '이 방에 들어가 있지 않습니다.');
+    if (me.status !== 'playing') fail(400, '진행 중인 판이 아닙니다.');
+    me.status = 'done'; me.score = score; me.finished_at = now(); tbl('bbrp').save(me);
+    var resolved = false;
+    if (ps.length >= r.cap && ps.every(function (p) { return p.status === 'done'; })) { bbwResolve(r); resolved = true; }
+    return { ok: true, resolved: resolved, score: score };
+  },
+  'POST /api/bbwar/close': function (body, u) {   // 방장이 지금 마감: 점수를 낸 사람끼리 결판, 못 낸 사람은 판돈을 잃음
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 마감할 수 있습니다.');
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    bbwResolve(r);
+    return { ok: true };
+  },
+
   /* ---- 💸 돈뿌리기 / 🙏 구걸하기 ---- */
   'GET /api/gifts': function (body, u) { needLogin(u); return giftView(u); },
   'POST /api/drop/create': function (body, u) {
@@ -1918,7 +2029,7 @@ const DEV = (() => {   // 이 브라우저의 기기 번호 (한 기기에서 �
   return d;
 })();
 const guard = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { await fn(...a); } catch (e) { toast(e.message); } finally { busy = false; } }; };
-function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false }; LS.del('token'); render(); }
+function logout() { token = null; user = null; chatMsgs = []; lastChatId = 0; gamesInit = false; watch = { lun: false, lad: false, bbw: false }; LS.del('token'); render(); }
 
 let chatMsgs = [], lastChatId = 0;
 let chatBet = null;
@@ -1959,14 +2070,14 @@ async function refreshBody() {
 
 function render() {
   if (window.__adminMode) { renderHeader(); return; }
-  if (window.__bbPlaying && tab === 'casino' && casinoMode === 'bb') { renderHeader(); return; }   // 블록 블라스트를 하는 중에는 화면을 다시 그리지 않음 (끌던 블록이 사라지지 않게)
+  if (window.__bbPlaying && tab === 'bets' && listMode === 'bb') { renderHeader(); return; }   // 블록 블라스트를 하는 중에는 화면을 다시 그리지 않음 (끌던 블록이 사라지지 않게)
   renderHeader();
   $('#app').innerHTML = !token ? authView() : user && user.pending ? pendingView() : `
     ${approveCard()}<div class="tabs">${[['bets','🎲 게임'],['new','➕ 만들기'],['casino','🎰 카지노'],['gift','💸 나눔'],['shop','🛍 상점'],['rank','랭킹']].map(([k,l]) => `<button class="t-${k} ${(tab==='chat'?'bets':tab)===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</div>
     ${user && user.can_aid ? `<div class="card">💸 칩이 거의 없습니다. <button class="pri" onclick="aid()">구제금 100🪙 받기 (하루 1번)</button></div>` : ''}
     ${bodyView()}`;
   if (token && tab === 'chat') { renderChat(); pollChat(); }
-  if (token && tab === 'casino' && casinoMode === 'bb') bbAttach();
+  if (token && tab === 'bets' && listMode === 'bb') bbAttach();
 }
 const go = (k) => { tab = k; if (k === 'shop') loadShop(); render(); loadGame(); };
 
@@ -2103,17 +2214,17 @@ const HAND = { rock: '✊', paper: '🖐', scissors: '✌️' }, HAND_NAME = { r
 const setListMode = (m) => { listMode = m; render(); loadGame(); };
 const setCreateMode = (m) => { createMode = m; render(); };
 function modeToggle(mode, fn) {
-  const items = fn === 'setListMode' ? [['all', '📋 전체'], ['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기']]
+  const items = fn === 'setListMode' ? [['all', '📋 전체'], ['bets', '🎲 도박'], ['rps', '✊ 가위바위보'], ['lun', '🤫 최저 유일 숫자'], ['lad', '🪜 사다리타기'], ['bb', '🧱 블록 블라스트']]
     : fn === 'setCreateMode' ? [['bet', '🎲 도박 만들기'], ['rps', '✊ 가위바위보 방'], ['lun', '🤫 최저 유일 숫자 방'], ['lad', '🪜 사다리타기 방']]
     : fn === 'setGiftMode' ? [['drop', '💸 돈뿌리기'], ['beg', '🙏 구걸하기']]
-    : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신'], ['bb', '🧱 블록 블라스트']];
+    : [['bj', '🃏 블랙잭'], ['slots', '🎰 슬롯머신']];
   return `<div class="tabs mode">${items.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 }
 const handBtns = (roomId) => ['scissors', 'rock', 'paper'].map((h) => `<button class="hand" onclick="joinRps(${roomId},'${h}')"><span>${HAND[h]}</span>${HAND_NAME[h]}</button>`).join('');
 function allView() {   // 도박장 기본 화면: 열려 있는 방을 종류별로 한꺼번에
-  const bs = bets.filter((b) => !isDone(b)).map(betView).join(''), r = rpsRooms(), l = lunRooms(), d = ladRooms();
+  const bs = bets.filter((b) => !isDone(b)).map(betView).join(''), r = rpsRooms(), l = lunRooms(), d = ladRooms(), w = bbwRooms();
   const sec = (title, n, html) => (html ? `<h2 class="sec">${title} <span class="mute">${n}</span></h2>${html}` : '');
-  return sec('🎲 도박', bets.filter((b) => !isDone(b)).length, bs) + sec('✊ 가위바위보', rps.rooms.length, r) + sec('🤫 최저 유일 숫자', lun.rooms.length, l) + sec('🪜 사다리타기', lad.rooms.length, d)
+  return sec('🎲 도박', bets.filter((b) => !isDone(b)).length, bs) + sec('✊ 가위바위보', rps.rooms.length, r) + sec('🤫 최저 유일 숫자', lun.rooms.length, l) + sec('🪜 사다리타기', lad.rooms.length, d) + sec('🧱 블록 블라스트 대결', bbw.rooms.length, w)
     || '<p class="mute" style="text-align:center">열려 있는 방이 없습니다. 만들기 탭에서 방을 열어보십시오!</p>';
 }
 function rpsRooms() {
@@ -2177,7 +2288,7 @@ function notifyRps() {   // 내가 연 방이 내가 없는 사이 결판났으�
 
 /* ---------- 새 게임: 최저 유일 숫자 · 사다리타기 · 블랙잭 · 슬롯머신 ---------- */
 let lun = { rooms: [], recent: [] }, lad = { rooms: [], recent: [] }, bj = { game: null, recent: [], rules: { MIN_BET: 10, MAX_BET: 500 } }, slotData = null;
-let casinoMode = 'bj', createNum = null, createCap = 3, createSlots = 3, createSeat = null, watch = { lun: false, lad: false }, gamesInit = false;
+let casinoMode = 'bj', createNum = null, createCap = 3, createSlots = 3, createSeat = null, watch = { lun: false, lad: false, bbw: false }, gamesInit = false;
 let slotUi = { reels: ['❔', '❔', '❔'], msg: '', busy: false };
 const curView = () => (tab === 'bets' ? listMode : tab === 'casino' ? casinoMode : tab === 'gift' ? giftMode : null);
 const setCasinoMode = (m) => { casinoMode = m; render(); loadGame(); };
@@ -2187,6 +2298,7 @@ const netText = (n) => (n > 0 ? `+${n}🪙` : n < 0 ? `${n}🪙` : '±0');
 const netCls = (n) => (n > 0 ? 'win' : n < 0 ? 'lose' : 'mute');
 
 async function fetchLun() { lun = await api('GET', '/api/lun'); watch.lun = lun.rooms.some((r) => r.joined); notifyMulti('lun', lun.recent, '🤫 최저 유일 숫자'); }
+async function fetchBbw() { bbw = await api('GET', '/api/bbwar'); watch.bbw = bbw.rooms.some((r) => r.my_status !== 'none'); notifyMulti('bbw', bbw.recent, '🧱 블록 블라스트 대결'); }
 async function fetchLad() { lad = await api('GET', '/api/ladder'); watch.lad = lad.rooms.some((r) => r.joined); notifyMulti('lad', lad.recent, '🪜 사다리타기'); }
 function notifyMulti(kind, recent, label) {   // 내가 낀 방이 내가 없는 사이 결판났으면 알려줌
   const key = 'seen_' + kind, mine = recent.filter((r) => r.mine), raw = LS.get(key);
@@ -2205,9 +2317,9 @@ async function loadGame() {
     if (view === 'lun') await fetchLun();
     else if (view === 'lad') await fetchLad();
     else if (view === 'drop' || view === 'beg') { const d = await api('GET', '/api/gifts'); if (curView() !== view) return; gift = d; }
-    else if (view === 'all') await Promise.all([fetchLun(), fetchLad()]);
+    else if (view === 'all') await Promise.all([fetchLun(), fetchLad(), fetchBbw()]);
     else if (view === 'bj') { const d = await api('GET', '/api/blackjack'); if (curView() !== 'bj') return; bj = d; }
-    else if (view === 'bb') { const d = await api('GET', '/api/blockblast'); if (curView() !== 'bb') return; bbData = d; }
+    else if (view === 'bb') { const d = await api('GET', '/api/blockblast'); bbData = d; await fetchBbw(); }
     else if (view === 'slots') { const d = await api('GET', '/api/slots'); if (curView() !== 'slots') return; slotData = d; }
     else return;
   } catch (e) { return; }
@@ -2215,9 +2327,10 @@ async function loadGame() {
 }
 async function gamesTick() {
   const view = curView();
-  if (!gamesInit) { gamesInit = true; try { await Promise.all([fetchLun(), fetchLad()]); } catch (e) { /* 무시 */ } }
+  if (!gamesInit) { gamesInit = true; try { await Promise.all([fetchLun(), fetchLad(), fetchBbw()]); } catch (e) { /* 무시 */ } }
   else {
     if (watch.lun && view !== 'lun' && view !== 'all') { try { await fetchLun(); } catch (e) { /* 무시 */ } }
+    if (watch.bbw && view !== 'bb' && view !== 'all') { try { await fetchBbw(); } catch (e) { /* 무시 */ } }
     if (watch.lad && view !== 'lad' && view !== 'all') { try { await fetchLad(); } catch (e) { /* 무시 */ } }
   }
   await loadGame();
@@ -2490,13 +2603,19 @@ const BB = (function () {
   const q = (s) => root.querySelector(s);
   const boardEl = q('.bbboard'), trayEl = q('.bbtray'), overEl = q('.bbover'), cardEl = q('.bbcard');
   const ghostEl = document.createElement('div'); ghostEl.className = 'bbghost'; document.body.appendChild(ghostEl);
-  let board, pieces, score = 0, best = 0, combo = 0, running = false, busy = false, drag = null, cells = [], onOver = null;
+  let board, pieces, score = 0, best = 0, combo = 0, running = false, busy = false, drag = null, cells = [], onOver = null, seed = null, setNo = 0;
   try { best = parseInt(LS.get('bb_best') || '0', 10) || 0; } catch { /* 무시 */ }
   const newBoard = () => Array.from({ length: N }, () => Array(N).fill(-1));
   const fits = (b, s, r, c) => s.cells.every(([dy, dx]) => { const y = r + dy, x = c + dx; return y >= 0 && x >= 0 && y < N && x < N && b[y][x] < 0; });
   const fitsAnywhere = (b, s) => { for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (fits(b, s, r, c)) return true; return false; };
   const pick = () => { const total = WEIGHT.reduce((a, b) => a + b, 0); let t = Math.random() * total; for (let i = 0; i < SHAPES.length; i++) { t -= WEIGHT[i]; if (t <= 0) return i; } return 0; };
+  const mulberry = (a) => () => { a = (a + 0x6D2B79F5) >>> 0; let x = a; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+  function pickWith(rnd) { const total = WEIGHT.reduce((a, b) => a + b, 0); let t = rnd() * total; for (let i = 0; i < SHAPES.length; i++) { t -= WEIGHT[i]; if (t <= 0) return i; } return 0; }
   function newPieces() {
+    if (seed !== null) {   // 대결: 모두가 똑같은 순서의 블록을 받음 (판 상태와 무관하게 시드로만 결정)
+      const rnd = mulberry((seed + Math.imul(++setNo, 7919)) >>> 0);
+      return [0, 1, 2].map(() => ({ shape: SHAPES[pickWith(rnd)], color: Math.floor(rnd() * COLORS), used: false }));
+    }
     let set;
     for (let tries = 0; tries < 40; tries++) {
       set = [0, 1, 2].map(() => ({ shape: SHAPES[pick()], color: Math.floor(Math.random() * COLORS), used: false }));
@@ -2512,7 +2631,7 @@ const BB = (function () {
     return { rows, cols };
   }
   const points = (placed, lines, comboNow) => Math.round((placed + (lines > 0 ? 10 * lines * lines : 0)) * (comboNow >= 2 ? 1 + 0.5 * (comboNow - 1) : 1));
-  const rewardOf = (s) => Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 300);
+  const rewardOf = (s) => (bbCur && bbCur.kind === 'war') ? 0 : Math.min(Math.floor(s * ((bbData && bbData.rate_pct) || 10) / 100), (bbData && bbData.max_reward) || 300);
 
   function buildBoard() { boardEl.innerHTML = ''; cells = []; for (let i = 0; i < N * N; i++) { const d = document.createElement('div'); d.className = 'bbc'; boardEl.appendChild(d); cells.push(d); } }
   function paintBoard() { for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const el = cells[y * N + x], v = board[y][x]; el.className = 'bbc' + (v >= 0 ? ' f' : ''); el.style.setProperty('--k', v >= 0 ? `var(--b${v})` : 'transparent'); } }
@@ -2535,7 +2654,7 @@ const BB = (function () {
       trayEl.appendChild(slot);
     });
   }
-  function setScore() { q('.bbscore').textContent = score.toLocaleString(); q('.bbrew').textContent = rewardOf(score).toLocaleString() + '🪙'; q('.bbbest').textContent = best.toLocaleString(); }
+  function setScore() { q('.bbscore').textContent = score.toLocaleString(); q('.bbrew').textContent = (bbCur && bbCur.kind === 'war') ? '대결' : rewardOf(score).toLocaleString() + '🪙'; q('.bbbest').textContent = best.toLocaleString(); }
   function floatText(txt, big) { const f = document.createElement('div'); f.className = 'bbfloat' + (big ? ' big' : ''); f.textContent = txt; q('.bbwrap').appendChild(f); setTimeout(() => f.remove(), 950); }
 
   function startDrag(e, i) {
@@ -2593,34 +2712,99 @@ const BB = (function () {
   function showCard(html) { cardEl.innerHTML = html; overEl.classList.add('on'); }
   function hideCard() { overEl.classList.remove('on'); }
   function reset() { board = newBoard(); pieces = null; score = 0; combo = 0; running = false; busy = false; setScore(); paintBoard(); paintTray(); }
-  function begin() { board = newBoard(); score = 0; combo = 0; busy = false; running = true; pieces = newPieces(); hideCard(); setScore(); paintBoard(); paintTray(); }
+  function begin(sd) { seed = sd == null ? null : sd >>> 0; setNo = 0; board = newBoard(); score = 0; combo = 0; busy = false; running = true; pieces = newPieces(); hideCard(); setScore(); paintBoard(); paintTray(); }
   buildBoard(); reset();
   window.addEventListener('resize', () => { if (!drag && pieces) paintTray(); });
   return { root, begin, reset, showCard, hideCard, isRunning: () => running, setOnOver: (f) => { onOver = f; }, score: () => score, setScore };
 })();
-const bbHome = () => `<h2 style="margin:0 0 6px">🧱 블록 블라스트</h2><p class="mute" style="margin:0 0 10px">끝나면 <b>점수 × ${bbData ? bbData.rate_pct / 100 : 0.1}</b>만큼 🪙을 받습니다 (한 판 최대 ${bbData ? bbData.max_reward : 300}🪙). 시작하면 한 판으로 계산됩니다.</p><button class="pri" onclick="bbStart()">게임 시작</button>`;
+const bbHome = () => `<h2 style="margin:0 0 6px">혼자 하기</h2><p class="mute" style="margin:0 0 10px">끝나면 <b>점수 × ${bbData ? bbData.rate_pct / 100 : 0.1}</b>만큼 🪙을 받습니다. 시작하면 한 판으로 계산됩니다.</p><button class="pri" onclick="bbStart()">게임 시작</button>`;
 const bbStart = guard(async () => {
   const r = await api('POST', '/api/blockblast/start');
-  bbCur = r.id; window.__bbPlaying = true; BB.begin();
+  bbCur = { kind: 'solo', id: r.id }; window.__bbPlaying = true; BB.begin();
 });
 const bbFinish = guard(async () => {
   const s = BB.score();
+  if (bbCur && bbCur.kind === 'war') return bbwSubmit(s);
   try {
-    const r = await api('POST', '/api/blockblast/finish', { id: bbCur, score: s });
+    const r = await api('POST', '/api/blockblast/finish', { id: bbCur.id, score: s });
     window.__bbPlaying = false; bbCur = null;
     BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.reward > 0 ? `<b class="win">+${r.reward.toLocaleString()}🪙</b> 지급${r.capped ? ' (오늘 한도까지만 지급)' : ''}` : '받은 🪙이 없습니다.'}</p><button class="pri" onclick="bbStart()">다시 하기</button>`);
     toast(r.reward > 0 ? `블록 블라스트 +${r.reward.toLocaleString()}🪙` : '블록 블라스트 종료');
-    await refresh(); bbData = await api('GET', '/api/blockblast'); if (tab === 'casino' && casinoMode === 'bb') render();
+    await refresh(); bbData = await api('GET', '/api/blockblast'); if (tab === 'bets' && listMode === 'bb') render();
   } catch (e) {
     BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="lose" style="margin:4px 0 10px">보상을 받지 못했습니다: ${esc(e.message)}</p><button class="pri" onclick="bbFinish()">다시 시도</button>`);
   }
 });
 BB.setOnOver(() => { bbFinish(); });
-function bbTable() {
-  if (!bbData) return '<p class="mute">불러오는 중…</p>';
-  const rec = bbData.recent.length ? bbData.recent.map((r) => `<div class="rec"><span>점수 ${r.score.toLocaleString()}</span><b class="${netCls(r.reward)}">${r.reward > 0 ? '+' + r.reward.toLocaleString() + '🪙' : '±0'}</b></div>`).join('') : '<p class="mute">아직 기록이 없습니다.</p>';
-  return `<div class="card">${soloBar(bbData.limits)}<div id="bbhost"></div></div><div class="card"><h2>최근 기록</h2>${rec}</div>`;
+let bbw = { rooms: [], recent: [] };
+const BBW_ST = { joined: '대기', playing: '하는 중', done: '완료' };
+function bbwRooms() {
+  return bbw.rooms.map((r) => {
+    const chips = `<div class="seats">${r.players.map((p) => `<span class="seat on">${nm(p)} <span class="mute">${BBW_ST[p.status]}</span></span>`).join('')}${Array.from({ length: Math.max(0, r.cap - r.count) }, () => '<span class="seat">빈자리</span>').join('')}</div>`;
+    const playingHere = window.__bbPlaying && bbCur && bbCur.kind === 'war' && bbCur.id === r.id;
+    let act = '';
+    if (r.my_status === 'none') act = r.count < r.cap ? `<button class="pri" onclick="bbwJoin(${r.id}, ${r.stake})">참가 (${r.stake.toLocaleString()}🪙)</button>` : '<div class="mute">자리가 다 찼습니다.</div>';
+    else if (r.my_status === 'joined') act = `<button class="pri" onclick="bbwStart(${r.id})">내 판 시작</button>`;
+    else if (r.my_status === 'playing') act = playingHere ? '<div class="mute">지금 하는 중입니다. 위쪽 게임 화면에서 이어서 하십시오.</div>' : `<div class="lose">이전 판이 끝나지 않았습니다.</div><button onclick="bbwForfeit(${r.id})">포기하고 0점 제출</button>`;
+    else act = `<div class="mute">내 점수 <b style="color:var(--gold)">${r.my_score.toLocaleString()}</b> · 다른 사람이 끝나기를 기다리는 중입니다.</div>`;
+    const host = r.mine ? `<div style="margin-top:6px"><button onclick="bbwClose(${r.id})">마감하고 결과 내기</button></div>` : '';
+    return `<div class="room ${r.mine ? 'mine' : ''}"><div class="row"><span>${nm(r.host)} ${r.my_status !== 'none' ? '<span class="tag s">참가 중</span>' : ''}</span><b class="pts">${r.stake.toLocaleString()}🪙</b></div>
+      <div class="mute">${r.count}/${r.cap}명 · 같은 블록 순서로 한 판씩 → 최고 점수가 판돈 전부</div>${chips}${act}${host}</div>`;
+  }).join('');
 }
+function bbView() {
+  if (!bbData) return '<p class="mute">불러오는 중…</p>';
+  const rooms = bbwRooms() || '<p class="mute" style="text-align:center">열려 있는 대결 방이 없습니다. 위에서 방을 열어보십시오!</p>';
+  const rec = bbw.recent.map((r) => {
+    const top = Math.max(...r.players.map((p) => (p.score === null ? -1 : p.score)));
+    return `<div class="card sub ${r.mine ? 'me' : ''}"><div class="row"><span>${r.players.map((p) => `<span class="pn ${p.score === top ? 'win' : ''}">${esc(p.name)} ${p.score === null ? '–' : p.score.toLocaleString()}</span>`).join('')}</span>
+      <span class="mute">판돈 ${(r.stake * r.players.length).toLocaleString()}🪙</span>${r.net === null ? '' : `<b class="${netCls(r.net)}">${netText(r.net)}</b>`}</div></div>`;
+  }).join('') || '<p class="mute">아직 결과가 없습니다.</p>';
+  const recent = bbData.recent.length ? bbData.recent.map((r) => `<div class="rec"><span>점수 ${r.score.toLocaleString()}</span><b class="${netCls(r.reward)}">${r.reward > 0 ? '+' + r.reward.toLocaleString() + '🪙' : '±0'}</b></div>`).join('') : '<span class="mute">아직 기록이 없습니다.</span>';
+  return `<div class="card"><h2>🧱 블록 블라스트</h2>
+    <div class="mute">블록을 끌어서 8×8 판에 놓고 가로·세로줄을 채워 없애는 퍼즐입니다. <b>혼자 하면</b> 끝난 뒤 점수 × ${bbData.rate_pct / 100}만큼 🪙을 받습니다 (한 판 최대 ${bbData.max_reward}🪙, 시작하면 한 판으로 계산).</div>
+    ${soloBar(bbData.limits)}<div id="bbhost"></div><div class="mute" style="margin-top:8px">혼자 한 최근 기록: ${recent}</div></div>
+  <div class="card"><h2>⚔️ 대결 방</h2>
+    <div class="mute">판돈을 걸고 방을 열면, 참가자 모두가 <b>같은 블록 순서</b>로 각자 한 판씩 합니다. <b>점수가 가장 높은 사람이 판돈 전부</b>를 가져가고, 동점이면 나눕니다. 모두 끝나거나 방장이 마감하면 결과가 나오고, 12시간이 지나면 자동으로 마감됩니다. 점수를 내지 못한 사람은 판돈을 잃습니다.</div>
+    <div class="betrow" style="margin-top:8px"><input id="bwstake" type="number" min="10" step="10" placeholder="판돈 (참가자 모두 같은 금액)"><input id="bwcap" type="number" min="2" max="6" value="2" style="max-width:84px" placeholder="인원"></div>
+    <button class="pri" style="width:100%;margin-top:6px" onclick="bbwCreate()">방 열기</button></div>
+  ${rooms}<h2 class="sec">최근 대결 결과</h2>${rec}`;
+}
+const bbwCreate = guard(async () => {
+  await api('POST', '/api/bbwar/create', { stake: Number($('#bwstake').value), cap: Number($('#bwcap').value) });
+  toast('방을 열었습니다. 상대를 기다립니다'); await refresh(); await fetchBbw(); render();
+});
+const bbwJoin = guard(async (id, stake) => {
+  if (!(await ask(`${stake.toLocaleString()}🪙을 내고 참가합니까?\n(참가한 뒤 "내 판 시작"을 눌러 한 판을 하면 됩니다)`))) return;
+  await api('POST', '/api/bbwar/join', { room_id: id }); toast('참가했습니다'); await refresh(); await fetchBbw(); render();
+});
+const bbwStart = guard(async (id) => {
+  if (window.__bbPlaying) throw new Error('이미 게임을 하는 중입니다.');
+  if (!(await ask('시작하면 되돌릴 수 없고, 한 판만 할 수 있습니다. 모두 같은 블록 순서로 시작합니다. 시작합니까?'))) return;
+  const r = await api('POST', '/api/bbwar/start', { room_id: id });
+  bbCur = { kind: 'war', id }; listMode = 'bb'; tab = 'bets'; render();
+  window.__bbPlaying = true; BB.begin(r.seed);
+  const h = document.getElementById('bbhost'); if (h && h.scrollIntoView) h.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+async function bbwSubmit(s) {
+  try {
+    const r = await api('POST', '/api/bbwar/submit', { room_id: bbCur.id, score: s });
+    window.__bbPlaying = false; bbCur = null;
+    BB.showCard(`<h2 style="margin:0 0 4px">제출 완료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="mute" style="margin:4px 0 10px">${r.resolved ? '모두 끝나서 결과가 나왔습니다. 아래 최근 결과를 확인하십시오.' : '다른 사람이 끝나면 결과가 나옵니다.'}</p><button class="pri" onclick="bbIdle()">확인</button>`);
+    await refresh(); await fetchBbw(); if (tab === 'bets' && listMode === 'bb') render();
+  } catch (e) {
+    BB.showCard(`<h2 style="margin:0 0 4px">게임 종료</h2><div class="bbbig">${s.toLocaleString()}</div><p class="lose" style="margin:4px 0 10px">점수를 제출하지 못했습니다: ${esc(e.message)}</p><button class="pri" onclick="bbFinish()">다시 시도</button>`);
+  }
+}
+const bbIdle = () => { BB.reset(); BB.showCard(bbHome()); };
+const bbwForfeit = guard(async (id) => {
+  if (!(await ask('이 판을 포기하고 0점으로 제출합니까?'))) return;
+  await api('POST', '/api/bbwar/submit', { room_id: id, score: 0 }); await refresh(); await fetchBbw(); render();
+});
+const bbwClose = guard(async (id) => {
+  if (!(await ask('지금 마감하면 점수를 내지 않은 사람은 판돈을 잃습니다. 마감합니까?'))) return;
+  await api('POST', '/api/bbwar/close', { room_id: id }); toast('마감했습니다'); await refresh(); await fetchBbw(); render();
+});
 function bbAttach() {
   const h = document.getElementById('bbhost'); if (!h) return;
   h.appendChild(BB.root);
@@ -2629,9 +2813,9 @@ function bbAttach() {
 
 /* ---- 화면 조립 ---- */
 function bodyView() {
-  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
+  if (tab === 'bets') return modeToggle(listMode, 'setListMode') + (listMode === 'all' ? allView() : listMode === 'bb' ? bbView() : listMode === 'rps' ? rpsLobby() : listMode === 'lun' ? lunLobby() : listMode === 'lad' ? ladLobby() : (sortBets(bets).map(betView).join('') || '<p class="mute">아직 도박이 없습니다. 하나 열어보십시오!</p>'));
   if (tab === 'new') return modeToggle(createMode, 'setCreateMode') + ({ bet: newView, rps: rpsCreateView, lun: lunCreateView, lad: ladCreateView }[createMode] || newView)();
-  if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : casinoMode === 'bb' ? bbTable() : bjTable());
+  if (tab === 'casino') return `<div class="mute" style="margin:0 2px 6px">딜러(서버)와 혼자 하는 게임입니다. 이기면 🪙이 새로 생기고 지면 사라집니다.</div>` + modeToggle(casinoMode, 'setCasinoMode') + (casinoMode === 'slots' ? slotTable() : bjTable());
   if (tab === 'gift') return modeToggle(giftMode, 'setGiftMode') + (giftMode === 'beg' ? begView() : dropView());
   if (tab === 'chat') return chatView();
   if (tab === 'shop') return shopView();
@@ -2726,7 +2910,7 @@ window.openAdmin = openAdmin; window.closeAdmin = closeAdmin;
       n.replaceWith(f);
     }
   };
-  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) walk(n); else if (n.nodeType === 3 && n.parentNode && n.nodeValue.includes('🪙')) walk(n.parentNode); } })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
 

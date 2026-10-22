@@ -24,6 +24,8 @@ var SHEETS = {
   bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
   slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
   bb: ['id', 'user_id', 'status', 'score', 'reward', 'created_at', 'finished_at'],
+  bbr: ['id', 'host_id', 'stake', 'cap', 'seed', 'status', 'winner_id', 'created_at', 'played_at'],
+  bbrp: ['id', 'room_id', 'user_id', 'status', 'score', 'started_at', 'finished_at'],
   drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
   dropc: ['id', 'drop_id', 'user_id', 'amount', 'at'],
   begs: ['id', 'user_id', 'want', 'got', 'msg', 'status', 'created_at'],
@@ -392,13 +394,14 @@ function adminRooms() {
   tbl('rps').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'rps', id: r.id, host: nm(r.host_id), stake: r.stake, players: [nm(r.host_id)], cap: 2, created_at: r.created_at, grp: gp(r.host_id) }); });   // 손은 안 보임
   tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lun', id: r.id, host: nm(r.host_id), stake: r.stake, players: lunPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });   // 숫자는 안 보임
   tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') out.push({ kind: 'lad', id: r.id, host: nm(r.host_id), stake: r.stake, players: ladPlayers(r).sort(function (a, b) { return a.slot - b.slot; }).map(function (p) { return nm(p.user_id); }), cap: r.slots, created_at: r.created_at, grp: gp(r.host_id) }); });
+  tbl('bbr').all().forEach(function (r) { if (r.status === 'open') out.push({ kind: 'bb', id: r.id, host: nm(r.host_id), stake: r.stake, players: bbwPlayers(r).map(function (p) { return nm(p.user_id); }), cap: r.cap, created_at: r.created_at, grp: gp(r.host_id) }); });
   return out.sort(function (a, b) { return b.created_at - a.created_at; });
 }
 function adminGroups() {
   var by = {}, codes = {};
   tbl('rooms').all().forEach(function (r) { codes[String(r.grp)] = r.code; by[String(r.grp)] = by[String(r.grp)] || []; });
   tbl('users').all().forEach(function (u) { var g = grpOf(u); (by[g] = by[g] || []).push(u); });
-  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; });
+  var bets = tbl('bets').all(), waiting = [].concat(tbl('rps').all(), tbl('lun').all(), tbl('lad').all()).filter(function (r) { return r.status === 'waiting'; }).concat(tbl('bbr').all().filter(function (r) { return r.status === 'open'; }));
   return Object.keys(by).map(function (g) {
     var ms = by[g], ids = {}; ms.forEach(function (m) { ids[m.id] = 1; });
     return { id: g, label: codes[g] || '방 없음', members: ms.map(function (m) { return m.name; }), count: ms.length, points: ms.reduce(function (a, m) { return a + m.points; }, 0),
@@ -406,7 +409,13 @@ function adminGroups() {
   }).sort(function (a, b) { return b.count - a.count; });
 }
 function adminCloseRoom(kind, roomId) {
-  if (['rps', 'lun', 'lad'].indexOf(kind) < 0) fail(400, '알 수 없는 게임입니다.');
+  if (['rps', 'lun', 'lad', 'bb'].indexOf(kind) < 0) fail(400, '알 수 없는 게임입니다.');
+  if (kind === 'bb') {
+    var br = byId('bbr', roomId);
+    if (br.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    bbwPlayers(br).forEach(function (p) { addPoints(p.user_id, br.stake); });
+    br.status = 'cancelled'; tbl('bbr').save(br); return;
+  }
   var r = byId(kind, roomId);
   if (r.status !== 'waiting') fail(400, '이미 끝났거나 닫힌 방입니다.');
   if (kind === 'rps') addPoints(r.host_id, r.stake);
@@ -431,6 +440,9 @@ function adminDeleteGroup(grp) {
     tbl(pair[0]).removeWhere(function (r) { return rooms[r.id]; });
   });
   tbl('rps').removeWhere(function (r) { return ids[r.host_id] || ids[r.guest_id]; });
+  var bbRooms = {}; tbl('bbr').where(function (r) { return ids[r.host_id]; }).forEach(function (r) { bbRooms[r.id] = 1; });
+  tbl('bbrp').removeWhere(function (p) { return bbRooms[p.room_id] || ids[p.user_id]; });
+  tbl('bbr').removeWhere(function (r) { return bbRooms[r.id]; });
   ['bj', 'slots', 'bb', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
   tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
   tbl('users').removeWhere(function (u) { return ids[u.id]; });
@@ -512,6 +524,45 @@ function lunResolve(room) {
   else addPoints(ps[w].user_id, room.stake * ps.length);                                // 승자가 판돈 전체
   room.status = 'done'; room.winner_id = w < 0 ? '' : ps[w].user_id; room.played_at = now(); tbl('lun').save(room);
 }
+/* ================= 🧱 블록 블라스트 대결 (모두가 같은 블록 순서로 각자 한 판씩 → 최고 점수가 판돈 전부) ================= */
+function bbwPlayers(room) { return tbl('bbrp').where(function (p) { return p.room_id === room.id; }); }
+/** 점수를 낸 사람 중 최고 점수가 판돈 전부 (동점이면 나눔). 못 낸 사람은 판돈을 잃고, 아무도 못 냈거나 혼자뿐이면 환불 */
+function bbwResolve(room) {
+  var ps = bbwPlayers(room), done = ps.filter(function (p) { return p.status === 'done'; });
+  if (!done.length || ps.length < 2) { ps.forEach(function (p) { addPoints(p.user_id, room.stake); }); room.status = 'cancelled'; room.winner_id = ''; }
+  else {
+    var top = Math.max.apply(null, done.map(function (p) { return p.score; }));
+    var winners = done.filter(function (p) { return p.score === top; }).sort(function (a, b) { return a.finished_at - b.finished_at; });
+    var pot = room.stake * ps.length, share = Math.floor(pot / winners.length);
+    winners.forEach(function (w, i) { addPoints(w.user_id, share + (i === 0 ? pot - share * winners.length : 0)); });
+    room.status = 'done'; room.winner_id = winners.length === 1 ? winners[0].user_id : '';
+  }
+  room.played_at = now(); tbl('bbr').save(room);
+}
+function bbwSweep() {   // 12시간이 지난 방은 그 시점의 점수로 마감
+  var old = function () { return tbl('bbr').where(function (r) { return r.status === 'open' && r.created_at < now() - RPS.EXPIRE_MS; }); };
+  if (!old().length) return;
+  withLock(function () { TBL.bbr = null; TBL.bbrp = null; TBL.users = null; old().forEach(bbwResolve); });
+}
+function bbwView(u) {
+  bbwSweep();
+  var rooms = tbl('bbr').all().filter(function (r) { return r.status === 'open' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 30).map(function (r) {
+    var ps = bbwPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0];
+    return { id: r.id, stake: r.stake, cap: r.cap, count: ps.length, host: playerView(r.host_id), mine: r.host_id === u.id,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.status = p.status; return o; }),     // 점수는 끝나기 전까지 숨김
+      my_status: me ? me.status : 'none', my_score: me && me.status === 'done' ? me.score : null };
+  });
+  var recent = tbl('bbr').all().filter(function (r) { return r.status === 'done' && sameRoom(r.host_id, u); }).sort(function (a, b) { return b.id - a.id; }).slice(0, 8).map(function (r) {
+    var ps = bbwPlayers(r), me = ps.some(function (p) { return p.user_id === u.id; }), pot = r.stake * ps.length;
+    var done = ps.filter(function (p) { return p.status === 'done'; }), top = Math.max.apply(null, done.map(function (p) { return p.score; }));
+    var winners = done.filter(function (p) { return p.score === top; }), mine = winners.some(function (p) { return p.user_id === u.id; });
+    var net = !me ? null : mine ? Math.floor(pot / winners.length) - r.stake + (winners.sort(function (a, b) { return a.finished_at - b.finished_at; })[0].user_id === u.id ? pot - Math.floor(pot / winners.length) * winners.length : 0) : -r.stake;
+    return { id: r.id, stake: r.stake, at: r.played_at, mine: me, net: net, winner: r.winner_id ? playerView(r.winner_id) : null,
+      players: ps.map(function (p) { var o = playerView(p.user_id); o.score = p.status === 'done' ? p.score : null; return o; }).sort(function (a, b) { return (b.score === null ? -1 : b.score) - (a.score === null ? -1 : a.score); }) };
+  });
+  return { rooms: rooms, recent: recent, min: GAMES.BBWAR.MIN_PLAYERS, max: GAMES.BBWAR.MAX_PLAYERS };
+}
+
 /* ================= 💸 돈뿌리기 / 🙏 구걸하기 ================= */
 var GIFT_MAX = 1000;
 function giftSweep() {   // 12시간이 지나면 닫음 (뿌리기는 남은 돈을 돌려받음)
@@ -653,6 +704,8 @@ function removeUser(u) {   // 계정 삭제 (관리자 삭제·추방 공용). �
   tbl('lun').all().forEach(function (r) { if (r.status === 'waiting') waitingLun[r.id] = 1; });
   tbl('lad').all().forEach(function (r) { if (r.status === 'waiting') waitingLad[r.id] = 1; });
   if (tbl('lunp').find(function (p) { return p.user_id === u.id && waitingLun[p.room_id]; }) || tbl('ladp').find(function (p) { return p.user_id === u.id && waitingLad[p.room_id]; }) || bjActive(u.id)) fail(400, '진행 중인 게임이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
+  var openBb = {}; tbl('bbr').all().forEach(function (r) { if (r.status === 'open') openBb[r.id] = 1; });
+  if (tbl('bbrp').find(function (p) { return p.user_id === u.id && openBb[p.room_id]; })) fail(400, '진행 중인 블록 블라스트 대결이 있어서 처리할 수 없습니다. 끝나거나 닫힌 뒤에 하십시오.');
   tbl('rps').where(function (r) { return r.host_id === u.id && r.status === 'waiting'; }).forEach(function (r) { r.status = 'cancelled'; tbl('rps').save(r); });
   tbl('sessions').removeWhere(function (s) { return s.user_id === u.id; });
   tbl('messages').removeWhere(function (m) { return m.user_id === u.id; });
@@ -899,6 +952,63 @@ var ROUTES = {
   },
 
   /* ---- 🪜 사다리타기 ---- */
+  /* ---- 🧱 블록 블라스트 대결 ---- */
+  'GET /api/bbwar': function (body, u) { needLogin(u); return bbwView(u); },
+  'POST /api/bbwar/create': function (body, u) {
+    needLogin(u);
+    var stake = checkStake(body.stake), cap = Number(body.cap), W = GAMES.BBWAR;
+    if (cap !== Math.floor(cap) || cap < W.MIN_PLAYERS || cap > W.MAX_PLAYERS) fail(400, '인원은 ' + W.MIN_PLAYERS + '~' + W.MAX_PLAYERS + '명입니다.');
+    if (u.points < stake) fail(400, '칩이 부족합니다.');
+    if (isDup('bbr', function (r) { return r.host_id === u.id && r.stake === stake && r.cap === cap && r.status === 'open'; })) fail(409, '연타');
+    if (tbl('bbr').where(function (r) { return r.host_id === u.id && r.status === 'open'; }).length >= RPS.MAX_OPEN) fail(400, '동시에 열 수 있는 방은 ' + RPS.MAX_OPEN + '개까지입니다.');
+    addPoints(u.id, -stake);
+    var r = tbl('bbr').insert({ host_id: u.id, stake: stake, cap: cap, seed: 1 + Math.floor(Math.random() * 2147483646), status: 'open', winner_id: '', created_at: now(), played_at: '' });
+    tbl('bbrp').insert({ room_id: r.id, user_id: u.id, status: 'joined', score: 0, started_at: '', finished_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/bbwar/join': function (body, u) {
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (!sameRoom(r.host_id, u)) fail(404, '방이 없습니다.');
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    var ps = bbwPlayers(r);
+    if (ps.some(function (p) { return p.user_id === u.id; })) fail(400, '이미 들어간 방입니다.');
+    if (ps.length >= r.cap) fail(400, '자리가 다 찼습니다.');
+    if (u.points < r.stake) fail(400, '칩이 부족합니다.');
+    addPoints(u.id, -r.stake);
+    tbl('bbrp').insert({ room_id: r.id, user_id: u.id, status: 'joined', score: 0, started_at: '', finished_at: '' });
+    return { ok: true, id: r.id };
+  },
+  'POST /api/bbwar/start': function (body, u) {   // 내 판 시작: 한 번만 (다시 시작해서 같은 블록을 연습할 수 없음)
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    var me = bbwPlayers(r).filter(function (p) { return p.user_id === u.id; })[0] || fail(400, '이 방에 들어가 있지 않습니다.');
+    if (me.status !== 'joined') fail(400, '이미 시작했거나 끝낸 판입니다.');
+    me.status = 'playing'; me.started_at = now(); tbl('bbrp').save(me);
+    return { ok: true, seed: r.seed, id: r.id };
+  },
+  'POST /api/bbwar/submit': function (body, u) {
+    needLogin(u);
+    var r = byId('bbr', body.room_id), score = Number(body.score);
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    if (score !== Math.floor(score) || score < 0 || score > GAMES.BB.MAX_SCORE) fail(400, '점수가 올바르지 않습니다.');
+    var ps = bbwPlayers(r), me = ps.filter(function (p) { return p.user_id === u.id; })[0] || fail(400, '이 방에 들어가 있지 않습니다.');
+    if (me.status !== 'playing') fail(400, '진행 중인 판이 아닙니다.');
+    me.status = 'done'; me.score = score; me.finished_at = now(); tbl('bbrp').save(me);
+    var resolved = false;
+    if (ps.length >= r.cap && ps.every(function (p) { return p.status === 'done'; })) { bbwResolve(r); resolved = true; }
+    return { ok: true, resolved: resolved, score: score };
+  },
+  'POST /api/bbwar/close': function (body, u) {   // 방장이 지금 마감: 점수를 낸 사람끼리 결판, 못 낸 사람은 판돈을 잃음
+    needLogin(u);
+    var r = byId('bbr', body.room_id);
+    if (r.host_id !== u.id) fail(403, '방을 만든 사람만 마감할 수 있습니다.');
+    if (r.status !== 'open') fail(400, '이미 끝났거나 닫힌 방입니다.');
+    bbwResolve(r);
+    return { ok: true };
+  },
+
   /* ---- 💸 돈뿌리기 / 🙏 구걸하기 ---- */
   'GET /api/gifts': function (body, u) { needLogin(u); return giftView(u); },
   'POST /api/drop/create': function (body, u) {

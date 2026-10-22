@@ -38,7 +38,7 @@ srv.listen(3140, async () => {
     await A.click('button:has-text("취소(환불)")'); await A.waitForSelector('#modal:not([hidden]) .mmsg'); console.log('확인 창:', await A.textContent('.mmsg')); await A.click('#myes');
     await B.waitForFunction(() => document.querySelector('#who').textContent.includes('1,000'), null, { timeout: 20000 }); console.log('환불 뒤 B 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
     // 블록 블라스트: 시작 → 블록 하나 놓기 → 화면이 다시 그려져도 판이 유지 → 끝내기(점수 1234) → 보상 123
-    await A.click('button:has-text("카지노")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForSelector('.bbover.on button:has-text("게임 시작")', { timeout: 20000 });
+    await A.click('button:has-text("🎲 게임")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForSelector('.bbover.on button:has-text("게임 시작")', { timeout: 20000 });
     const chips0 = await A.evaluate(() => user.points);
     await A.click('.bbover.on button:has-text("게임 시작")'); await A.waitForSelector('.bbslot .bbpc', { timeout: 20000 });
     const slot = await A.$('.bbslot:nth-child(1) .bbpc'), sb = await slot.boundingBox(), bb = await (await A.$('.bbboard')).boundingBox();
@@ -47,7 +47,28 @@ srv.listen(3140, async () => {
     await A.screenshot({ path: process.env.SC + '/art_bb.png' });
     await A.evaluate(() => { BB.score = () => 1234; bbFinish(); }); await A.waitForSelector('.bbover.on .bbbig', { timeout: 20000 });
     await A.waitForFunction((c) => user.points === c + 123, chips0, { timeout: 20000 }); console.log('보상 지급:', chips0, '→', await A.evaluate(() => user.points), '|', (await A.textContent('.bbcard')).replace(/\s+/g, ' '));
+    await A.evaluate(() => BB.reset());   // 시험용 종료 흉내를 낸 뒤 판을 비움
     await A.click('button:has-text("🎲 게임")');
+    // 블록 블라스트 대결: A 가 방을 열고 B 가 참가 → 같은 블록 순서 → 점수 제출 → 높은 쪽이 판돈 전부
+    const chipsA0 = await A.evaluate(() => user.points), chipsB0 = await B.evaluate(() => user.points);
+    await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForSelector('#bwstake', { timeout: 20000 });
+    await A.fill('#bwstake', '100'); await A.fill('#bwcap', '2'); await A.click('button.pri:has-text("방 열기")');
+    await B.click('button:has-text("🎲 게임")'); await B.click('button:has-text("🧱 블록 블라스트")'); await B.waitForSelector('button:has-text("참가 (")', { timeout: 20000 });
+    await B.click('button:has-text("참가 (")'); await B.click('#myes'); await B.waitForSelector('button:has-text("내 판 시작")', { timeout: 20000 });
+    await A.waitForSelector('button:has-text("내 판 시작")', { timeout: 20000 });
+    await B.click('button:has-text("내 판 시작")'); await B.click('#myes'); await B.waitForFunction(() => BB.isRunning(), null, { timeout: 20000 });
+    await A.click('button:has-text("내 판 시작")'); await A.click('#myes'); await A.waitForFunction(() => BB.isRunning(), null, { timeout: 20000 });
+    const trayOf = (pg) => pg.evaluate(() => Array.from(document.querySelectorAll('.bbslot')).map((s) => s.innerHTML).join('|'));
+    const sig = (pg) => pg.evaluate(() => Array.from(document.querySelectorAll('.bbslot')).map((s) => (s.querySelector('.bbpc') ? s.querySelector('.bbpc').style.gridTemplateColumns + '/' + s.querySelectorAll('i.f').length + '/' + (s.querySelector('i.f') ? s.querySelector('i.f').style.cssText.match(/--b\d/)[0] : '') : '-')).join(' '));
+    console.log('트레이 A:', await sig(A), '| B:', await sig(B));
+    console.log('대결 같은 블록 순서:', (await trayOf(A)) === (await trayOf(B)) && (await trayOf(A)).length > 100);
+    await B.evaluate(() => { BB.score = () => 700; bbFinish(); });
+    await B.waitForSelector('.bbover.on:has-text("제출 완료")', { timeout: 20000 }).catch(async (e) => { console.log('B 카드:', (await B.textContent('.bbcard')).replace(/\s+/g, ' ')); throw e; });
+    await A.evaluate(() => { BB.score = () => 300; bbFinish(); }); await A.waitForSelector('.bbover.on:has-text("제출 완료")', { timeout: 20000 });
+    await B.waitForFunction((c) => user.points === c + 100, chipsB0 - 0, { timeout: 25000 }).catch(() => {});
+    await A.waitForFunction((c) => user.points === c - 100, chipsA0, { timeout: 25000 }).catch(() => {});
+    console.log('대결 결과 칩:', 'A', chipsA0, '→', await A.evaluate(() => user.points), '| B', chipsB0, '→', await B.evaluate(() => user.points), '(기대 A -100, B +100)');
+    await A.screenshot({ path: process.env.SC + '/art_bbwar.png', fullPage: true });
     await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
     await A.screenshot({ path: process.env.SC + '/art_admin.png' });
     console.log('B 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null);

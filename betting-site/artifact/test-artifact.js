@@ -89,6 +89,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const sp = ok(await call('C', 'POST', '/api/slots/spin', { bet: 50 }));
   assert.ok(Array.isArray(sp.reels) || sp.reels);
 
+  /* ---- 블록 블라스트 대결: 동시 참가·동시 제출 ---- */
+  await sleep(300); const T0 = await total();   // 혼자 하는 게임은 칩이 새로 생기거나 사라지므로 여기서부터 기준을 다시 잡음
+  const war = ok(await call('A', 'POST', '/api/bbwar/create', { stake: 40, cap: 3 }));
+  assert.ok(await waitFor(async () => ok(await call('B', 'GET', '/api/bbwar')).rooms.length === 1));
+  const wj = await Promise.all(['B', 'C', 'D'].map((n) => call(n, 'POST', '/api/bbwar/join', { room_id: war.id })));
+  assert.equal(wj.filter((r) => !r.error).length, 2, '자리가 3개라 두 명만 더 들어감');
+  const joined = ['B', 'C', 'D'].filter((n, i) => !wj[i].error);
+  const seeds = await Promise.all(['A', ...joined].map((n) => call(n, 'POST', '/api/bbwar/start', { room_id: war.id })));
+  seeds.forEach(ok); assert.equal(new Set(seeds.map((r) => r.data.seed)).size, 1, '모두 같은 시드');
+  const subs = await Promise.all(['A', ...joined].map((n, i) => call(n, 'POST', '/api/bbwar/submit', { room_id: war.id, score: [300, 900, 500][i] })));
+  subs.forEach(ok); assert.equal(subs.filter((r) => r.data.resolved).length, 1, '결판은 한 번만');
+  assert.ok(await waitFor(async () => (await total()) === T0), '대결 뒤 총량');
+  assert.ok(await waitFor(async () => ok(await call('A', 'GET', '/api/bbwar')).recent.length === 1));
+
   /* ---- 관리자 ---- */
   assert.equal((await call('B', 'POST', '/api/admin/settings', { values: { gift_max: 500 } })).code, 403, '소유자가 아니면 관리자 기능 불가');
   ok(await call('A', 'POST', '/api/admin/settings', { values: { gift_max: 500 } }));

@@ -8,7 +8,7 @@
  */
 (function (root) {
   'use strict';
-  var PERSIST = ['users', 'bets', 'options', 'wagers', 'items', 'rooms', 'rps', 'lun', 'lunp', 'lad', 'ladp', 'bj', 'slots', 'bb', 'drops', 'dropc', 'begs', 'begg'];
+  var PERSIST = ['users', 'bets', 'options', 'wagers', 'items', 'rooms', 'rps', 'lun', 'lunp', 'lad', 'ladp', 'bj', 'slots', 'bb', 'bbr', 'bbrp', 'drops', 'dropc', 'begs', 'begg'];
   var LOCAL = ['sessions'];                       // 이 브라우저에만 있는 표 (로그인 표시)
   var MESSAGES = 'messages';                      // 채팅: 최근 것만 구독, 임대 없이 추가
   var MSG_LIMIT = 400;
