@@ -2044,7 +2044,7 @@ function nm(o, force = {}) {
   return `${d.title ? `<span class="ttl">${esc(d.title)}</span>` : ''}${d.badge ? d.badge + ' ' : ''}<span class="nm${cls}"${style}>${esc(o.name)}</span>`;
 }
 function renderHeader() {
-  $('#who').innerHTML = user ? `${nm(user)} ${user.can_rename ? '<button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button>' : ''} · <span class="pts">${user.points.toLocaleString()}🪙</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> ${ENGINE && ENGINE.isOwner ? '<button onclick="openAdmin()" style="padding:2px 8px;font-size:12px">⚙️ 관리</button>' : ''}` : '';
+  $('#who').innerHTML = window.__adminOnly ? '<span class="tag">🛠 관리자 전용 계정</span>' : user ? `${nm(user)} ${user.can_rename ? '<button onclick="rename()" title="닉네임 변경" style="padding:1px 7px;font-size:12px">✏️</button>' : ''} · <span class="pts">${user.points.toLocaleString()}🪙</span> <button onclick="go('rank')" title="방 멤버 보기" style="padding:1px 7px;font-size:12px">👥${user.group_size || 1}</button> ${ENGINE && ENGINE.isOwner ? '<button onclick="openAdmin()" style="padding:2px 8px;font-size:12px">⚙️ 관리</button>' : ''}` : '';
 }
 let refreshP = null;
 function refresh() {   // 이미 진행 중이면 끝난 뒤 한 번 더 (동작 직후 호출이 옛 데이터로 끝나지 않게). 요청이 쌓이지는 않음
@@ -2852,7 +2852,7 @@ function rankView() {
 
 /* ===== 시작: 아티팩트 저장소 연결 ===== */
 let ENGINE = null, ENG_ERR = '';
-const ADMIN_ENABLED = false;   // false: 소유자 계정도 관리자 기능(관리 버튼·설정·유저 관리)을 쓰지 않음
+const ADMIN_ENABLED = true;   // 소유자 계정은 '관리 전용': 플레이어 계정 없이 관리 화면만 열림 (false 로 바꾸면 관리 기능 자체를 끔)
 async function boot() {
   try {
     const c = window.claude;
@@ -2867,9 +2867,11 @@ async function boot() {
     await eng.start();
     ENGINE = eng;
     ENGINE.onChange(() => { if (!document.hidden) refresh(); });
-    if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
+    if (ENGINE.isOwner) { window.__adminOnly = true; window.__adminMode = true; }   // 소유자는 게임에 참가하지 않고 관리만 함
+    else if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
   } catch (e) { ENG_ERR = e.message || '연결하지 못했습니다.'; }
-  render(); refresh();
+  if (window.__adminOnly) { renderHeader(); ADM.open(); } else render();
+  refresh();
   setInterval(() => { if (!document.hidden) refresh(); }, 3000);
 }
 boot();
@@ -2974,7 +2976,7 @@ const gift = guard(async () => {
 function render() {
   const st = data.stats;
   const S = { open: '진행', closed: '마감', resolved: '확정', cancelled: '취소' };
-  $('#app').innerHTML = `<div class="row"><h1 style="margin:0">🛠 관리자 콘솔</h1><button onclick="closeAdmin()">← 도박장</button></div>
+  $('#app').innerHTML = `<div class="row"><h1 style="margin:0">🛠 관리자 콘솔</h1>${window.__adminOnly ? '' : '<button onclick="closeAdmin()">← 도박장</button>'}</div>
   <div class="stats">
     <div class="stat">유저<b>${st.users}</b></div><div class="stat">유통 🪙<b>${st.points.toLocaleString()}</b></div>
     <div class="stat">총 베팅 수<b>${st.wagers}</b></div><div class="stat">총 베팅액<b>${st.wagered.toLocaleString()}🪙</b></div>

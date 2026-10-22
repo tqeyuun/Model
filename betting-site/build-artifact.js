@@ -46,12 +46,13 @@ script = rep(script, '🚪 내 방 코드 <b style="color:var(--cyan)">${esc(use
 script = rep(script, '상대에게 이 코드를 알려주십시오', '초대는 아티팩트의 공유 메뉴에서 합니다');
 // 계정은 Claude 계정에 묶여 있어서 로그아웃 없음, 소유자에게만 관리 버튼
 script = rep(script, `<button onclick="logout()" style="padding:2px 8px;font-size:12px">로그아웃</button>`, `\${ENGINE && ENGINE.isOwner ? '<button onclick="openAdmin()" style="padding:2px 8px;font-size:12px">⚙️ 관리</button>' : ''}`);
+script = rep(script, "$('#who').innerHTML = user ?", "$('#who').innerHTML = window.__adminOnly ? '<span class=\"tag\">🛠 관리자 전용 계정</span>' : user ?");
 script = rep(script, 'function render() {\n', 'function render() {\n  if (window.__adminMode) { renderHeader(); return; }\n');
 // 빠른 반영: 저장소가 바뀌면 바로 새로고침, 주기는 짧게 (읽기는 메모리에서)
 script = rep(script, '}, 4000); // 앱스 스크립트는 호출이 느려서 간격을 넉넉히', '}, 1500);');
 script = cut(script, '(async () => {\n  render(); refresh();', '// 글자 🪙 → 게임칩', `/* ===== 시작: 아티팩트 저장소 연결 ===== */
 let ENGINE = null, ENG_ERR = '';
-const ADMIN_ENABLED = ${process.env.ADMIN_ENABLED === '1' ? 'true' : 'false'};   // false: 소유자 계정도 관리자 기능(관리 버튼·설정·유저 관리)을 쓰지 않음
+const ADMIN_ENABLED = true;   // 소유자 계정은 '관리 전용': 플레이어 계정 없이 관리 화면만 열림 (false 로 바꾸면 관리 기능 자체를 끔)
 async function boot() {
   try {
     const c = window.claude;
@@ -66,9 +67,11 @@ async function boot() {
     await eng.start();
     ENGINE = eng;
     ENGINE.onChange(() => { if (!document.hidden) refresh(); });
-    if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
+    if (ENGINE.isOwner) { window.__adminOnly = true; window.__adminMode = true; }   // 소유자는 게임에 참가하지 않고 관리만 함
+    else if (ENGINE.myUser()) { const r = await ENGINE.enter(); if (!r.error) token = r.data.token; }
   } catch (e) { ENG_ERR = e.message || '연결하지 못했습니다.'; }
-  render(); refresh();
+  if (window.__adminOnly) { renderHeader(); ADM.open(); } else render();
+  refresh();
   setInterval(() => { if (!document.hidden) refresh(); }, 3000);
 }
 boot();
@@ -117,7 +120,7 @@ admScript = cut(admScript, 'const guard =', 'const load =', '');
 admScript = cut(admScript, 'load(); setInterval(', '\n', '');
 admScript = admScript.replace(/\bconfirm\(/g, 'await ask(').replace(/\bprompt\(/g, 'await askText(');
 admScript = admScript.replace(/const (ask\w+) = \(/g, 'const $1 = async (');
-admScript = rep(admScript, '<h1>🛠 관리자 콘솔</h1>', '<div class="row"><h1 style="margin:0">🛠 관리자 콘솔</h1><button onclick="closeAdmin()">← 도박장</button></div>');
+admScript = rep(admScript, '<h1>🛠 관리자 콘솔</h1>', '<div class="row"><h1 style="margin:0">🛠 관리자 콘솔</h1>${window.__adminOnly ? \'\' : \'<button onclick="closeAdmin()">← 도박장</button>\'}</div>');
 const handlers = ['resetSetting', 'saveSettings', 'resetAllSettings', 'delGroup', 'closeRoom', 'gift', 'userAct', 'askPoints', 'askName', 'askPin', 'askRoom', 'delMsg', 'betAct'];
 admScript = admScript.replace(new RegExp('onclick=(\\\\?")(' + handlers.join('|') + ')\\(', 'g'), 'onclick=$1ADM.$2(');
 admScript = rep(admScript, "$('#app').innerHTML = `<h1>🔒 관리자</h1>", "$('#app').innerHTML = `<div class=\"row\"><h1>🔒 관리자</h1><button onclick=\"closeAdmin()\">← 도박장</button></div>");

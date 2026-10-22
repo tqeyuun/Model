@@ -24,7 +24,7 @@ srv.listen(3140, async () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }), errs = [];
   const open = async (uid, owner) => { const pg = await (await br.newContext({ viewport: { width: 420, height: 1600 }, deviceScaleFactor: 2 })).newPage(); pg.on('pageerror', (e) => errs.push(e.message)); pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); }); await pg.goto('http://localhost:3140/?uid=' + uid + (owner ? '&owner=1' : '')); return pg; };
   try {
-    const A = await open('u_owner_aaaaaaaaaaaaaaaa', true), B = await open('u_friend_bbbbbbbbbbbbbbbb', false);
+    const A = await open('u_player_aaaaaaaaaaaaaaaa', false), B = await open('u_friend_bbbbbbbbbbbbbbbb', false);
     for (const [pg, name] of [[A, '민수'], [B, '지은']]) { await pg.waitForSelector('#n', { timeout: 20000 }); await pg.fill('#n', name); await pg.click('button:has-text("입장하기")'); await pg.waitForSelector('text=카지노', { timeout: 20000 }); }
     console.log('입장:', (await A.textContent('#who')).replace(/\s+/g, ' ').trim().slice(0, 40), '|', (await B.textContent('#who')).replace(/\s+/g, ' ').trim().slice(0, 40));
     await A.click('button:has-text("➕ 만들기")'); await A.click('button:has-text("🎲 도박 만들기")').catch(() => {});
@@ -76,8 +76,17 @@ srv.listen(3140, async () => {
     await A.click('button:has-text("💸 나눔")'); await A.click('button:has-text("🙏 구걸하기")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
     await A.click('button:has-text("🎲 게임")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForTimeout(300); leftovers.push(...await scan(A));
     console.log('남은 🪙 글자:', JSON.stringify(leftovers));
-    console.log('소유자에게도 관리 버튼 없음:', (await A.$('button:has-text("⚙️ 관리")')) === null);
-    console.log('B 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null);
+    // 소유자는 관리 전용 계정: 게임 화면 없이 관리 콘솔만 열리고, 거기서 칩 지급 같은 관리가 됨
+    const O = await open('u_owner_oooooooooooooooo', true);
+    await O.waitForSelector('text=관리자 콘솔', { timeout: 20000 });
+    console.log('관리 전용 화면:', (await O.textContent('#who')).trim(), '| 게임 메뉴 없음:', (await O.$('button:has-text("➕ 만들기")')) === null, '| 돌아가기 버튼 없음:', (await O.$('button:has-text("← 도박장")')) === null);
+    console.log('관리 콘솔 통계:', (await O.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 70));
+    const bnm = await B.evaluate(() => user.name), pb = await B.evaluate(() => user.points);
+    await O.click('tr:has-text("' + bnm + '") button:has-text("± 더하기")'); await O.fill('#minput', '50'); await O.click('#myes');
+    await B.waitForFunction((c) => user.points === c + 50, pb, { timeout: 25000 }); console.log('관리 화면에서 칩 지급:', pb, '→', await B.evaluate(() => user.points));
+    await O.screenshot({ path: process.env.SC + '/art_admin.png' });
+    console.log('관리자 목록에 소유자 계정(플레이어) 없음:', !(await O.textContent('table')).includes('u_owner'));
+    console.log('친구 화면에 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null, (await A.$('button:has-text("⚙️ 관리")')) === null);
     console.log('오류:', errs);
   } catch (e) { console.error('실패:', e.message, errs); process.exitCode = 1; }
   await br.close(); srv.close();
