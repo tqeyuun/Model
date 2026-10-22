@@ -22,7 +22,7 @@ const srv = http.createServer(async (req, res) => {
 });
 srv.listen(3140, async () => {
   const br = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }), errs = [];
-  const open = async (uid, owner) => { const pg = await (await br.newContext({ viewport: { width: 420, height: 900 }, deviceScaleFactor: 2 })).newPage(); pg.on('pageerror', (e) => errs.push(e.message)); pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); }); await pg.goto('http://localhost:3140/?uid=' + uid + (owner ? '&owner=1' : '')); return pg; };
+  const open = async (uid, owner) => { const pg = await (await br.newContext({ viewport: { width: 420, height: 1600 }, deviceScaleFactor: 2 })).newPage(); pg.on('pageerror', (e) => errs.push(e.message)); pg.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); }); await pg.goto('http://localhost:3140/?uid=' + uid + (owner ? '&owner=1' : '')); return pg; };
   try {
     const A = await open('u_owner_aaaaaaaaaaaaaaaa', true), B = await open('u_friend_bbbbbbbbbbbbbbbb', false);
     for (const [pg, name] of [[A, '민수'], [B, '지은']]) { await pg.waitForSelector('#n', { timeout: 20000 }); await pg.fill('#n', name); await pg.click('button:has-text("입장하기")'); await pg.waitForSelector('text=카지노', { timeout: 20000 }); }
@@ -37,6 +37,17 @@ srv.listen(3140, async () => {
     await A.click('button:has-text("랭킹")'); await A.waitForSelector('table'); await A.screenshot({ path: process.env.SC + '/art_rank.png' }); await A.click('button:has-text("게임")');
     await A.click('button:has-text("취소(환불)")'); await A.waitForSelector('#modal:not([hidden]) .mmsg'); console.log('확인 창:', await A.textContent('.mmsg')); await A.click('#myes');
     await B.waitForFunction(() => document.querySelector('#who').textContent.includes('1,000'), null, { timeout: 20000 }); console.log('환불 뒤 B 칩:', (await B.textContent('#who')).replace(/\s+/g, ' ').trim());
+    // 블록 블라스트: 시작 → 블록 하나 놓기 → 화면이 다시 그려져도 판이 유지 → 끝내기(점수 1234) → 보상 123
+    await A.click('button:has-text("카지노")'); await A.click('button:has-text("🧱 블록 블라스트")'); await A.waitForSelector('.bbover.on button:has-text("게임 시작")', { timeout: 20000 });
+    const chips0 = await A.evaluate(() => user.points);
+    await A.click('.bbover.on button:has-text("게임 시작")'); await A.waitForSelector('.bbslot .bbpc', { timeout: 20000 });
+    const slot = await A.$('.bbslot:nth-child(1) .bbpc'), sb = await slot.boundingBox(), bb = await (await A.$('.bbboard')).boundingBox();
+    await A.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2); await A.mouse.down(); await A.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2, { steps: 8 }); await A.mouse.up(); await A.waitForTimeout(3800);
+    console.log('블록 놓은 뒤 판 유지:', await A.evaluate(() => document.querySelectorAll('.bbc.f').length), '칸, 점수', await A.textContent('.bbscore'));
+    await A.screenshot({ path: process.env.SC + '/art_bb.png' });
+    await A.evaluate(() => { BB.score = () => 1234; bbFinish(); }); await A.waitForSelector('.bbover.on .bbbig', { timeout: 20000 });
+    await A.waitForFunction((c) => user.points === c + 123, chips0, { timeout: 20000 }); console.log('보상 지급:', chips0, '→', await A.evaluate(() => user.points), '|', (await A.textContent('.bbcard')).replace(/\s+/g, ' '));
+    await A.click('button:has-text("🎲 게임")');
     await A.click('button:has-text("⚙️ 관리")'); await A.waitForSelector('text=관리자 콘솔', { timeout: 20000 }); console.log('관리자 콘솔 열림:', (await A.textContent('.stats')).replace(/\s+/g, ' ').slice(0, 60));
     await A.screenshot({ path: process.env.SC + '/art_admin.png' });
     console.log('B 관리 버튼 없음:', (await B.$('button:has-text("⚙️ 관리")')) === null);

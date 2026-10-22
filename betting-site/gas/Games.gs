@@ -35,7 +35,7 @@ var GAMES = (function () {
     return cap > 0 && net > 0 ? Math.min(net, Math.max(0, cap - netToday)) : net;
   };
   G.soloBlockedMessage = function (l) {
-    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '점까지 벌 수 있는데 한도에 도달했습니다! 내일(한국 시간 자정 이후) 다시 합니다.'
+    return l.blocked === 'net' ? '오늘은 최대 +' + l.net_cap + '🪙까지 벌 수 있는데 한도에 도달했습니다! 내일(한국 시간 자정 이후) 다시 합니다.'
       : '하루에 ' + l.plays_cap + '번까지만 할 수 있습니다. 내일(한국 시간 자정 이후) 다시 합니다.';
   };
 
@@ -213,6 +213,14 @@ var GAMES = (function () {
     if (cnt <= 1) return left;
     var max = Math.min(Math.max(1, Math.floor(left / cnt * 2)), left - (cnt - 1));
     return 1 + rint(max, rnd);
+  };
+
+  /* ================= 🧱 블록 블라스트 (혼자 하는 퍼즐: 점수에 비례해 칩을 받음) ================= */
+  G.BB = { RATE_PCT: 10, MAX_REWARD: 300, MAX_SCORE: 100000 };   // 보상 = 점수 × RATE_PCT% (최대 MAX_REWARD)
+  G.bbReward = function (score) {
+    score = Math.floor(Number(score));
+    if (!(score > 0)) return 0;
+    return Math.min(Math.floor(score * G.BB.RATE_PCT / 100), G.BB.MAX_REWARD);
   };
 
   return G;

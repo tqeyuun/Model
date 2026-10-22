@@ -23,6 +23,7 @@ var SHEETS = {
   ladp: ['id', 'room_id', 'user_id', 'slot', 'joined_at'],
   bj: ['id', 'user_id', 'bet', 'state', 'status', 'outcome', 'payout', 'created_at', 'finished_at'],
   slots: ['id', 'user_id', 'bet', 'reels', 'payout', 'created_at'],
+  bb: ['id', 'user_id', 'status', 'score', 'reward', 'created_at', 'finished_at'],
   drops: ['id', 'host_id', 'total', 'cnt', 'left_amt', 'left_cnt', 'status', 'created_at'],
   dropc: ['id', 'drop_id', 'user_id', 'amount', 'at'],
   begs: ['id', 'user_id', 'want', 'got', 'msg', 'status', 'created_at'],
@@ -360,6 +361,8 @@ function settingSpecs() {
     { key: 'solo_plays', label: '혼자 하는 게임 하루 판 수', hint: '블랙잭 한 판, 슬롯 한 번이 각각 1판. 0이면 무제한', type: 'int', min: 0, max: 10000, get: function () { return GAMES.SOLO.DAILY_PLAYS; }, set: function (v) { GAMES.SOLO.DAILY_PLAYS = v; } },
     { key: 'bj_max_bet', label: '블랙잭 한 판 최대 건 돈(🪙)', hint: '최소 ' + GAMES.BJ.MIN_BET + '🪙', type: 'int', min: GAMES.BJ.MIN_BET, max: 1000000, get: function () { return GAMES.BJ.MAX_BET; }, set: function (v) { GAMES.BJ.MAX_BET = v; } },
     { key: 'slot_max_bet', label: '슬롯 한 번 최대 건 돈(🪙)', hint: '최소 ' + GAMES.SLOT.MIN_BET + '🪙', type: 'int', min: GAMES.SLOT.MIN_BET, max: 1000000, get: function () { return GAMES.SLOT.MAX_BET; }, set: function (v) { GAMES.SLOT.MAX_BET = v; } },
+    { key: 'bb_rate_pct', label: '블록 블라스트 보상 배율(%)', hint: '점수 × 이 값% = 받는 🪙. 기본 10 (점수 1000이면 100🪙)', type: 'int', min: 0, max: 1000, get: function () { return GAMES.BB.RATE_PCT; }, set: function (v) { GAMES.BB.RATE_PCT = v; } },
+    { key: 'bb_max_reward', label: '블록 블라스트 한 판 최대 보상(🪙)', hint: '한 판에 받을 수 있는 🪙의 상한', type: 'int', min: 0, max: 1000000, get: function () { return GAMES.BB.MAX_REWARD; }, set: function (v) { GAMES.BB.MAX_REWARD = v; } },
     { key: 'room_stake_max', label: '방 게임(눈치게임·사다리) 최대 판돈(🪙)', hint: '최소 ' + CFG.MIN_BET + '🪙', type: 'int', min: CFG.MIN_BET, max: 1000000, get: function () { return ROOM_STAKE_MAX; }, set: function (v) { ROOM_STAKE_MAX = v; } },
     { key: 'device_limit', label: '한 기기당 방마다 계정 1개로 제한', hint: '켜면 같은 기기(브라우저)에서는 한 방에 계정을 하나만 만들 수 있습니다. 다른 브라우저·시크릿 창으로는 우회할 수 있습니다', type: 'bool', get: function () { return !!CFG.DEVICE_LIMIT; }, set: function (v) { CFG.DEVICE_LIMIT = !!v; } },
     { key: 'approval_required', label: '가입 승인제', hint: '켜면 방에 새로 들어온 계정은 방장(또는 관리자)이 승인하기 전까지 아무것도 못 합니다. 방을 만든 첫 계정은 자동 승인', type: 'bool', get: function () { return !!CFG.APPROVAL; }, set: function (v) { CFG.APPROVAL = !!v; } },
@@ -428,7 +431,7 @@ function adminDeleteGroup(grp) {
     tbl(pair[0]).removeWhere(function (r) { return rooms[r.id]; });
   });
   tbl('rps').removeWhere(function (r) { return ids[r.host_id] || ids[r.guest_id]; });
-  ['bj', 'slots', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
+  ['bj', 'slots', 'bb', 'sessions'].forEach(function (t) { tbl(t).removeWhere(function (r) { return ids[r.user_id]; }); });
   tbl('items').removeWhere(function (r) { return ids[r.user_id]; });
   tbl('users').removeWhere(function (u) { return ids[u.id]; });
   tbl('rooms').removeWhere(function (r) { return String(r.grp) === g; });
@@ -602,6 +605,7 @@ function checkBet(raw, min, max) {
 function soloToday(uid) {
   var ds = GAMES.dayStart(now()), net = 0, plays = 0;
   tbl('slots').all().forEach(function (r) { if (r.user_id === uid && r.created_at >= ds) { net += r.payout - r.bet; plays++; } });
+  tbl('bb').all().forEach(function (r) { if (r.user_id === uid && r.created_at >= ds) { plays++; if (r.status === 'done') net += r.reward; } });
   tbl('bj').all().forEach(function (r) {
     if (r.user_id !== uid) return;
     if (r.created_at >= ds) plays++;
@@ -1032,6 +1036,32 @@ var ROUTES = {
     addPoints(u.id, payout - bet);
     tbl('slots').insert({ user_id: u.id, bet: bet, reels: JSON.stringify(sp.reels), payout: payout, created_at: now() });
     return { reels: sp.reels.map(function (i) { return GAMES.SLOT.SYMBOLS[i]; }), mult: sp.mult, bet: bet, payout: payout, net: payout - bet, capped: capped, points: userById(u.id).points, limits: soloLimits(u.id) };
+  },
+
+  /* ---- 🧱 블록 블라스트: 시작할 때 한 판으로 세고, 끝나면 점수에 비례해 칩을 받음 ---- */
+  'GET /api/blockblast': function (body, u) {
+    needLogin(u);
+    var recent = tbl('bb').where(function (r) { return r.user_id === u.id && r.status === 'done'; }).slice(-8).reverse().map(function (r) { return { score: r.score, reward: r.reward }; });
+    return { recent: recent, rate_pct: GAMES.BB.RATE_PCT, max_reward: GAMES.BB.MAX_REWARD, max_score: GAMES.BB.MAX_SCORE, limits: soloLimits(u.id) };
+  },
+  'POST /api/blockblast/start': function (body, u) {
+    needLogin(u);
+    soloGuard(u.id);
+    tbl('bb').where(function (r) { return r.user_id === u.id && r.status === 'playing'; }).forEach(function (r) { r.status = 'abandoned'; tbl('bb').save(r); });   // 끝내지 않은 예전 판은 보상 없이 닫음
+    var r = tbl('bb').insert({ user_id: u.id, status: 'playing', score: 0, reward: 0, created_at: now(), finished_at: '' });
+    return { id: r.id };
+  },
+  'POST /api/blockblast/finish': function (body, u) {
+    needLogin(u);
+    var id = Number(body.id), score = Number(body.score);
+    var r = tbl('bb').find(function (x) { return x.id === id && x.user_id === u.id; }) || fail(404, '진행 중인 판이 없습니다.');
+    if (r.status !== 'playing') fail(400, '이미 끝난 판입니다.');
+    if (score !== Math.floor(score) || score < 0 || score > GAMES.BB.MAX_SCORE) fail(400, '점수가 올바르지 않습니다.');
+    var reward = GAMES.bbReward(score), capped = false;
+    if (reward > 0) { var allowed = GAMES.soloClampWin(reward, soloToday(u.id).net); if (allowed < reward) { reward = allowed; capped = true; } }   // 오늘 한도까지만 지급
+    r.status = 'done'; r.score = score; r.reward = reward; r.finished_at = now(); tbl('bb').save(r);
+    addPoints(u.id, reward);
+    return { score: score, reward: reward, capped: capped, points: userById(u.id).points, limits: soloLimits(u.id) };
   },
 
   'GET /api/shop': function (body, u) {

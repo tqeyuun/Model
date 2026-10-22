@@ -185,3 +185,38 @@ err(call('', 'GET', '/api/slots'), 401);
   } finally { Date.now = realNow; G.slotSpin = origSpin; G.bjNewDeck = origDeck; G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0; }
 }
 console.log('GAS 새 게임 테스트 통과');
+
+/* ===== 🧱 블록 블라스트: 점수에 비례한 칩, 하루 한도·횟수와 함께 계산 ===== */
+{
+  G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 0;
+  const p0 = pts(a);
+  const s1 = ok(call(a, 'POST', '/api/blockblast/start', {}));
+  err(call(a, 'POST', '/api/blockblast/finish', { id: s1.id, score: -1 }), 400);
+  err(call(a, 'POST', '/api/blockblast/finish', { id: s1.id, score: 1.5 }), 400);
+  err(call(a, 'POST', '/api/blockblast/finish', { id: s1.id, score: 10 ** 9 }), 400);
+  err(call(b, 'POST', '/api/blockblast/finish', { id: s1.id, score: 100 }), 404);          // 남의 판은 못 끝냄
+  const f1 = ok(call(a, 'POST', '/api/blockblast/finish', { id: s1.id, score: 1000 }));
+  assert.equal(f1.reward, 100); assert.equal(pts(a), p0 + 100);                              // 점수 × 10%
+  err(call(a, 'POST', '/api/blockblast/finish', { id: s1.id, score: 1000 }), 400);          // 두 번 받을 수 없음
+  const s2 = ok(call(a, 'POST', '/api/blockblast/start', {}));
+  assert.equal(ok(call(a, 'POST', '/api/blockblast/finish', { id: s2.id, score: 99999 })).reward, G.BB.MAX_REWARD);   // 한 판 상한
+  const s3 = ok(call(a, 'POST', '/api/blockblast/start', {})), s4 = ok(call(a, 'POST', '/api/blockblast/start', {}));    // 끝내지 않은 판은 보상 없이 닫힘
+  err(call(a, 'POST', '/api/blockblast/finish', { id: s3.id, score: 500 }), 400);
+  assert.equal(ok(call(a, 'GET', '/api/blockblast')).recent.length, 2);
+  const z = mk('블럭', '5555');
+  // 하루 한도: 블랙잭·슬롯과 함께 계산
+  G.SOLO.DAILY_NET_CAP = 150; const before = pts(z);
+  const todayNet = ok(call(z, 'GET', '/api/blockblast')).limits.net_today;
+  const s5 = ok(call(z, 'POST', '/api/blockblast/start', {}));
+  const f5 = ok(call(z, 'POST', '/api/blockblast/finish', { id: s5.id, score: 3000 }));
+  assert.ok(f5.capped && pts(z) - before <= 150 - Math.max(todayNet, 0), JSON.stringify(f5));
+  err(call(z, 'POST', '/api/blockblast/start', {}), 400);                                     // 한도에 닿으면 새 판 시작 불가
+  // 하루 판 수 한도
+  G.SOLO.DAILY_NET_CAP = 0; G.SOLO.DAILY_PLAYS = 1;
+  err(call(z, 'POST', '/api/blockblast/start', {}), 400);
+  G.SOLO.DAILY_PLAYS = 0;
+  // 관리자 설정으로 배율 변경
+  G.BB.RATE_PCT = 50; const s6 = ok(call(b, 'POST', '/api/blockblast/start', {}));
+  assert.equal(ok(call(b, 'POST', '/api/blockblast/finish', { id: s6.id, score: 200 })).reward, 100); G.BB.RATE_PCT = 10;
+  console.log('블록 블라스트 서버 테스트 통과');
+}
