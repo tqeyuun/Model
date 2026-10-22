@@ -16,11 +16,20 @@ let admScript = between(adm, '<script>\n', '</script>', true);
 /* ================= 화면 스크립트 변환 ================= */
 // 저장된 로그인 대신 계정(user.id)으로 자동 입장
 script = rep(script, "let token = LS.get('token'), user = null", "let token = null, user = null");
-script = cut(script, 'function api(method, url, body) {', 'function toast(', `async function api(method, url, body) {
+script = cut(script, 'function api(method, url, body) {', 'function toast(', `let apiPending = 0, busyT = null;
+function busyMark(on) {   // 저장 중이면 위쪽에 진행 막대를 보여 눌렀다는 반응을 바로 줌 (0.15초 이내에 끝나면 안 보임)
+  apiPending += on ? 1 : -1;
+  if (apiPending > 0 && !busyT) busyT = setTimeout(() => document.body.classList.add('wait'), 150);
+  if (apiPending <= 0) { apiPending = 0; clearTimeout(busyT); busyT = null; document.body.classList.remove('wait'); }
+}
+async function api(method, url, body) {
   if (!ENGINE) throw new Error(ENG_ERR || '연결 중입니다. 잠시 뒤 다시 해주십시오.');
-  const j = await ENGINE.call(token || '', method, url, body || {});
-  if (j.error) { if (j.code === 401 && token) logout(); const e = new Error(j.error); e.code = j.code; throw e; }
-  return j.data;
+  const writes = method === 'POST'; if (writes) busyMark(true);
+  try {
+    const j = await ENGINE.call(token || '', method, url, body || {});
+    if (j.error) { if (j.code === 401 && token) logout(); const e = new Error(j.error); e.code = j.code; throw e; }
+    return j.data;
+  } finally { if (writes) busyMark(false); }
 }
 `);
 // 로그인 화면: 닉네임 하나만
@@ -135,6 +144,8 @@ const rules = (c) => [...c.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [m[1].t
 const have = new Set(rules(css).map(([s]) => s));
 const extra = rules(admCss).filter(([s]) => !have.has(s) && !/^(:root|\*|body|main|html)$/.test(s)).map(([, r]) => r).join('\n');
 css += `\n:root{color-scheme:dark}
+/* 저장 중 진행 막대 */
+body.wait{cursor:progress}body.wait::before{content:"";position:fixed;left:0;top:0;height:3px;width:100%;z-index:60;background:linear-gradient(90deg,transparent,var(--gold),transparent) no-repeat;background-size:40% 100%;animation:busyslide .9s linear infinite}\n@keyframes busyslide{from{background-position:-40% 0}to{background-position:140% 0}}
 /* 위쪽 배너 */
 .banner{display:block;max-width:640px;margin:12px auto 0;padding:0 14px}.banner img{display:block;width:100%;height:auto;border-radius:0;border:0}
 /* 관리자 화면 */

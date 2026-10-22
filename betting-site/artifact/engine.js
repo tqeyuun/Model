@@ -134,7 +134,7 @@
     waits.push(pc);
     return Promise.all(waits).then(function () {
       return db.doc('meta/rev').get();
-    }).then(function (s) { self.rev = s.exists ? s.data().n : 0; self.lastFull = Date.now(); self.ready = true; });
+    }).then(function (s) { self.rev = s.exists ? s.data().n : 0; self.revH = s.exists && s.data().h ? s.data().h : []; self.lastFull = Date.now(); self.ready = true; });
   };
   Engine.prototype.stop = function () { this.unsubs.forEach(function (u) { try { u(); } catch (e) { /* 무시 */ } }); this.unsubs = []; };
 
@@ -155,9 +155,14 @@
     var self = this, s = await this.db.doc('meta/rev').get(), rev = s.exists ? s.data() : { n: 0, tables: [] };
     var full = Date.now() - this.lastFull > 60000;
     if (rev.n === this.rev && !full) return;
-    var names = rev.n === this.rev + 1 && rev.tables && !full ? rev.tables.filter(function (n) { return PERSIST.indexOf(n) >= 0; }) : PERSIST;
+    var names = PERSIST;
+    if (!full && rev.h && rev.n > this.rev && rev.n - this.rev <= rev.h.length) {   // 기록이 이어져 있으면 그 사이에 바뀐 표만
+      var set = {}, ok = true;
+      for (var k = this.rev + 1; k <= rev.n; k++) { var e = rev.h.filter(function (x) { return x[0] === k; })[0]; if (!e) { ok = false; break; } e[1].forEach(function (n) { set[n] = 1; }); }
+      if (ok) names = Object.keys(set).filter(function (n) { return PERSIST.indexOf(n) >= 0; });
+    }
     await Promise.all(names.map(async function (n) { var snap = await self.db.collection(n).limit(1000).get(); self._replaceAll(n, snap.docs, snap.docs.length >= 1000); }));
-    this.rev = rev.n; if (names === PERSIST) this.lastFull = Date.now();
+    this.rev = rev.n; this.revH = rev.h || []; if (names === PERSIST) this.lastFull = Date.now();
   };
   Engine.prototype._flush = async function () {
     var self = this, items = Array.from(this.dirty.values()), tables = {};
@@ -173,7 +178,7 @@
         } catch (x) { err = err || x; }
       }
     }
-    await Promise.all([worker(), worker(), worker(), worker(), worker()]);
+    await Promise.all([worker(), worker(), worker(), worker(), worker(), worker(), worker(), worker()]);
     items.forEach(function (e) { self.pendingKeys.delete(e.table + '/' + e.key); });
     if (self.settingsWrite !== null) { var v = self.settingsWrite; self.settingsWrite = null; try { await self.db.doc('config/settings').set({ json: v }); } catch (x) { err = err || x; } }
     return { tables: Object.keys(tables), err: err };
@@ -217,12 +222,13 @@
         self.dirty.clear();
         var out = self._run(token, method, url, body);
         if (self.dirty.size || self.settingsWrite !== null) {
-          await self.db.doc('locks/main').acquire({ holder: self.uid, ttlMs: LEASE_MS });   // 저장하는 동안 임대 연장
-          var r = await self._flush();
-          if (r.tables.length) {
-            self.rev = self.rev + 1;
-            try { await self.db.doc('meta/rev').set({ n: self.rev, tables: r.tables, by: self.uid, at: Date.now() }); } catch (x) { /* 다음 호출 때 전체를 다시 읽음 */ self.rev = -1; }
-          }
+          var tablesTouched = {}; self.dirty.forEach(function (e) { tablesTouched[e.table] = 1; });
+          var names = Object.keys(tablesTouched), n = self.rev + 1, h = (self.revH || []).concat([[n, names]]).slice(-12);
+          var renew = self.db.doc('locks/main').acquire({ holder: self.uid, ttlMs: LEASE_MS });   // 저장하는 동안 임대 연장
+          // 바뀐 문서 저장과 '바뀐 표 기록'을 동시에 보냄 (따로 기다리지 않음). 다음 사람은 임대가 끝난 뒤에야 읽으므로 순서는 안전
+          var revWrite = names.length ? self.db.doc('meta/rev').set({ n: n, tables: names, h: h, by: self.uid, at: Date.now() }) : null;
+          var r = await self._flush(); renew.catch(function () { /* 연장 실패해도 저장은 이미 끝남 */ });
+          if (revWrite) { try { await revWrite; self.rev = n; self.revH = h; } catch (x) { self.rev = -1; /* 다음 호출 때 전체를 다시 읽음 */ } }
           if (r.err) return { error: '저장 중 문제가 생겼습니다. 새로고침 후 확인하십시오. (' + (r.err.message || r.err.code) + ')', code: 500 };
         }
         return out;
