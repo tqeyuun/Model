@@ -17,9 +17,9 @@ let admScript = between(adm, '<script>\n', '</script>', true);
 // 저장된 로그인 대신 계정(user.id)으로 자동 입장
 script = rep(script, "let token = LS.get('token'), user = null", "let token = null, user = null");
 script = cut(script, 'function api(method, url, body) {', 'function toast(', `let apiPending = 0, busyT = null;
-function busyMark(on) {   // 저장 중이면 위쪽에 진행 막대를 보여 눌렀다는 반응을 바로 줌 (0.15초 이내에 끝나면 안 보임)
+function busyMark(on) {   // 저장 중이면 위쪽에 진행 막대를 보여 눌렀다는 반응을 바로 줌 (0.08초 이내에 끝나면 안 보임)
   apiPending += on ? 1 : -1;
-  if (apiPending > 0 && !busyT) busyT = setTimeout(() => document.body.classList.add('wait'), 150);
+  if (apiPending > 0 && !busyT) busyT = setTimeout(() => document.body.classList.add('wait'), 80);
   if (apiPending <= 0) { apiPending = 0; clearTimeout(busyT); busyT = null; document.body.classList.remove('wait'); }
 }
 async function api(method, url, body) {
@@ -145,7 +145,7 @@ const have = new Set(rules(css).map(([s]) => s));
 const extra = rules(admCss).filter(([s]) => !have.has(s) && !/^(:root|\*|body|main|html)$/.test(s)).map(([, r]) => r).join('\n');
 css += `\n:root{color-scheme:dark}
 /* 저장 중 진행 막대 */
-body.wait{cursor:progress}body.wait::before{content:"";position:fixed;left:0;top:0;height:3px;width:100%;z-index:60;background:linear-gradient(90deg,transparent,var(--gold),transparent) no-repeat;background-size:40% 100%;animation:busyslide .9s linear infinite}\n@keyframes busyslide{from{background-position:-40% 0}to{background-position:140% 0}}
+body.wait{cursor:progress}body.wait::before{content:"";position:fixed;left:0;top:0;height:3px;width:100%;z-index:60;background:linear-gradient(90deg,transparent,var(--gold),transparent) no-repeat;background-size:40% 100%;animation:busyslide .9s linear infinite}\nbody.wait::after{content:"";position:fixed;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;z-index:61;border:4px solid rgba(255,255,255,.2);border-top-color:var(--gold);border-radius:50%;animation:busyspin .7s linear infinite;pointer-events:none;box-shadow:0 0 0 8px rgba(0,0,0,.35)}\n@keyframes busyspin{to{transform:rotate(360deg)}}\n@keyframes busyslide{from{background-position:-40% 0}to{background-position:140% 0}}
 /* 위쪽 배너 */
 .banner{display:block;max-width:640px;margin:12px auto 0;padding:0 14px}.banner img{display:block;width:100%;height:auto;border-radius:0;border:0}
 /* 관리자 화면 */
